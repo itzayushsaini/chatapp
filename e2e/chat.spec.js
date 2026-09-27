@@ -149,6 +149,48 @@ test('switching between two chats never shows the other chat\'s messages, and on
   expect(overflow.bodyScrollHeight).toBeLessThanOrEqual(overflow.innerHeight)
 })
 
+test('scrolling the message list never scrolls the page itself (no scroll chaining)', async ({ page }) => {
+  await register(page, 'aman_wheel', 'Aman Kumar')
+  const rahul = await (await page.context().browser().newContext()).newPage()
+  await register(rahul, 'rahul_wheel', 'Rahul Singh')
+
+  await page.getByRole('tab', { name: 'Add Friend' }).click()
+  await page.getByLabel('Find a friend by their exact username').fill('rahul_wheel')
+  await page.getByRole('button', { name: 'Search' }).click()
+  await page.getByRole('button', { name: 'Add friend' }).click()
+  await rahul.getByRole('tab', { name: /Requests/ }).click()
+  await rahul.getByRole('button', { name: 'Accept' }).click()
+  await page.getByRole('tab', { name: 'Chats' }).click()
+
+  await page.getByRole('button', { name: /Rahul Singh/ }).click()
+  const input = page.getByLabel('Type a message')
+  await expect(input).toBeEnabled()
+  for (let i = 1; i <= 8; i++) {
+    await input.fill(`Message ${i}`)
+    await input.press('Enter')
+    await page.getByText(`Message ${i}`, { exact: true }).waitFor()
+  }
+
+  const log = page.getByRole('log', { name: 'Messages' })
+  const box = await log.boundingBox()
+  await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2)
+
+  // Without "the outer page must never scroll" (overflow: hidden on
+  // html/body, and overscroll-behavior on the panel itself), once the
+  // message list is scrolled to its own end, the browser's default "scroll
+  // chaining" hands any further wheel input to the page - which then
+  // scrolls the fixed-height layout out of view, revealing blank space.
+  for (let i = 0; i < 20; i++) await page.mouse.wheel(0, 400) // hard past the bottom
+  await expect.poll(() => page.evaluate(() => window.scrollY)).toBe(0)
+
+  for (let i = 0; i < 20; i++) await page.mouse.wheel(0, -400) // hard past the top
+  await expect.poll(() => page.evaluate(() => window.scrollY)).toBe(0)
+
+  // The chat header stayed on screen throughout - proof the page itself
+  // never moved, not just that it settled back to 0 afterwards.
+  await expect(page.getByRole('heading', { name: 'Rahul Singh' })).toBeVisible()
+})
+
 test('logging out ends the session', async ({ page }) => {
   await register(page, 'rahul_e2e', 'Rahul')
 

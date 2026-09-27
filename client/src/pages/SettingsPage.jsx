@@ -55,7 +55,7 @@ export default function SettingsPage() {
         <h1 className="text-lg font-semibold text-slate-900">Settings</h1>
       </header>
 
-      <div className="min-h-0 flex-1 overflow-y-auto">
+      <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain">
         <div className="mx-auto w-full max-w-2xl space-y-4 px-3 py-4 sm:px-4 sm:py-6">
           {/* Me - the same profile editor the sidebar opens. */}
           <section className="flex items-center gap-4 rounded-2xl bg-surface p-4 shadow-sm">

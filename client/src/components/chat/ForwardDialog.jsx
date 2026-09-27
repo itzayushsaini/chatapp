@@ -64,7 +64,7 @@ export default function ForwardDialog({ message, onClose }) {
       {friends.length === 0 ? (
         <p className="text-sm text-slate-500">You have no friends to forward this to yet.</p>
       ) : (
-        <ul className="max-h-72 space-y-1 overflow-y-auto">
+        <ul className="max-h-72 space-y-1 overflow-y-auto overscroll-contain">
           {friends.map(({ friend, conversationId }) => (
             <li key={conversationId}>
               <label className="flex cursor-pointer items-center gap-3 rounded-lg p-2 hover:bg-slate-50">

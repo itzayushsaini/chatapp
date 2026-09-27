@@ -106,7 +106,7 @@ export default function ContactInfoPanel({ item, onClose }) {
         <h2 className="font-semibold text-slate-900">Contact info</h2>
       </div>
 
-      <div className="min-h-0 flex-1 space-y-2 overflow-y-auto pb-4">
+      <div className="min-h-0 flex-1 space-y-2 overflow-y-auto overscroll-contain pb-4">
         {/* Who they are - PublicUser fields only, the same as anywhere else. */}
         <section className="flex flex-col items-center bg-surface px-6 pt-6 pb-5 text-center">
           <Avatar user={friend} size="xl" />

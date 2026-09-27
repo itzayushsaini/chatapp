@@ -86,6 +86,21 @@
   --color-amber-900: #fde68a;
 }
 
+/* The app is a fixed-viewport SPA (WhatsApp-Web style): every panel that
+   needs to scroll (the message list, the sidebar's chat list, contact info)
+   does so INSIDE itself. The page itself must never scroll - without this,
+   once an inner panel is scrolled to its own top or bottom, the browser's
+   default "scroll chaining" hands any further wheel/trackpad input to the
+   page, which then scrolls past the fixed layout and reveals blank space
+   below/above it (this is what the team saw: the chat header and the
+   sidebar's own top bar scrolled out of view together). */
+html,
+body {
+  height: 100%;
+  overflow: hidden;
+  overscroll-behavior: none;
+}
+
 body {
   @apply bg-slate-50 font-sans text-slate-900 antialiased;
 }

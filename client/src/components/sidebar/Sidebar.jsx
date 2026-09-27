@@ -126,7 +126,7 @@ export default function Sidebar({ className = '' }) {
         id={`panel-${tab}`}
         role="tabpanel"
         aria-labelledby={`tab-${tab}`}
-        className="min-h-0 flex-1 overflow-y-auto"
+        className="min-h-0 flex-1 overflow-y-auto overscroll-contain"
       >
         {tab === 'chats' && <ChatsTab />}
         {tab === 'requests' && <RequestsTab />}

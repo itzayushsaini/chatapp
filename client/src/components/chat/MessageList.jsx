@@ -99,7 +99,7 @@ export default function MessageList({
       <div
         ref={listRef}
         onScroll={handleScroll}
-        className="chat-background h-full overflow-y-auto px-3 py-4 sm:px-6"
+        className="chat-background h-full overflow-y-auto overscroll-contain px-3 py-4 sm:px-6"
         role="log"
         aria-label="Messages"
       >

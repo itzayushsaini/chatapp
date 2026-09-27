@@ -7,8 +7,8 @@ Kept up to date at the end of every phase.
 - **Manual** cases are the ones a person checks in the browser. Fill in the
   Actual and Result columns when you run them.
 
-Last full run: 2026-09-27 (after the post-16b chat-switching bugfix) - **261/261
-server tests pass, 17/17 end-to-end tests pass, lint clean in both workspaces, `npm run build`
+Last full run: 2026-09-28 (after the post-16b scroll-chaining bugfix) - **261/261
+server tests pass, 18/18 end-to-end tests pass, lint clean in both workspaces, `npm run build`
 succeeds.**
 
 ---
@@ -331,6 +331,7 @@ email provider configured.
 | E15 | Messages while Settings is open | The friend's message makes the tab title "(1) PingMe" and shows "Delivered" to them - the socket stayed connected |
 | E16 | Failed Google sign-in | `/login?error=google_failed` shows the fixed message; no Google button when not configured |
 | E17 | Switching chats never bleeds content (`e2e/chat.spec.js`) | Messages sent in chat A, then chat B; switching between them always shows the right one, never the other; the page itself never scrolls (only the message list does) - regression test for the post-16b bugfix below |
+| E18 | No scroll chaining (`e2e/chat.spec.js`) | Real mouse-wheel input, hard past both the top and bottom of a long chat's message list - `window.scrollY` stays exactly 0 throughout, and the chat header never scrolls out of view |
 ---
 
 ## Manual

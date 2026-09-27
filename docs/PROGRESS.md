@@ -630,8 +630,27 @@ different chats and asserts switching between them always shows the right
 one and never the other, plus that `document.body.scrollHeight` never
 exceeds the viewport. Confirmed it fails on the pre-fix code (finds two
 `role="log"` regions) and passes after the fix, run cleanly three times.
-Full suite after the fix: `npm test` 261/261, `npm run test:e2e` 17/17
-(16 + this new one), lint clean, build succeeds.
+
+**Second report, same day - the page itself could still scroll.** After
+deploying the fix above, the team reported the content-bleeding was gone,
+but scrolling a chat could still reveal blank space, with the chat header
+AND the sidebar's own top bar both scrolling out of view together - proof
+the whole PAGE was scrolling, not just the message list. Root cause: `html`
+and `body` had no `overflow: hidden`, so once an inner scrollable panel
+(the message list) reached its own top or bottom, the browser's default
+"scroll chaining" handed any further wheel/trackpad input to the page
+itself, which then scrolled the fixed-height (`h-dvh`) layout out of view.
+Fixed with `html, body { height: 100%; overflow: hidden; overscroll-behavior:
+none; }` in `index.css`, plus `overscroll-contain` on every internally
+scrollable panel (the message list, the sidebar's chat list, Contact info,
+Settings, the forward dialog's friend list) as a second line of defence.
+A Playwright test (`e2e/chat.spec.js`, "scrolling the message list never
+scrolls the page...") sends real mouse-wheel input hard past both ends of a
+long chat and asserts `window.scrollY` stays exactly 0 throughout - confirmed
+it fails on the pre-fix code (`windowScrollY: 932`) and passes after.
+
+Full suite after both fixes: `npm test` 261/261, `npm run test:e2e` 18/18
+(16 + these 2 new ones), lint clean, build succeeds.
 
 ---
 
