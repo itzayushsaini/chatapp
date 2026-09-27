@@ -86,14 +86,62 @@ export async function getHistory(meId, conversationId, { before, limit }) {
 
   const otherId = conversation.participants.find((p) => String(p) !== String(meId))
   const theirRead = conversation.lastRead?.get(String(otherId))
+  const theirDelivered = conversation.lastDelivered?.get(String(otherId))
 
   return {
     messages: page.map(messageView),
     hasMore,
-    // How far the OTHER person has read, so the client can show the right
-    // tick colour on my own messages without waiting for a live event.
+    // How far the OTHER person has read, and how far their app has received,
+    // so the client can show the right ticks on my own messages without
+    // waiting for a live event.
     theirReadUpTo: theirRead?.upTo ? String(theirRead.upTo) : null,
+    theirDeliveredUpTo: theirDelivered?.upTo ? String(theirDelivered.upTo) : null,
   }
+}
+
+// Records that `recipientId`'s app has received everything up to
+// `upToMessageId` in this conversation. ONE atomic update whose filter is the
+// "only moves forward" rule, so two tabs (or a live send racing a reconnect
+// catch-up) can never move the pointer backwards. Returns true if it moved.
+export async function markDelivered(recipientId, conversationId, upToMessageId) {
+  const path = `lastDelivered.${recipientId}`
+  // Cast explicitly: a path inside a Map is not always cast automatically.
+  const upTo = new mongoose.Types.ObjectId(String(upToMessageId))
+  const result = await Conversation.updateOne(
+    {
+      _id: conversationId,
+      participants: recipientId,
+      $or: [{ [`${path}.upTo`]: { $exists: false } }, { [`${path}.upTo`]: { $lt: upTo } }],
+    },
+    { $set: { [path]: { upTo, at: new Date() } } },
+  )
+  return result.modifiedCount > 0
+}
+
+// Called when a user comes online: everything already waiting for them in
+// every conversation now counts as delivered. Returns who needs telling -
+// [{ senderId, conversationId, upToMessageId }] - for only the pointers that
+// actually moved, so reconnecting repeatedly announces nothing new.
+export async function catchUpDelivered(userId) {
+  const conversations = await Conversation.find({ participants: userId }, { participants: 1 })
+  const moved = []
+
+  for (const conversation of conversations) {
+    const latestFromThem = await Message.findOne(
+      { conversation: conversation._id, sender: { $ne: userId } },
+      { _id: 1, sender: 1 },
+    ).sort({ _id: -1 })
+    if (!latestFromThem) continue
+
+    if (await markDelivered(userId, conversation._id, latestFromThem._id)) {
+      moved.push({
+        senderId: String(latestFromThem.sender),
+        conversationId: String(conversation._id),
+        upToMessageId: String(latestFromThem._id),
+      })
+    }
+  }
+  return moved
 }
 
 // Records that I have read up to `upToMessageId` in this conversation.
@@ -365,4 +413,56 @@ export async function forwardMessage(meId, { messageId, toConversationIds }) {
   }
 
   return results
+}
+
+// ---------------------------------------------------------------------------
+// Contact info panel: shared media and files, clear chat, mute
+// ---------------------------------------------------------------------------
+
+const SHARED_LIMIT = 200
+
+// Every photo, video and document sent in this conversation that I can still
+// see - nothing deleted for everyone, nothing I deleted (or cleared) for me.
+// Newest first. Built from the MESSAGES, not the Attachment collection, so a
+// deleted message's file never shows up here.
+export async function listSharedAttachments(meId, conversationId) {
+  await assertParticipant(conversationId, meId)
+  const messages = await Message.find({
+    conversation: conversationId,
+    attachment: { $ne: null },
+    deletedForEveryone: false,
+    deletedFor: { $ne: meId },
+  })
+    .sort({ _id: -1 })
+    .limit(SHARED_LIMIT)
+    .populate('attachment')
+
+  return messages
+    .filter((m) => m.attachment)
+    .map((m) => ({
+      messageId: String(m._id),
+      senderId: String(m.sender),
+      createdAt: m.createdAt,
+      attachment: attachmentView(m.attachment),
+    }))
+}
+
+// "Clear chat": every message in the conversation disappears from MY view
+// only - exactly "delete for me", applied to all of them in one update. The
+// other person keeps their whole history.
+export async function clearConversation(meId, conversationId) {
+  await assertParticipant(conversationId, meId)
+  await Message.updateMany(
+    { conversation: conversationId, deletedFor: { $ne: meId } },
+    { $addToSet: { deletedFor: meId } },
+  )
+}
+
+export async function setMuted(meId, conversationId, muted) {
+  await assertParticipant(conversationId, meId)
+  await Conversation.updateOne(
+    { _id: conversationId },
+    muted ? { $addToSet: { mutedBy: meId } } : { $pull: { mutedBy: meId } },
+  )
+  return muted
 }

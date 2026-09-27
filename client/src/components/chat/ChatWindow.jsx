@@ -1,18 +1,17 @@
 import { useEffect, useState } from 'react'
 
 import { uploadAttachment } from '../../api/conversations.js'
-import { unfriend } from '../../api/friends.js'
 import { errorMessage } from '../../api/http.js'
 import { useAuth } from '../../context/AuthContext.jsx'
 import { useSocket } from '../../context/SocketContext.jsx'
+import { useFriendStatus } from '../../hooks/useFriendStatus.js'
 import { useChatStore } from '../../store/useChatStore.js'
 import { kindOf } from '../../utils/files.js'
-import { lastSeenLabel } from '../../utils/time.js'
 import Avatar from '../common/Avatar.jsx'
 import Button from '../common/Button.jsx'
-import { AlertIcon, BackIcon, UserMinusIcon } from '../common/Icons.jsx'
+import { AlertIcon, BackIcon, BellOffIcon } from '../common/Icons.jsx'
 import Spinner from '../common/Spinner.jsx'
-import UserProfileDialog from '../profile/UserProfileDialog.jsx'
+import ContactInfoPanel from './ContactInfoPanel.jsx'
 import MessageInput from './MessageInput.jsx'
 import MessageList from './MessageList.jsx'
 
@@ -25,13 +24,16 @@ export default function ChatWindow({ conversationId }) {
   const item = useChatStore((s) => s.friends.find((f) => f.conversationId === conversationId))
   const entry = useChatStore((s) => s.messagesByConversation[conversationId])
   const readUpTo = useChatStore((s) => s.readUpTo[conversationId] ?? null)
+  const deliveredUpTo = useChatStore((s) => s.deliveredUpTo[conversationId] ?? null)
   const store = useChatStore.getState
   const [replyTarget, setReplyTarget] = useState(null)
+  const [infoOpen, setInfoOpen] = useState(false)
 
-  // A different chat, or the one message being replied to going away
-  // (deleted from another tab), both clear the reply-in-progress state.
+  // A different chat clears the reply-in-progress state and closes the
+  // contact info panel.
   useEffect(() => {
     setReplyTarget(null)
+    setInfoOpen(false)
   }, [conversationId])
 
   // Load the latest page the first time this chat is opened.
@@ -41,12 +43,21 @@ export default function ChatWindow({ conversationId }) {
 
   // Opening a chat marks everything currently in it as read - the same
   // moment WhatsApp does. (New messages that arrive while it stays open are
-  // marked read separately, in useSocketEvents.)
+  // marked read separately, in useSocketEvents.) Only while the tab is
+  // actually visible: a chat left open in a minimised tab has not been
+  // SEEN, so it stays "delivered" until the tab is shown again - which is
+  // what the visibilitychange listener catches.
   useEffect(() => {
-    const messages = entry?.messages
-    if (entry?.status !== 'ready' || !messages?.length) return
-    const latest = [...messages].reverse().find((m) => m.id)
-    if (latest) socket.emit('conversation:read', { conversationId, upToMessageId: latest.id })
+    function markLatestRead() {
+      if (document.hidden) return
+      const current = store().messagesByConversation[conversationId]
+      if (current?.status !== 'ready' || !current.messages.length) return
+      const latest = [...current.messages].reverse().find((m) => m.id)
+      if (latest) socket.emit('conversation:read', { conversationId, upToMessageId: latest.id })
+    }
+    markLatestRead()
+    document.addEventListener('visibilitychange', markLatestRead)
+    return () => document.removeEventListener('visibilitychange', markLatestRead)
     // Only re-run when the LATEST message actually changes, not on every
     // store update (e.g. presence ticking) that happens to touch this entry.
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -154,70 +165,67 @@ export default function ChatWindow({ conversationId }) {
     deliver(current)
   }
 
-  async function handleUnfriend() {
-    if (!window.confirm(`Remove ${friend.displayName} from your friends?`)) return
-    try {
-      await unfriend(friend.id)
-      store().removeFriend(friend.id)
-    } catch (err) {
-      store().addToast(errorMessage(err), 'error')
-    }
-  }
-
   return (
-    <section className="flex min-h-0 flex-1 flex-col bg-slate-50" aria-label={`Chat with ${friend.displayName}`}>
-      <ChatHeader friend={friend} onBack={() => store().setActiveConversation(null)} onUnfriend={handleUnfriend} />
-
-      {!entry || entry.status === 'loading' ? (
-        <div className="flex flex-1 items-center justify-center">
-          <Spinner />
-        </div>
-      ) : entry.status === 'error' ? (
-        <div className="flex flex-1 flex-col items-center justify-center gap-3 text-center">
-          <AlertIcon className="h-8 w-8 text-red-500" />
-          <p className="text-sm text-slate-600">Could not load messages.</p>
-          <Button size="sm" onClick={() => store().fetchLatest(conversationId)}>
-            Try again
-          </Button>
-        </div>
-      ) : (
-        <MessageList
-          key={conversationId}
+    <section className="relative flex min-h-0 flex-1" aria-label={`Chat with ${friend.displayName}`}>
+      <div className="flex min-w-0 flex-1 flex-col bg-slate-50">
+        <ChatHeader
+          friend={friend}
+          muted={Boolean(item.muted)}
           conversationId={conversationId}
-          messages={entry.messages}
-          hasMore={entry.hasMore}
+          onBack={() => store().setActiveConversation(null)}
+          onOpenInfo={() => setInfoOpen(true)}
+        />
+
+        {!entry || entry.status === 'loading' ? (
+          <div className="flex flex-1 items-center justify-center">
+            <Spinner />
+          </div>
+        ) : entry.status === 'error' ? (
+          <div className="flex flex-1 flex-col items-center justify-center gap-3 text-center">
+            <AlertIcon className="h-8 w-8 text-red-500" />
+            <p className="text-sm text-slate-600">Could not load messages.</p>
+            <Button size="sm" onClick={() => store().fetchLatest(conversationId)}>
+              Try again
+            </Button>
+          </div>
+        ) : (
+          <MessageList
+            key={conversationId}
+            conversationId={conversationId}
+            messages={entry.messages}
+            hasMore={entry.hasMore}
+            myId={user.id}
+            friendName={friend.displayName}
+            readUpTo={readUpTo}
+            deliveredUpTo={deliveredUpTo}
+            onRetry={retry}
+            onReply={setReplyTarget}
+          />
+        )}
+
+        <MessageInput
+          key={conversationId}
+          onSend={send}
+          onTyping={(isTyping) => socket.emit('typing', { conversationId, isTyping })}
+          disabled={entry?.status !== 'ready'}
+          replyTarget={replyTarget}
           myId={user.id}
           friendName={friend.displayName}
-          readUpTo={readUpTo}
-          onRetry={retry}
-          onReply={setReplyTarget}
+          onCancelReply={() => setReplyTarget(null)}
         />
-      )}
+      </div>
 
-      <MessageInput
-        onSend={send}
-        disabled={entry?.status !== 'ready'}
-        replyTarget={replyTarget}
-        myId={user.id}
-        friendName={friend.displayName}
-        onCancelReply={() => setReplyTarget(null)}
-      />
+      {/* Over the chat on small and medium screens, beside it on wide ones. */}
+      {infoOpen && <ContactInfoPanel item={item} onClose={() => setInfoOpen(false)} />}
     </section>
   )
 }
 
-function ChatHeader({ friend, onBack, onUnfriend }) {
-  const presence = useChatStore((s) => s.presence[friend.id])
-  const [profileOpen, setProfileOpen] = useState(false)
-
-  const status = presence?.online
-    ? 'Online'
-    : presence?.lastSeen
-      ? lastSeenLabel(presence.lastSeen)
-      : 'Offline'
+function ChatHeader({ friend, muted, conversationId, onBack, onOpenInfo }) {
+  const status = useFriendStatus(friend.id, conversationId)
 
   return (
-    <header className="flex items-center gap-3 border-b border-slate-200 bg-white px-3 py-3 sm:px-4">
+    <header className="flex items-center gap-3 border-b border-slate-200 bg-surface px-3 py-3 sm:px-4">
       {/* Only on small screens, where the list and the chat are separate views. */}
       <button
         type="button"
@@ -227,47 +235,41 @@ function ChatHeader({ friend, onBack, onUnfriend }) {
       >
         <BackIcon />
       </button>
-      {/* The picture and the name both open their profile. The picture is
+      {/* The picture and the name both open Contact info. The picture is
           skipped by Tab (tabIndex -1) so keyboard users have one stop. */}
       <button
         type="button"
         tabIndex={-1}
-        onClick={() => setProfileOpen(true)}
+        onClick={onOpenInfo}
         className="shrink-0 rounded-full"
         aria-hidden="true"
       >
-        <Avatar user={friend} online={presence?.online ?? false} />
+        <Avatar user={friend} online={status.online} />
       </button>
       <div className="min-w-0 flex-1">
-        <h2 className="truncate font-semibold text-slate-900">
+        <h2 className="flex items-center gap-1.5 font-semibold text-slate-900">
           <button
             type="button"
-            onClick={() => setProfileOpen(true)}
+            onClick={onOpenInfo}
             className="max-w-full truncate rounded text-left hover:underline focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:outline-none"
-            title="View profile"
+            title="Contact info"
           >
             {friend.displayName}
           </button>
+          {muted && (
+            <span title="Notifications muted">
+              <BellOffIcon className="h-4 w-4 shrink-0 text-slate-400" />
+              <span className="sr-only">(muted)</span>
+            </span>
+          )}
         </h2>
-        <p className={`truncate text-xs ${presence?.online ? 'text-emerald-600' : 'text-slate-500'}`}>
-          {status}
+        <p
+          className={`truncate text-xs ${status.active ? 'text-emerald-600' : 'text-slate-500'}`}
+          aria-live="polite"
+        >
+          {status.text}
         </p>
       </div>
-      <button
-        type="button"
-        onClick={onUnfriend}
-        className="rounded-lg p-2 text-slate-500 hover:bg-slate-100 hover:text-red-600 focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:outline-none"
-        aria-label={`Remove ${friend.displayName} from friends`}
-        title="Remove friend"
-      >
-        <UserMinusIcon />
-      </button>
-      <UserProfileDialog
-        user={friend}
-        status={status}
-        open={profileOpen}
-        onClose={() => setProfileOpen(false)}
-      />
     </header>
   )
 }

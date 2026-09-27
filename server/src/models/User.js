@@ -32,8 +32,20 @@ const userSchema = new mongoose.Schema(
     avatarFileId: { type: mongoose.Schema.Types.ObjectId, default: null },
     email: { type: String, required: true, unique: true, lowercase: true, trim: true },
     // select: false means a normal query never loads the hash. Only login asks
-    // for it explicitly with .select('+passwordHash').
-    passwordHash: { type: String, required: true, select: false },
+    // for it explicitly with .select('+passwordHash'). Missing for an account
+    // created through "Continue with Google" - it has no password at all
+    // until one is set through "Forgot password".
+    passwordHash: { type: String, select: false },
+    // How the account was CREATED. A password account can later also sign in
+    // with Google (same verified email) - that just sets googleId below.
+    authProvider: { type: String, enum: ['password', 'google'], default: 'password' },
+    // Google's permanent id for the person ("sub"). No default on purpose: a
+    // sparse unique index skips documents WITHOUT the field, but would treat
+    // many `null`s as duplicates.
+    googleId: { type: String, unique: true, sparse: true },
+    // Light or dark, saved with the account so it follows the person to any
+    // device. 'system' follows the device's own setting.
+    theme: { type: String, enum: ['light', 'dark', 'system'], default: 'light' },
     // Set whenever the password is changed (from the profile) or reset
     // (forgot password). Any session token issued BEFORE this moment is
     // rejected - see authService.userFromToken - which is what logs out

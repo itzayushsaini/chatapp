@@ -26,6 +26,7 @@ const registerSchema = z.object({
 const loginSchema = z.object({
   identifier: z.string().trim().toLowerCase().min(1, 'is required'),
   password: z.string().min(1, 'is required').max(72),
+  rememberMe: z.boolean().default(false),
 })
 
 // bcrypt only uses the first 72 bytes - shared with registerSchema's rule.
@@ -61,6 +62,22 @@ router.post('/register', authLimiter, validate({ body: registerSchema }), auth.r
 router.post('/login', authLimiter, validate({ body: loginSchema }), auth.login)
 router.post('/logout', auth.logout)
 router.get('/me', requireAuth, auth.me)
+
+// "Continue with Google" - see services/googleAuthService.js. Same per-IP
+// limit as login: both are ways an anonymous visitor gets into an account.
+router.get('/google', authLimiter, auth.googleStart)
+router.get(
+  '/google/callback',
+  authLimiter,
+  validate({
+    query: z.object({
+      code: z.string().max(2000).optional(),
+      state: z.string().max(200).optional(),
+      error: z.string().max(200).optional(),
+    }),
+  }),
+  auth.googleCallback,
+)
 
 // Same limiter as register/login: all three are the ways an anonymous
 // visitor can act on an account, so all three share one abuse budget.

@@ -164,6 +164,62 @@ export const TrashIcon = (p) => (
     <path d="M9 7V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v3" />
   </Icon>
 )
+export const SettingsIcon = (p) => (
+  <Icon {...p}>
+    <circle cx="12" cy="12" r="3" />
+    <path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1Z" />
+  </Icon>
+)
+export const BellIcon = (p) => (
+  <Icon {...p}>
+    <path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9" />
+    <path d="M10.3 21a1.9 1.9 0 0 0 3.4 0" />
+  </Icon>
+)
+export const BellOffIcon = (p) => (
+  <Icon {...p}>
+    <path d="M8.7 3A6 6 0 0 1 18 8a21 21 0 0 0 .6 5" />
+    <path d="M17 17H3s3-2 3-9a4.7 4.7 0 0 1 .3-1.7" />
+    <path d="M10.3 21a1.9 1.9 0 0 0 3.4 0" />
+    <path d="m2 2 20 20" />
+  </Icon>
+)
+export const BanIcon = (p) => (
+  <Icon {...p}>
+    <circle cx="12" cy="12" r="9" />
+    <path d="m5.7 5.7 12.6 12.6" />
+  </Icon>
+)
+export const SunIcon = (p) => (
+  <Icon {...p}>
+    <circle cx="12" cy="12" r="4" />
+    <path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4" />
+  </Icon>
+)
+export const MoonIcon = (p) => (
+  <Icon {...p}>
+    <path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8Z" />
+  </Icon>
+)
+export const MonitorIcon = (p) => (
+  <Icon {...p}>
+    <rect x="2" y="3" width="20" height="14" rx="2" />
+    <path d="M8 21h8M12 17v4" />
+  </Icon>
+)
+export const HelpIcon = (p) => (
+  <Icon {...p}>
+    <circle cx="12" cy="12" r="9" />
+    <path d="M9.1 9a3 3 0 0 1 5.8 1c0 2-3 3-3 3" />
+    <path d="M12 17h.01" />
+  </Icon>
+)
+export const KeyIcon = (p) => (
+  <Icon {...p}>
+    <circle cx="7.5" cy="15.5" r="4.5" />
+    <path d="m21 2-9.6 9.6M15.5 7.5l3 3L22 7l-3-3" />
+  </Icon>
+)
 export const ShieldIcon = (p) => (
   <Icon {...p}>
     <path d="M12 3 4 6v6c0 5 3.5 7.5 8 9 4.5-1.5 8-4 8-9V6Z" />

@@ -20,13 +20,14 @@ async function announce(user) {
   }
 }
 
-// Any of displayName, bio and username may be given; the rest stay as they
-// are. Returns the updated user document.
-export async function updateProfile(meId, { displayName, bio, username }) {
+// Any of displayName, bio, username and theme may be given; the rest stay as
+// they are. Returns the updated user document.
+export async function updateProfile(meId, { displayName, bio, username, theme }) {
   const me = await User.findById(meId)
   const changes = {}
   if (displayName !== undefined) changes.displayName = displayName
   if (bio !== undefined) changes.bio = bio
+  if (theme !== undefined) changes.theme = theme
 
   const filter = { _id: meId }
   const changingUsername = username !== undefined && username !== me.username

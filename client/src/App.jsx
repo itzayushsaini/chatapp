@@ -1,29 +1,42 @@
 import { Navigate, Route, Routes } from 'react-router'
 
+import { ErrorScreen } from './components/common/ErrorScreen.jsx'
 import { FullScreenLoader } from './components/common/Spinner.jsx'
+import LoggedInLayout from './components/layout/LoggedInLayout.jsx'
 import { useAuth } from './context/AuthContext.jsx'
-import { SocketProvider } from './context/SocketContext.jsx'
 import AdminPage from './pages/AdminPage.jsx'
 import ChatPage from './pages/ChatPage.jsx'
 import ForgotPasswordPage from './pages/ForgotPasswordPage.jsx'
 import LoginPage from './pages/LoginPage.jsx'
 import RegisterPage from './pages/RegisterPage.jsx'
 import ResetPasswordPage from './pages/ResetPasswordPage.jsx'
+import SettingsPage from './pages/SettingsPage.jsx'
 
-// Six routes. Which ones you may see depends only on whether you are
+// Seven routes. Which ones you may see depends only on whether you are
 // logged in (and, for /admin, whether you are an admin), so the redirects
 // all live here in one place:
-//   logged out -> "/" and "/admin" send you to /login
+//   logged out -> "/", "/settings" and "/admin" send you to /login
 //   logged in  -> /login, /register, /forgot-password and /reset-password
 //                 all send you to "/"
 //   logged in but not an admin -> /admin sends you to "/"
 //   anything else -> "/"
 export default function App() {
-  const { user, loading } = useAuth()
+  const { user, loading, bootError, retrySession } = useAuth()
 
   // Until /auth/me answers we do not know which page to show, so show
   // neither - this is what prevents the login page flashing on refresh.
   if (loading) return <FullScreenLoader />
+
+  // The server could not be reached at all. Showing the login page here
+  // would be wrong - they may well be logged in already.
+  if (bootError) {
+    return (
+      <ErrorScreen
+        message="We couldn't reach PingMe. Please check your internet connection and try again."
+        onRetry={retrySession}
+      />
+    )
+  }
 
   return (
     <Routes>
@@ -37,19 +50,12 @@ export default function App() {
         path="/reset-password"
         element={user ? <Navigate to="/" replace /> : <ResetPasswordPage />}
       />
-      <Route
-        path="/"
-        element={
-          user ? (
-            // The socket only exists inside the logged-in part of the app.
-            <SocketProvider>
-              <ChatPage />
-            </SocketProvider>
-          ) : (
-            <Navigate to="/login" replace />
-          )
-        }
-      />
+      {/* The socket only exists inside the logged-in part of the app, and
+          both of these pages share it (see LoggedInLayout). */}
+      <Route element={user ? <LoggedInLayout /> : <Navigate to="/login" replace />}>
+        <Route path="/" element={<ChatPage />} />
+        <Route path="/settings" element={<SettingsPage />} />
+      </Route>
       <Route
         path="/admin"
         element={user?.isAdmin ? <AdminPage /> : <Navigate to="/" replace />}

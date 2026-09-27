@@ -7,6 +7,20 @@ export async function search(req, res) {
   res.json(await friendService.searchByUsername(req.user._id, req.valid.query.username))
 }
 
+export async function blocked(req, res) {
+  res.json({ users: await friendService.listBlocked(req.user._id) })
+}
+
+export async function block(req, res) {
+  await friendService.blockUser(req.user._id, req.valid.params.id)
+  res.status(204).end()
+}
+
+export async function unblock(req, res) {
+  await friendService.unblockUser(req.user._id, req.valid.params.id)
+  res.status(204).end()
+}
+
 export async function updateMe(req, res) {
   const user = await profileService.updateProfile(req.user._id, req.valid.body)
   res.json({ user: selfUser(user) })

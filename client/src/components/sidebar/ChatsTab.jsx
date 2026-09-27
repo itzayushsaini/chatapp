@@ -6,7 +6,7 @@ import { attachmentLabel } from '../../utils/files.js'
 import { previewTime } from '../../utils/time.js'
 import Avatar from '../common/Avatar.jsx'
 import Button from '../common/Button.jsx'
-import { AlertIcon, CheckIcon, CopyIcon, UserPlusIcon } from '../common/Icons.jsx'
+import { AlertIcon, BellOffIcon, CheckIcon, CopyIcon, UserPlusIcon } from '../common/Icons.jsx'
 import Spinner from '../common/Spinner.jsx'
 
 export default function ChatsTab() {
@@ -53,9 +53,12 @@ function FriendRow({ item }) {
   const online = useChatStore((s) => s.presence[friend.id]?.online ?? false)
   const unread = useChatStore((s) => s.unreadCounts[conversationId] ?? 0)
   const isActive = useChatStore((s) => s.activeConversationId === conversationId)
+  const typing = useChatStore((s) => Boolean(s.typing[conversationId]))
   const open = useChatStore((s) => s.setActiveConversation)
 
-  const preview = lastMessage
+  const preview = typing
+    ? 'typing…'
+    : lastMessage
     ? `${lastMessage.senderId === user.id ? 'You: ' : ''}${
         lastMessage.attachment
           ? attachmentLabel(lastMessage.attachment, lastMessage.text)
@@ -81,17 +84,33 @@ function FriendRow({ item }) {
           )}
         </span>
         <span className="flex items-center justify-between gap-2">
-          <span className={`truncate text-sm ${unread ? 'font-medium text-slate-900' : 'text-slate-500'}`}>
+          <span
+            className={`truncate text-sm ${
+              typing ? 'font-medium text-emerald-600' : unread ? 'font-medium text-slate-900' : 'text-slate-500'
+            }`}
+          >
             {preview}
           </span>
-          {unread > 0 && (
-            <span
-              className="min-w-5 shrink-0 rounded-full bg-brand-600 px-1.5 text-center text-xs leading-5 font-semibold text-white"
-              aria-label={`${unread} unread`}
-            >
-              {unread}
-            </span>
-          )}
+          <span className="flex shrink-0 items-center gap-1.5">
+            {item.muted && (
+              <span title="Notifications muted">
+                <BellOffIcon className="h-4 w-4 text-slate-400" />
+                <span className="sr-only">Muted</span>
+              </span>
+            )}
+            {/* A muted chat still counts unread messages, in grey - like
+                WhatsApp - so it is visible without demanding attention. */}
+            {unread > 0 && (
+              <span
+                className={`min-w-5 rounded-full px-1.5 text-center text-xs leading-5 font-semibold text-white ${
+                  item.muted ? 'bg-slate-400' : 'bg-brand-600'
+                }`}
+                aria-label={`${unread} unread`}
+              >
+                {unread}
+              </span>
+            )}
+          </span>
         </span>
         <span className="sr-only">{online ? 'Online' : 'Offline'}</span>
       </span>
@@ -125,7 +144,7 @@ function NoFriends() {
         <button
           type="button"
           onClick={copy}
-          className="rounded-md p-1.5 text-slate-500 hover:bg-white hover:text-slate-800 focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:outline-none"
+          className="rounded-md p-1.5 text-slate-500 hover:bg-surface hover:text-slate-800 focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:outline-none"
           aria-label={copied ? 'Copied' : 'Copy username'}
         >
           {copied ? <CheckIcon className="h-4 w-4 text-emerald-600" /> : <CopyIcon className="h-4 w-4" />}

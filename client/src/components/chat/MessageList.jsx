@@ -18,6 +18,7 @@ export default function MessageList({
   myId,
   friendName,
   readUpTo,
+  deliveredUpTo,
   onRetry,
   onReply,
 }) {
@@ -106,7 +107,7 @@ export default function MessageList({
             does not change the content height the scroll restore relies on. */}
         {loadingOlder && (
           <div className="pointer-events-none absolute inset-x-0 top-2 flex justify-center">
-            <span className="rounded-full bg-white p-1.5 shadow">
+            <span className="rounded-full bg-surface p-1.5 shadow">
               <Spinner className="h-5 w-5" />
             </span>
           </div>
@@ -126,7 +127,7 @@ export default function MessageList({
               <Fragment key={m.clientId}>
                 {newDay && (
                   <li className="flex justify-center py-2">
-                    <span className="rounded-full bg-white px-3 py-1 text-xs font-medium text-slate-500 shadow-sm">
+                    <span className="rounded-full bg-surface px-3 py-1 text-xs font-medium text-slate-500 shadow-sm">
                       {dayLabel(m.createdAt)}
                     </span>
                   </li>
@@ -136,8 +137,13 @@ export default function MessageList({
                   mine={m.senderId === myId}
                   myId={myId}
                   friendName={friendName}
-                  // Same-length hex ids compare correctly as strings.
+                  // Same-length hex ids compare correctly as strings. Read
+                  // implies delivered, so either pointer covering it counts.
                   read={Boolean(m.id && readUpTo && m.id <= readUpTo)}
+                  delivered={Boolean(
+                    m.id &&
+                      ((deliveredUpTo && m.id <= deliveredUpTo) || (readUpTo && m.id <= readUpTo)),
+                  )}
                   onRetry={onRetry}
                   onOpenImage={setViewing}
                   onMediaLoad={handleMediaLoad}

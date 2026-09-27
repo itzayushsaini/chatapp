@@ -20,7 +20,7 @@ export default function AdminPage() {
 
   return (
     <div className="min-h-dvh bg-slate-50">
-      <header className="flex items-center gap-3 border-b border-slate-200 bg-white px-4 py-3 sm:px-6">
+      <header className="flex items-center gap-3 border-b border-slate-200 bg-surface px-4 py-3 sm:px-6">
         <Link
           to="/"
           className="inline-flex items-center gap-1 rounded-lg p-1.5 text-slate-600 hover:bg-slate-100 focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:outline-none"
@@ -31,7 +31,7 @@ export default function AdminPage() {
         <h1 className="text-lg font-semibold text-slate-900">Admin panel</h1>
       </header>
 
-      <div role="tablist" aria-label="Admin sections" className="flex gap-1 border-b border-slate-200 bg-white px-4 sm:px-6">
+      <div role="tablist" aria-label="Admin sections" className="flex gap-1 border-b border-slate-200 bg-surface px-4 sm:px-6">
         {TABS.map((t) => (
           <button
             key={t.id}

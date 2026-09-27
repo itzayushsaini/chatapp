@@ -17,12 +17,18 @@ they **accept**. Privacy is enforced on the server, not just hidden in the UI.
 ## Features
 
 - Register (Gmail addresses only, by default - admin-editable) or log in with
-  username or email; session in an httpOnly cookie
+  username or email, or "Continue with Google"; "Remember me"; session in an
+  httpOnly cookie
+- Read receipts in three states (sent, delivered, read), "typing…", and
+  browser notifications for new messages (muteable per chat)
+- Contact info panel: a friend's profile plus every photo, video and document
+  shared in the chat; mute, clear chat, block
+- A Settings page (account, blocked contacts, notifications, Enter to send,
+  help, log out) and a real dark mode (light / dark / same as device)
 - Exact-username search, friend requests (accept, decline, cancel), unfriend
 - Real-time one-to-one messaging with optimistic sending, retry and no duplicates
 - Reply (with a quoted preview), copy, delete (for me / for everyone, within a
   time limit) and forward (to several friends at once) any message
-- Read receipts: a single tick once sent, two blue ticks once they open the chat
 - Online / last-seen presence, visible to friends only
 - Profiles: photo, bio, display name, and username changes (once every 30 days)
 - Forgot password (emailed reset link, via Brevo) and change password from

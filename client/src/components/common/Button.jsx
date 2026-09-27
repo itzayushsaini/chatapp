@@ -2,8 +2,10 @@
 // look and sizes. `variant` picks the colour.
 const VARIANTS = {
   primary: 'bg-brand-600 text-white hover:bg-brand-700 disabled:bg-brand-300',
-  secondary: 'border border-slate-300 bg-white text-slate-700 hover:bg-slate-50 disabled:text-slate-400',
-  danger: 'bg-red-600 text-white hover:bg-red-700 disabled:bg-red-300',
+  secondary: 'border border-slate-300 bg-surface text-slate-700 hover:bg-slate-50 disabled:text-slate-400',
+  // brightness/opacity rather than red-700/red-300: dark mode re-uses those
+  // two shades for light text on dark alert boxes (see index.css).
+  danger: 'bg-red-600 text-white hover:brightness-90 disabled:opacity-50',
   ghost: 'text-slate-600 hover:bg-slate-100 disabled:text-slate-300',
 }
 

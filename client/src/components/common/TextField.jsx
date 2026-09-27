@@ -21,7 +21,7 @@ export default function TextField({ label, hint, type = 'text', ...inputProps })
           id={id}
           type={isPassword && visible ? 'text' : type}
           aria-describedby={hint ? hintId : undefined}
-          className="block w-full rounded-lg border border-slate-300 bg-white px-3 py-2.5 text-sm text-slate-900 placeholder:text-slate-400 focus:border-brand-500 focus:ring-2 focus:ring-brand-500/30 focus:outline-none disabled:cursor-not-allowed disabled:bg-slate-100 disabled:text-slate-500"
+          className="block w-full rounded-lg border border-slate-300 bg-surface px-3 py-2.5 text-sm text-slate-900 placeholder:text-slate-400 focus:border-brand-500 focus:ring-2 focus:ring-brand-500/30 focus:outline-none disabled:cursor-not-allowed disabled:bg-slate-100 disabled:text-slate-500"
           {...inputProps}
         />
         {isPassword && (

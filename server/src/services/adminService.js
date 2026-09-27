@@ -1,3 +1,4 @@
+import { Block } from '../models/Block.js'
 import { Friendship } from '../models/Friendship.js'
 import { Message } from '../models/Message.js'
 import { User } from '../models/User.js'
@@ -88,6 +89,7 @@ export async function deleteUser(meId, userId) {
 
   const friendships = await Friendship.find({ $or: [{ requester: userId }, { recipient: userId }] })
   await Friendship.deleteMany({ _id: { $in: friendships.map((f) => f._id) } })
+  await Block.deleteMany({ $or: [{ blocker: userId }, { blocked: userId }] })
   await User.deleteOne({ _id: userId })
 
   for (const f of friendships) {

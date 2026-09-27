@@ -30,7 +30,7 @@ export default function OverviewTab() {
   return (
     <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
       {CARDS.map((c) => (
-        <div key={c.key} className="rounded-xl border border-slate-200 bg-white p-5 text-center">
+        <div key={c.key} className="rounded-xl border border-slate-200 bg-surface p-5 text-center">
           <p className="text-3xl font-semibold text-brand-700">{stats[c.key]}</p>
           <p className="mt-1 text-sm text-slate-500">{c.label}</p>
         </div>

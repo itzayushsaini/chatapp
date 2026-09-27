@@ -27,6 +27,9 @@ describe('POST /api/auth/register', () => {
       email: 'aman@gmail.com',
       usernameChangeAllowedAt: null,
       isAdmin: false,
+      theme: 'light',
+      authProvider: 'password',
+      googleLinked: false,
     })
 
     const cookie = res.headers['set-cookie'][0]
@@ -132,6 +135,29 @@ describe('POST /api/auth/login', () => {
     expect(unknownUser.status).toBe(401)
     expect(wrongPassword.body).toEqual({ message: 'Invalid credentials' })
     expect(unknownUser.body).toEqual(wrongPassword.body)
+  })
+
+  it('"Remember me" makes a 30-day cookie; without it, a browser-session cookie', async () => {
+    await registerUser('priya')
+
+    const remembered = await request(app)
+      .post('/api/auth/login')
+      .send({ identifier: 'priya', password: 'password123', rememberMe: true })
+    expect(remembered.headers['set-cookie'][0]).toMatch(/Max-Age=2592000/)
+
+    const notRemembered = await request(app)
+      .post('/api/auth/login')
+      .send({ identifier: 'priya', password: 'password123' })
+    // No Max-Age and no Expires = deleted when the browser closes.
+    expect(notRemembered.headers['set-cookie'][0]).not.toMatch(/Max-Age|Expires/i)
+  })
+
+  it('rejects a non-boolean rememberMe', async () => {
+    await registerUser('priya')
+    const res = await request(app)
+      .post('/api/auth/login')
+      .send({ identifier: 'priya', password: 'password123', rememberMe: 'yes' })
+    expect(res.status).toBe(400)
   })
 
   it('rejects NoSQL operator injection in the identifier', async () => {

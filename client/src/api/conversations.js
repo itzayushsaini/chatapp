@@ -7,6 +7,16 @@ export const getMessages = (conversationId, before) =>
     .get(`/conversations/${conversationId}/messages`, { params: before ? { before } : {} })
     .then((r) => r.data)
 
+// The files sent in this chat, newest first: [{ messageId, senderId,
+// createdAt, attachment }] - for the contact info panel.
+export const getSharedAttachments = (conversationId) =>
+  http.get(`/conversations/${conversationId}/attachments`).then((r) => r.data.items)
+
+// Both of these only change things for ME, never for the other person.
+export const clearChat = (conversationId) => http.post(`/conversations/${conversationId}/clear`)
+export const setMuted = (conversationId, muted) =>
+  http.patch(`/conversations/${conversationId}/mute`, { muted }).then((r) => r.data.muted)
+
 // Step 1 of sending a file. `onProgress` is called with 0..1 as it uploads.
 // Resolves to the attachment; step 2 is message:send with its id.
 export const uploadAttachment = (conversationId, file, onProgress) => {

@@ -1,8 +1,32 @@
 import { z } from 'zod'
 
 import { objectId } from '../../middleware/validate.js'
-import { deleteMessage, forwardMessage, sendMessage } from '../../services/messageService.js'
+import {
+  deleteMessage,
+  forwardMessage,
+  markDelivered,
+  sendMessage,
+} from '../../services/messageService.js'
+import { isOnline } from '../../services/presenceService.js'
 import { AppError } from '../../utils/AppError.js'
+import { emitToUser } from '../emitter.js'
+
+// If the recipient is online right now, the message:new just emitted has
+// reached their app, so it counts as delivered (grey double tick). The news
+// goes to the SENDER's room via emitToUser - every one of their tabs,
+// INCLUDING the one that sent it, since that is where the ticks are drawn.
+// Its own try/catch: this runs after the ack, so a failure here must never
+// turn into a second, contradictory ack.
+async function announceDeliveredIfOnline(senderId, recipientId, conversationId, messageId) {
+  try {
+    if (!isOnline(recipientId)) return
+    if (await markDelivered(recipientId, conversationId, messageId)) {
+      emitToUser(senderId, 'message:delivered', { conversationId, upToMessageId: messageId })
+    }
+  } catch (err) {
+    console.error('marking delivered failed:', err)
+  }
+}
 
 // text may be empty when there is an attachment (a photo with no caption),
 // but a message must have one or the other.
@@ -84,6 +108,7 @@ export function registerMessageHandlers(socket) {
       }
 
       ack({ ok: true, message })
+      if (created) await announceDeliveredIfOnline(userId, otherId, message.conversationId, message.id)
     } catch (err) {
       // An AppError (403 not friends, 404 conversation) is safe to show. Any
       // other error is a bug: log it, but give the client a generic message.
@@ -155,6 +180,12 @@ export function registerMessageHandlers(socket) {
           error,
         })),
       })
+
+      for (const result of results) {
+        if (result.ok) {
+          await announceDeliveredIfOnline(userId, result.otherId, result.conversationId, result.message.id)
+        }
+      }
     } catch (err) {
       if (!(err instanceof AppError)) console.error('message:forward failed:', err)
       ack({ ok: false, error: err instanceof AppError ? err.message : 'Could not forward message' })

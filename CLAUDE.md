@@ -51,10 +51,10 @@ pingme/
     .env.example
     src/
       config/        env.js (zod-validated env), db.js
-      models/        User.js, Friendship.js, Conversation.js, Message.js, Attachment.js, Setting.js
+      models/        User.js, Friendship.js, Conversation.js, Message.js, Attachment.js, Setting.js, Block.js
       services/      authService.js, friendService.js, messageService.js, presenceService.js,
                      profileService.js, attachmentService.js, storageService.js, emailService.js,
-                     settingsService.js, adminService.js
+                     settingsService.js, adminService.js, googleAuthService.js
       controllers/   auth, users, friends, conversations, attachments, admin
       routes/        auth.routes.js, users.routes.js, friends.routes.js, conversations.routes.js,
                      attachments.routes.js, settings.routes.js, admin.routes.js
@@ -74,10 +74,12 @@ pingme/
                      settings.js, admin.js
       store/         useChatStore.js (zustand)
       context/       AuthContext.jsx, SocketContext.jsx
-      hooks/         useSocketEvents.js
-      pages/         LoginPage.jsx, RegisterPage.jsx, ChatPage.jsx, AdminPage.jsx
+      hooks/         useSocketEvents.js, useFriendStatus.js
+      pages/         LoginPage.jsx, RegisterPage.jsx, ChatPage.jsx, SettingsPage.jsx, AdminPage.jsx
       components/    layout/, sidebar/, chat/, profile/, admin/, common/ (incl. AnnouncementBanner.jsx)
-      utils/         time.js, avatar.js, files.js, image.js
+      utils/         time.js, avatar.js, files.js, image.js, notifications.js, theme.js, preferences.js
+    public/          favicon.svg, sw.js (service worker - notifications only),
+                     theme-init.js (applies the saved theme before React loads)
 ```
 
 ---
@@ -117,6 +119,10 @@ BREVO_API_KEY=
 EMAIL_FROM_ADDRESS=  # must be a sender verified in Brevo
 EMAIL_FROM_NAME=PingMe
 APP_URL=http://localhost:5173  # set to the deployed URL in production
+
+# "Continue with Google". Optional - without both, the button is not shown.
+GOOGLE_CLIENT_ID=
+GOOGLE_CLIENT_SECRET=
 ```
 
 Validate them at startup with zod in `config/env.js`. If one is missing or invalid, exit with a clear message.
@@ -156,7 +162,10 @@ Validate them at startup with zod in `config/env.js`. If one is missing or inval
 | `bio` | String, trimmed, 0–160 characters, default `''` |
 | `avatarFileId` | ObjectId of the profile picture in GridFS, or null |
 | `email` | String, required, unique, lowercase, trimmed |
-| `passwordHash` | String, `select: false` |
+| `passwordHash` | String, `select: false`. Absent for an account created by Google sign-in until they set a password via "Forgot password". |
+| `authProvider` | `'password' \| 'google'`, default `'password'` - how the account was CREATED (never changes). |
+| `googleId` | String, unique + sparse (only accounts that used Google have one). Google's own id for the person (`sub`). |
+| `theme` | `'light' \| 'dark' \| 'system'`, default `'light'`. Saved on the account so it follows the user to every device. |
 | `passwordChangedAt` | Date or null. Set on every password change or reset. Any session token issued before this moment is rejected (see Session token rules) - this is what signs every OTHER device out. |
 | `resetPasswordTokenHash` | String, `select: false`, default null. SHA-256 hash of the one-time reset token - never the raw token. |
 | `resetPasswordExpires` | Date, `select: false`, default null |
@@ -167,9 +176,19 @@ Validate them at startup with zod in `config/env.js`. If one is missing or inval
 
 - **PublicUser shape:** `{ id, username, displayName, bio, avatarUrl }`. These are the ONLY fields ever sent about another user. `avatarUrl` is `/api/users/:id/avatar?v=<avatarFileId>` or null.
 - **Friends-only fields:** `online` and `lastSeen` are sent only to friends.
-- **Email:** only ever sent to the user themself (via `/api/auth/me`), in the **SelfUser** shape: PublicUser + `email` + `usernameChangeAllowedAt` (Date or null) + `isAdmin`.
+- **Email:** only ever sent to the user themself (via `/api/auth/me`), in the **SelfUser** shape: PublicUser + `email` + `usernameChangeAllowedAt` (Date or null) + `isAdmin` + `theme` + `authProvider` + `googleLinked` (boolean - whether Google sign-in works for this account).
 - **AdminUser shape** (admin panel's own user list only): `{ id, username, displayName, email, isAdmin, suspended, online, lastSeen, createdAt }` - more detail than PublicUser/SelfUser, but still never `passwordHash` or any password/reset field.
 - **Avatars:** the uploaded profile picture, or - if there is none - initials on a coloured circle, with the colour derived from the username. Picture and bio are visible to any logged-in user who has the user's id (i.e. anyone who searched their exact username).
+
+### Block
+
+| Field | Rules |
+|---|---|
+| `blocker` | ObjectId → User |
+| `blocked` | ObjectId → User |
+| timestamps | |
+
+Unique index `{ blocker: 1, blocked: 1 }`, index `{ blocked: 1 }`. See "Blocking" in the friend rules.
 
 ### Friendship (exactly one document per pair of users)
 
@@ -192,6 +211,7 @@ Indexes: `{ recipient: 1, status: 1 }`, `{ requester: 1, status: 1 }`.
 | `pairKey` | String, unique |
 | `lastMessage` | `{ messageId, text, sender, createdAt, attachment: { kind, name } \| null }` for the sidebar preview. `messageId` lets a delete tell whether IT is the current preview and needs recomputing. |
 | `lastRead` | Map, keyed by user id (a string) → `{ upTo: ObjectId, at: Date }`. Only 2 entries ever exist - one per participant. How far each has read, tracked per conversation rather than per message. |
+| `mutedBy` | `[ObjectId]` - the participants who muted this chat (no notification pop-ups for them). Per person; never visible to the other one. |
 | timestamps | |
 
 The conversation is created when a request is accepted, by upserting on `pairKey` with `$setOnInsert`. If the pair becomes friends again later, the old conversation and history are reused.
@@ -264,13 +284,14 @@ Index: `{ message: 1, createdAt: 1 }` (cleanup of unsent uploads).
   - An unknown user and a wrong password return the **same** response: 401 "Invalid credentials".
   - Checked AFTER the password (so this can never be used to discover whether an unknown identifier belongs to a suspended account): a suspended account gets 403 "Your account has been suspended".
 - **Session token:**
-  - JWT `{ sub: userId, ts: <ms epoch when signed> }`, expires in 7 days, signed with `JWT_SECRET`.
+  - JWT `{ sub: userId, ts: <ms epoch when signed>, rm: <remember me> }`, signed with `JWT_SECRET`. Expires in 30 days when `rm` is true, 7 days when false.
+  - **Remember me** (login checkbox, `rememberMe` in the login body, default false): ticked → the cookie has a 30-day `maxAge` and survives browser restarts; unticked → NO `maxAge` (a browser-session cookie, deleted when the browser closes). Registration always behaves as ticked. A cookie reissued after a password change keeps the original choice (read back from `rm`; a token from before `rm` existed counts as ticked).
   - `ts` is a custom millisecond-precision issued-at time, separate from the JWT's own `iat` (which is whole seconds only - too coarse to reliably tell "issued just before a password change" from "issued just after", see `userFromToken`).
-  - Sent as a cookie named `token`: `httpOnly: true`, `sameSite: 'lax'`, `secure: true` in production, `maxAge` of 7 days, `path: '/'`.
+  - Sent as a cookie named `token`: `httpOnly: true`, `sameSite: 'lax'`, `secure: true` in production, `path: '/'`, and `maxAge` only as described under Remember me.
   - Never put the token in localStorage or in a response body.
 - **`requireAuth` middleware:** verifies the cookie, loads the user and sets `req.user`. Every route uses it except health, register, login, logout, forgot-password and reset-password.
 - **`userFromToken`** (shared by `requireAuth` and the socket handshake): rejects a token whose `ts` is before the user's `passwordChangedAt` - a stale token from before the password changed is refused, without a server-side list of valid tokens. Also rejects (returns null) any token belonging to a **suspended** user, so an admin's suspend takes effect on the very next request or handshake, not just at the account's next login.
-- **Logout:** clears the cookie.
+- **Logout:** clears the cookie. The client asks "Log out?" first (Cancel / Log out).
 
 ### Forgot password
 
@@ -282,6 +303,16 @@ Index: `{ message: 1, createdAt: 1 }` (cleanup of unsent uploads).
   - Looks up the user by email, hashes the given token the same way, and compares. Any mismatch, missing token, or an expired `resetPasswordExpires` all give the identical 400 "That reset link is invalid or has expired" - never a more specific reason.
   - On success: hash the new password, set `passwordChangedAt`, and clear `resetPasswordTokenHash` / `resetPasswordExpires` so the link cannot be used twice.
   - Does **not** log the user in - the client sends them back to `/login`.
+
+### Google sign-in
+
+OAuth 2.0 authorization-code flow with plain `fetch` (`googleAuthService.js`), no SDK:
+
+- **`GET /api/auth/google`** (register/login rate limit): if not configured → redirect `/login?error=google_unavailable`. Otherwise a random 16-byte hex `state` in an httpOnly cookie `oauth_state` (path `/api/auth/google`, 10 minutes), then redirect to Google with scope `openid email profile`, `prompt=select_account`, redirect URI `${APP_URL}/api/auth/google/callback`.
+- **`GET /api/auth/google/callback?code&state&error`**: clears the state cookie; refuses (→ `/login?error=google_failed`) a missing code, an `error`, or a `state` that does not equal the cookie (login CSRF). Swaps the code for a token server-to-server, fetches the profile, and refuses an email Google has not verified.
+- **Which account:** by `googleId`; else link the account with the same email (set `googleId`); else create one (only if `registrationOpen`, otherwise `registration_closed`; the allowed-email-domains rule does NOT apply) with `authProvider: 'google'`, no password, and a username from the email's local part (random 4 digits appended if taken). Suspended → `suspended`.
+- On success: the normal session cookie (as with Remember me ticked), redirect `/`. The browser never sees Google's tokens or the client secret.
+- Password login on an account with no password → the usual 401 "Invalid credentials". Change password on one → 400 telling them to use "Forgot password".
 
 ### Change password (while logged in)
 
@@ -302,12 +333,13 @@ Index: `{ message: 1, createdAt: 1 }` (cleanup of unsent uploads).
 - **Exact match on the normalised username only.** No partial, regex or prefix search. Partial search would let anyone list all users, which defeats the purpose of the feature.
 - **Response:** `{ user: PublicUser, relationship }`, or 404 `{ message: "No user found" }`.
 - **`relationship`** is one of `'self' | 'none' | 'pending_outgoing' | 'pending_incoming' | 'friends'`. A declined friendship shows as `'none'` to both sides.
+- If either user has blocked the other → the same 404 "No user found" (see Blocking).
 
 ### Send request
 
 `POST /api/friends/requests { username }`. Checks run in this order:
 
-1. The target doesn't exist → 404 "No user found".
+1. The target doesn't exist, or either of us has blocked the other → 404 "No user found".
 2. The target is me → 400 "You can't add yourself".
 3. Look up the Friendship by `pairKey`:
    - **No document:** create one with `status: 'pending'` and `requester = me`.
@@ -337,9 +369,15 @@ Index: `{ message: 1, createdAt: 1 }` (cleanup of unsent uploads).
 - **Cancel:** `DELETE /api/friends/requests/:id`. Only the requester can cancel, and only while the request is pending. Delete the document, then emit `friend:request:cancelled { requestId }` to the recipient.
 - **Unfriend:** `DELETE /api/friends/:userId`. Delete the accepted Friendship, but keep the Conversation and its messages. Emit `friend:removed { userId }` to both users. After this, the chat becomes read-only automatically because sending checks friendship.
 
+### Blocking
+
+- **`POST /api/users/:id/block`** (profile rate limit): 400 for myself, 404 for an unknown user; upserts the Block (blocking twice is harmless, 204). Deletes any Friendship between us - accepted → `friend:removed` to both; pending → `friend:request:cancelled` to both. The Conversation and messages are kept (read-only, like an unfriend).
+- **`DELETE /api/users/:id/block`** → 204. **`GET /api/users/me/blocked`** → `{ users: [PublicUser] }`, my blocks only, newest first.
+- Works in BOTH directions and silently: search and send-request give the same 404 as a username that does not exist, so a blocked person cannot tell.
+
 ### Lists
 
-- **`GET /api/friends`** returns `{ friends: [{ friend: PublicUser, conversationId, lastMessage, online, lastSeen }] }`, sorted by the most recent `lastMessage.createdAt` (friends with no messages go last, newest friendship first).
+- **`GET /api/friends`** returns `{ friends: [{ friend: PublicUser, conversationId, lastMessage, online, lastSeen, muted }] }`, sorted by the most recent `lastMessage.createdAt` (friends with no messages go last, newest friendship first). `muted` is whether *I* muted the chat. `lastMessage` is null for me if that message is deleted/cleared for me.
 - **`GET /api/friends/requests`** returns `{ incoming: [...], outgoing: [...] }`. Each item is `{ id, user: PublicUser, createdAt }`.
 
 ### Enforcement (never skip)
@@ -470,11 +508,29 @@ on the client, given the message already has its text in hand.
 
 ## Read receipts
 
-Two states only, not three: a single tick (saved on the server) and a
-double **blue** tick (the other person has opened that chat) - no separate
-"delivered" state. In a web chat where full history is always available on
-refetch, a delivered-but-not-read state would not carry an honest signal the
-way it does for a mobile app with push delivery.
+Three states, WhatsApp-style: a single grey tick (saved on the server), a
+double **grey** tick (delivered - it reached the other person's app, because
+they were online), and a double **blue** tick (they opened that chat while
+it was actually on screen). The middle "delivered" state was originally left
+out on purpose; it was added at the team's request in Phase 16a.
+
+- **Delivered** is a second forward-only pointer per participant,
+  `Conversation.lastDelivered` (same shape as `lastRead`), moved only by the
+  SERVER - there is no client event for it:
+  - when a message is sent (or forwarded) and the recipient `isOnline` right
+    then, straight after the ack;
+  - when a user connects (every tab, every reconnect), for the latest message
+    from the other person in each of their conversations
+    (`messageService.catchUpDelivered`).
+  `markDelivered` is ONE atomic update whose filter is the "only moves
+  forward" rule, so racing tabs can never move it back. Each time it actually
+  moves, `message:delivered { conversationId, upToMessageId }` goes to the
+  SENDER's room via `emitToUser` - every tab, including the sending one.
+- The client draws a message as delivered if its id is \<= the other
+  person's delivered OR read pointer (read implies delivered).
+- A chat open in a **hidden or minimised tab** is NOT read: the client only
+  emits `conversation:read` while `document.hidden` is false, and again on
+  `visibilitychange` when the tab is shown - so it stays grey until seen.
 
 - Tracked **per conversation**, not per message: `Conversation.lastRead` maps
   a user id to how far they have read (`upTo`, a Message id). A message is
@@ -491,9 +547,38 @@ way it does for a mobile app with push delivery.
   sent to the OTHER participant only, so a client never gets its own read
   events echoed back.
 - **`GET /api/conversations/:id/messages`** additionally returns
-  `theirReadUpTo` (a Message id, or null): the other participant's current
-  pointer, so the client can render the right tick colour immediately on
-  load, without waiting for a live event.
+  `theirReadUpTo` and `theirDeliveredUpTo` (each a Message id, or null): the
+  other participant's current pointers, so the client can render the right
+  ticks immediately on load, without waiting for a live event.
+
+## Typing indicator
+
+- **`typing` (client → server, no ack)** `{ conversationId, isTyping }`.
+  Rate limit (30 per 5 seconds per socket) → validate → `assertParticipant`
+  → `assertFriends` → relayed as `typing { conversationId, userId, isTyping }`
+  to the OTHER participant only. Never stored.
+- The client sends `isTyping: true` on the first keystroke and then at most
+  once every 3 seconds while typing continues; `false` after 3 seconds idle,
+  on send, when the text is emptied, or when leaving the chat.
+- The receiver shows "typing…" in the chat header and that friend's Chats
+  row, clearing it on `false`, when their message arrives, or after 6 seconds
+  with no update (their connection may simply have dropped).
+
+## Notifications
+
+- Browser notifications (Notification API, shown through a tiny service
+  worker `client/public/sw.js` so they also work on Android Chrome) for a
+  message from someone else, unless that exact chat is open in a VISIBLE
+  tab. Title: their display name; body: the text or attachment label; icon:
+  their picture. Tag per conversation, so a burst replaces rather than
+  stacks. Clicking one focuses PingMe and opens that chat.
+- Only while PingMe is open in some tab (even minimised). Not when the
+  browser is fully closed - that would need Web Push, not used here.
+- Permission is only requested from a click (a one-line "Enable" offer in the
+  sidebar, shown while the browser has not been asked yet, dismissible). A
+  per-device on/off preference (`localStorage`) is kept separately, because a
+  browser's "Allow" can only be revoked from the browser's own settings.
+- The tab title shows the total unread count: `(3) PingMe`.
 - **The client emits `conversation:read`:**
   - the moment a chat is opened, for the latest loaded message;
   - immediately when a new message arrives while that chat is already the
@@ -653,6 +738,11 @@ runaway script.
 | `user:updated` | server → client | `{ user }` - PublicUser to contacts, SelfUser to the user's own tabs |
 | `conversation:read` | client → server, no ack required | `{ conversationId, upToMessageId }` |
 | `message:read` | server → client | `{ conversationId, upToMessageId }` |
+| `message:delivered` | server → client (the sender's room) | `{ conversationId, upToMessageId }` |
+| `typing` | client → server, no ack | `{ conversationId, isTyping }` |
+| `typing` | server → client (the other participant) | `{ conversationId, userId, isTyping }` |
+| `conversation:cleared` | server → client (my own tabs) | `{ conversationId }` |
+| `conversation:muted` | server → client (my own tabs) | `{ conversationId, muted }` |
 | `settings:updated` | server → client (everyone, not just one room) | `{ registrationOpen, allowedEmailDomains, announcement }` - the PUBLIC subset only |
 
 ---
@@ -677,7 +767,15 @@ All responses are JSON (except the two file downloads). Errors use the shape `{ 
 | POST | `/api/friends/requests/:id/decline` | yes | 204 |
 | DELETE | `/api/friends/requests/:id` | yes | Cancel, returns 204 |
 | GET | `/api/conversations/:id/messages` | yes | `{ messages, hasMore, theirReadUpTo }` |
-| PATCH | `/api/users/me` | yes | `{ displayName?, bio?, username? }` → `{ user }` (SelfUser) |
+| PATCH | `/api/users/me` | yes | `{ displayName?, bio?, username?, theme? }` → `{ user }` (SelfUser) |
+| GET | `/api/users/me/blocked` | yes | `{ users }` (PublicUser) |
+| POST | `/api/users/:id/block` | yes | 204 |
+| DELETE | `/api/users/:id/block` | yes | 204 |
+| GET | `/api/conversations/:id/attachments` | yes | `{ items: [{ messageId, senderId, createdAt, attachment }] }`, newest first (max 200), excluding deleted-for-everyone and deleted-for-me |
+| POST | `/api/conversations/:id/clear` | yes | 204 - every message hidden for ME only (added to `deletedFor`) |
+| PATCH | `/api/conversations/:id/mute` | yes | `{ muted: boolean }` → `{ muted }` |
+| GET | `/api/auth/google` | no | Redirect to Google (see Google sign-in) |
+| GET | `/api/auth/google/callback` | no | Redirect to `/` or `/login?error=...` |
 | PUT | `/api/users/me/avatar` | yes | multipart `avatar` → `{ user }` |
 | DELETE | `/api/users/me/avatar` | yes | `{ user }` |
 | GET | `/api/users/:id/avatar` | yes | The picture (image bytes) |
@@ -686,7 +784,7 @@ All responses are JSON (except the two file downloads). Errors use the shape `{ 
 | POST | `/api/auth/forgot-password` | no | `{ email }` → the same 200 message either way |
 | POST | `/api/auth/reset-password` | no | `{ email, token, password }` → 200 message |
 | PATCH | `/api/auth/password` | yes | `{ currentPassword, newPassword }` → 200 message, cookie reissued |
-| GET | `/api/settings/public` | no | `{ settings }` - registrationOpen, allowedEmailDomains, announcement |
+| GET | `/api/settings/public` | no | `{ settings }` - registrationOpen, allowedEmailDomains, announcement, googleSignIn |
 | GET | `/api/admin/settings` | admin | `{ settings }` (every field) |
 | PATCH | `/api/admin/settings` | admin | Any subset of `Setting`'s fields → `{ settings }` |
 | GET | `/api/admin/users?search=&page=&limit=` | admin | `{ users, total, page, limit }` (AdminUser shape) |
@@ -709,6 +807,8 @@ All responses are JSON (except the two file downloads). Errors use the shape `{ 
   - Attachment uploads: 20 per hour per user.
   - Forgot/reset password: same budget as register/login (10 per 15 minutes per IP).
   - Change password: 20 per hour per user (same as profile changes).
+  - Block / unblock, clear chat and mute: the same profile budget (20 per hour per user).
+  - Google sign-in start and callback: the register/login budget (per IP).
   - Socket messages: as described above.
   - `message:delete` / `message:forward`: share one limit, 20 per 5 seconds per socket (user-initiated clicks, not automatic events, so they get `message:send`'s own budget rather than a separate counter).
   - Admin mutation routes (settings, suspend/unsuspend, delete): 200 per hour per user - `requireAdmin` is the real gate, this just stops a runaway script.
@@ -729,13 +829,13 @@ All responses are JSON (except the two file downloads). Errors use the shape `{ 
 
 ### Routes and session
 
-- Routes: `/login`, `/register`, `/forgot-password`, `/reset-password`, `/` (the protected chat app) and `/admin` (only when `user.isAdmin` - anyone else visiting it is sent to `/`). Unknown routes redirect to `/`.
+- Routes: `/login`, `/register`, `/forgot-password`, `/reset-password`, `/` (the protected chat app), `/settings` (protected) and `/admin` (only when `user.isAdmin` - anyone else visiting it is sent to `/`). Unknown routes redirect to `/`.
 - **AuthContext:** calls `GET /api/auth/me` on load and shows a full-screen spinner until it resolves. There must be no flash of the login page for users who are already logged in.
 - **axios instance:** `baseURL: '/api'`, `withCredentials: true`. On a 401 from any call except `/auth/me` and `/auth/login`, clear the user and go to `/login`. (`/auth/password`'s "wrong current password" is deliberately a 400, not a 401, so it is never mistaken for an expired session.)
 
 ### Sockets and state
 
-- **SocketProvider:** creates exactly one socket per logged-in session, after login, with `io({ withCredentials: true })`. It disconnects on logout.
+- **SocketProvider:** creates exactly one socket per logged-in session, after login, with `io({ withCredentials: true })`. It disconnects on logout. It lives in `LoggedInLayout`, the parent route of BOTH `/` and `/settings`, together with `useSocketEvents`, the initial fetches, the banners and the toasts - so opening Settings never disconnects.
 - **`useSocketEvents`:** all socket listeners are registered in this one hook, inside `useEffect`, with `socket.off` in the cleanup. React StrictMode runs effects twice in development, so without cleanup every message would appear twice.
 - **zustand store** holds: `friends`, `requests`, `messagesByConversation`, `presence`, `activeConversationId` and `unreadCounts`.
 - A reply-in-progress (which message, if any, the composer is currently replying to) is UI state local to `ChatWindow`, not in the zustand store - it never needs to be read anywhere else, and it must reset when the open conversation changes.
@@ -770,12 +870,13 @@ All responses are JSON (except the two file downloads). Errors use the shape `{ 
 
 ### Chat window
 
-- **Header:** the friend's name, with "Online" or "Last seen …".
+- **Header:** the friend's name (with a bell-off icon if muted), with "Online" or "Last seen …". Clicking the name or picture opens **Contact info**.
+- **Contact info panel** (beside the chat on wide screens, over it on narrow ones): picture, name, @username, status, bio; photos/videos grid (click → full size) and documents list (click → download) from `GET /conversations/:id/attachments`; a Mute notifications switch; Clear chat, Remove friend and Block, each behind a `ConfirmDialog`.
 - **Message list:**
   - My messages on the right, theirs on the left, with the time on each.
   - Date separators: Today, Yesterday, then dates.
 - **Input:**
-  - Enter sends; Shift+Enter adds a new line.
+  - Enter sends; Shift+Enter adds a new line - unless "Enter to send" is off in Settings (per browser), when Enter is a new line and only the Send button sends.
   - 2000-character limit, with a counter shown near the limit.
 - **Optimistic sending:**
   - Add the bubble immediately with a `clientId` from `crypto.randomUUID()` and the status `sending`.
@@ -789,9 +890,15 @@ All responses are JSON (except the two file downloads). Errors use the shape `{ 
 - **Toasts:** a new friend request, a request accepted, and errors.
 - **Read receipts:** the timestamp and status icon sit INSIDE the bubble,
   bottom-right (not as a caption below it) - a clock while sending, a single
-  grey tick once saved, two blue ticks once the other person has opened the
-  chat. Computed from `theirReadUpTo` (loaded with history) and the live
-  `message:read` event, never from a per-message flag.
+  grey tick once saved, two grey ticks once delivered, two blue ticks once the
+  other person has opened the chat. Computed from `theirDeliveredUpTo` /
+  `theirReadUpTo` (loaded with history) and the live `message:delivered` /
+  `message:read` events, never from a per-message flag.
+- **Typing:** "typing…" (green) replaces Online/Last seen in the chat header,
+  and the last-message preview in that friend's Chats row.
+- **Composer per chat:** `MessageInput` is keyed by conversation, so switching
+  chats starts an empty composer (and ends any "typing" in the old chat).
+- **Logout** (sidebar top bar) asks "Log out?" in a dialog first.
 - **Message actions:** hovering (or tapping, on touch) a saved message shows a
   small actions button - Reply, Copy (only when there is text), Forward,
   Delete. Not shown on a pending (unsent) or already-deleted-for-everyone
@@ -817,7 +924,10 @@ All responses are JSON (except the two file downloads). Errors use the shape `{ 
 
 ### Login, forgot password, reset password
 
-- **Login page:** a "Forgot password?" link next to the password field, going to `/forgot-password`.
+- **Login page:** a "Remember me" checkbox (unticked by default) and a "Forgot password?" link under the password field. `?error=google_failed|google_unavailable|registration_closed|suspended` shows a fixed message for that code (never text from the URL).
+- **"Continue with Google"** (a plain link to `/api/auth/google`) under the login and register forms, only when public settings say `googleSignIn: true`.
+- **Register page:** a "Confirm password" field, checked in the browser only ("Passwords do not match"), never sent to the server.
+- **Error screen:** a full-page "Something went wrong" + Try again, shown when (a) the very first `/auth/me` check cannot reach the server at all (a 401 still means "logged out" and shows the login page), or (b) a React error boundary catches a crash while rendering (Try again reloads the page).
 - **Forgot password page:** one email field. Always shows the same "we've sent a link" message on submit, whether or not the account exists.
 - **Reset password page:** reached from the emailed link (`?token=...&email=...`). A missing token or email shows "Invalid reset link" instead of a broken form. New password + confirm (checked client-side too). On success, redirects to `/login?reset=success`, which shows a green "Password reset" banner - not an automatic login.
 
@@ -825,10 +935,16 @@ All responses are JSON (except the two file downloads). Errors use the shape `{ 
 
 - The sidebar footer (my avatar and name) opens a **Your profile** dialog: photo (Add/Change/Remove - saved immediately, cropped to 256×256 in the browser), display name, username, bio (160 max, with a counter), email (read-only). Save sends only the changed fields.
 - Changing the username asks for confirmation (30-day lock, old name becomes available). While locked, the field is disabled and says until when.
-- Clicking a friend's picture or name in the chat header opens their profile (picture, name, @username, bio). The Add Friend result card shows the bio.
+- Clicking a friend's picture or name in the chat header opens their Contact info panel. The Add Friend result card shows the bio.
 - `user:updated` updates that person everywhere they appear (Chats, Requests, chat header), or my own profile if it is me.
 - Dialogs use the native `<dialog>` element (`showModal`): focus trap, Escape and backdrop click close it.
 - **Change password** is its own form inside the same dialog, below the profile fields, with its own Save button: current password, new password, confirm. On success, the current tab stays logged in and a message says other devices were signed out.
+
+### Settings page (`/settings`, gear icon in the sidebar top bar)
+
+- Profile summary + Edit profile (the same Your profile dialog); Account: email, sign-in method ("Password", "Google" or "Password or Google"), Change password.
+- Privacy: blocked contacts with Unblock. Notifications: on/off switch (asks the browser for permission when needed; explains when blocked or unsupported). Chats: Enter to send. Theme: Light / Dark / Same as device. Help & support: link to the GitHub issues page. Log out (the same "Log out?" dialog as the sidebar).
+- Notifications and Enter to send are per browser (localStorage); theme is per account.
 
 ### Attachments
 
@@ -846,8 +962,15 @@ A WhatsApp-style look: a green accent colour (`--color-brand-*` in
 green outgoing bubbles (`brand-100`) against white incoming ones, a subtle
 doodle-pattern chat background (`.chat-background`), a circular send button,
 and a top bar in the sidebar (my avatar + name, log out) instead of a footer.
-Light theme only - no dark mode. Use accessible labels, visible focus rings,
-good contrast and full keyboard use.
+Light and dark themes. Dark mode sets `<html data-theme="dark">` and
+`index.css` redefines the Tailwind colour VARIABLES under it (flipped slate
+scale, dark status colours, WhatsApp's dark bubble green) - no `dark:`
+classes. Pure white/black must therefore be written as the tokens
+`bg-surface`, `bg-overlay/<n>` and `text-meta`, never `bg-white`/`bg-black/5`
+(except white text/icons on coloured buttons). `public/theme-init.js` applies
+the cached theme before React loads (CSP forbids inline scripts), and
+`AuthContext` applies the account's saved theme once the user loads. Use
+accessible labels, visible focus rings, good contrast and full keyboard use.
 
 ---
 

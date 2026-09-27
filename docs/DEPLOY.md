@@ -88,6 +88,32 @@ server as a warning).
 
 ---
 
+## 1.6. Set up "Continue with Google" (optional)
+
+1. Open <https://console.cloud.google.com> and create a project (e.g.
+   "PingMe").
+2. **APIs & Services → OAuth consent screen**: choose *External*, fill in the
+   app name (PingMe), a support email and a developer email. Scopes: the
+   default `openid`, `email`, `profile` are all PingMe asks for. While the app
+   is in **Testing** mode, add every Google account that should be able to
+   sign in under *Test users* (or click *Publish app* to open it to anyone).
+3. **APIs & Services → Credentials → Create credentials → OAuth client ID**:
+   - Application type: **Web application**
+   - Authorized redirect URIs - add both:
+     - `http://localhost:5173/api/auth/google/callback` (development)
+     - `https://<your-render-url>/api/auth/google/callback` (production -
+       exactly your `APP_URL` followed by `/api/auth/google/callback`)
+4. Google shows a **Client ID** and **Client secret**. Put them in
+   `server/.env` as `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` for local
+   development, and in Render → Environment for the live site. Treat the
+   secret like a password.
+
+The redirect URI is built from `APP_URL`, so `APP_URL` must be right, or
+Google answers "redirect_uri_mismatch". Skipping this section is fine: the
+Google button is simply not shown.
+
+---
+
 ## 2. Create the web service (Render)
 
 The repository contains a `render.yaml` Blueprint, so Render configures itself.
@@ -125,6 +151,7 @@ What `render.yaml` sets for you:
 | `BREVO_API_KEY`, `EMAIL_FROM_ADDRESS` | you paste them | Password-reset email (optional - see section 1.5) |
 | `EMAIL_FROM_NAME` | `PingMe` | Shown as the email's sender name |
 | `APP_URL` | you paste it, after the first deploy | So reset links point at your real site, not `localhost` |
+| `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` | you paste them | "Continue with Google" (optional - see section 1.6) |
 | `PORT` | set by Render | `config/env.js` reads it |
 
 ### Without the Blueprint (manual setup)

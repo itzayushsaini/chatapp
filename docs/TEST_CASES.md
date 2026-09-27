@@ -2,14 +2,14 @@
 
 Kept up to date at the end of every phase.
 
-- **Automated** cases run with `npm test` (server: 221 tests) and
-  `npm run test:e2e` (Playwright: 11 browser tests).
+- **Automated** cases run with `npm test` (server: 261 tests) and
+  `npm run test:e2e` (Playwright: 16 browser tests).
 - **Manual** cases are the ones a person checks in the browser. Fill in the
   Actual and Result columns when you run them.
 
-Last full run: 2026-09-27 - **221/221 server tests pass, lint clean in both
-workspaces, `npm run build` succeeds. Playwright e2e (11/11, from Phase 13)
-was not re-run this phase either - see `docs/PROGRESS.md`, Known issues.**
+Last full run: 2026-09-27 (after Phase 16b) - **261/261 server tests pass,
+16/16 end-to-end tests pass, lint clean in both workspaces, `npm run build`
+succeeds.**
 
 ---
 
@@ -249,12 +249,64 @@ was not re-run this phase either - see `docs/PROGRESS.md`, Known issues.**
 | A15.13 | Delete a user who has an accepted friendship | 204; the `Friendship` document is gone; the shared `Conversation` still exists |
 | A15.14 | Stats | `{ totalUsers, totalMessages, onlineNow }` match reality |
 
+### Phase 16a - `server/tests/deliveryTyping.test.js`, `server/tests/auth.test.js`
+
+| ID | Case | Expected |
+|---|---|---|
+| A16.1 | Log in with `rememberMe: true` / without it | `Max-Age=2592000` (30 days) / no `Max-Age` or `Expires` at all (a browser-session cookie) |
+| A16.2 | A non-boolean `rememberMe` | 400 |
+| A16.3 | Send while the recipient is online | The SENDING tab gets `message:delivered { conversationId, upToMessageId }`; history shows `theirDeliveredUpTo` = that id and `theirReadUpTo` still null |
+| A16.4 | Send while the recipient is offline, then they connect | Nothing at send time; `message:delivered` the moment they connect |
+| A16.5 | The recipient reconnects with nothing new | No second `message:delivered` (the pointer only moves forward) |
+| A16.6 | The sender reconnects | Their own messages are never marked delivered to themselves |
+| A16.7 | Typing | Relayed to the friend as `{ conversationId, userId, isTyping }`; NOT to my own other tab; `isTyping: false` relayed too |
+| A16.8 | Typing from someone outside the conversation | Nothing relayed |
+| A16.9 | Typing after an unfriend | Nothing relayed |
+| A16.10 | Malformed typing payload / `null` | Ignored; the socket stays connected |
+
+### Phase 16b - `server/tests/google.test.js`, `server/tests/chatControls.test.js`
+
+Google's own servers are never contacted: `fetch` is replaced with a fake
+that answers the token and profile requests.
+
+| ID | Case | Expected |
+|---|---|---|
+| A16b.1 | `GET /api/auth/google` | 302 to accounts.google.com with our client id, redirect URI, `openid email profile` and a 32-hex `state`; the same `state` in an HttpOnly `oauth_state` cookie |
+| A16b.2 | Google sign-in not configured | 302 to `/login?error=google_unavailable` |
+| A16b.3 | New person | Account created (username from the email, email lowercased, `authProvider: 'google'`, `googleLinked: true`), logged in, redirect `/` |
+| A16b.4 | Same person again | Same account, no second one |
+| A16b.5 | Natural username taken | Gets it plus 4 digits |
+| A16b.6 | Existing password account, same email | That account, now `googleLinked: true`; `authProvider` stays `password` |
+| A16b.7 | Password login on a Google-only account | 401 "Invalid credentials" (same as any wrong password) |
+| A16b.8 | Change password on a Google-only account | 400 pointing to "Forgot password" |
+| A16b.9 | `state` does not match this browser's cookie | `google_failed`, no session cookie, no account |
+| A16b.10 | Cancelled on Google's page (`error=access_denied`) | `google_failed` |
+| A16b.11 | Email not verified by Google | `google_failed`, no account |
+| A16b.12 | Google rejects the code | `google_failed` |
+| A16b.13 | Registration closed | New Google account refused (`registration_closed`); an existing one still logs in |
+| A16b.14 | Email outside the allowed domains | Accepted - the domain rule does not apply to Google |
+| A16b.15 | Suspended account | `suspended` |
+| A16b.16 | Block a friend | 204; friendship gone, conversation kept; BOTH sides' searches 404 "No user found"; the blocked person's friend request 404 |
+| A16b.17 | Block with a pending request | The request is gone from the other side's Requests |
+| A16b.18 | Blocked list / unblock | Lists PublicUser only; the blocked person's own list is empty; after unblock the search works again with `relationship: 'none'` |
+| A16b.19 | Block twice | 204, one Block document |
+| A16b.20 | Block myself / unknown id / bad id | 400 / 404 / 400 |
+| A16b.21 | Clear chat | 204; my history empty, theirs intact; a later message still shows for me |
+| A16b.22 | Clear chat - sidebar preview | My `/api/friends` preview null; theirs unchanged |
+| A16b.23 | Clear chat as a stranger | 404 |
+| A16b.24 | Mute / unmute | `{ muted }`; my friends row `muted: true`, theirs `false`; unmute back to `false` |
+| A16b.25 | Mute with a non-boolean / as a stranger | 400 / 404 |
+| A16b.26 | Shared files | Newest first, with sender and `kind`; excludes deleted-for-everyone, unsent uploads and text-only messages |
+| A16b.27 | Shared files deleted for me | Not listed for me |
+| A16b.28 | Shared files as a stranger | 404 |
+| A16b.29 | Theme `dark` / `system` | Saved, returned in SelfUser and by `/auth/me` |
+| A16b.30 | Unknown theme | 400 |
 ---
 
 ## Automated - end-to-end (`npm run test:e2e`)
 
 Files: `e2e/chat.spec.js`, `e2e/profile-attachments.spec.js`, `e2e/password.spec.js`,
-`e2e/readReceipts.spec.js`. Run against the production build and server with
+`e2e/readReceipts.spec.js`, `e2e/settings.spec.js`. Run against the production build and server with
 an in-memory database.
 Forgot/reset password's email-dependent half (does the link actually work) is
 covered at the server level instead - see A12.1-A12.8 - since e2e has no real
@@ -263,17 +315,21 @@ email provider configured.
 | ID | Case | Expected |
 |---|---|---|
 | E1 | Logged-out visit to `/` and to an unknown route | Both land on `/login` |
-| E2 | Full flow with two browser contexts | Register both; partial search "No user found"; exact search (any case) finds; request arrives live with toast and badge; accept; requester gets "accepted" toast; open chat shows Online; message with `<b>` renders as text and is marked Sent; unread badge on the other side; reply arrives live; after refresh still logged in with history; closing one side shows "Last seen today" |
-| E3 | Logout | Back to `/login`; `/` redirects to `/login`; logging in again works |
+| E2 | Full flow with two browser contexts | Register both; partial search "No user found"; exact search (any case) finds; request arrives live with toast and badge; accept; requester gets "accepted" toast; open chat shows Online; message with `<b>` renders as text and is marked Delivered (the friend is online); unread badge on the other side; reply arrives live; after refresh still logged in with history; closing one side shows "Last seen today" |
+| E3 | Logout | "Log out?" dialog: Cancel keeps you logged in, Log out ends it; back to `/login`; `/` redirects to `/login`; logging in again works |
 | E4 | Edit my profile (`e2e/profile-attachments.spec.js`) | Choosing a photo saves it (footer shows it, decoded); name, bio and username saved after confirming; survives a reload; username field then locked with the date |
-| E5 | Files and live profile updates, two browser contexts | Chosen photo previews from a blob: URL under the production CSP; photo with caption arrives decoded from `/api/attachments/:id`; sidebar shows "📷 Our poster"; click opens full size, Escape closes; PDF card downloads as `application/pdf` attachment; a bio edit is visible in the other person's profile view without reload |
+| E5 | Files and live profile updates, two browser contexts | Chosen photo previews from a blob: URL under the production CSP; photo with caption arrives decoded from `/api/attachments/:id`; sidebar shows "📷 Our poster"; click opens full size, Escape closes; PDF card downloads as `application/pdf` attachment; a bio edit is visible in the other person's Contact info panel without reload, which also lists the shared photo and PDF |
 | E6 | Forgot password request (`e2e/password.spec.js`) | "Forgot password?" link works; submitting shows the same message whatever the email; "Back to log in" returns to `/login` |
 | E7 | A reset link missing its token | Shows "Invalid reset link", not a broken form |
 | E8 | Change password, two browser contexts (two "devices") | Wrong current password shown inline, session NOT ended; correct current password: success message, this device stays logged in after reload, the OTHER device is redirected to `/login` on its next request, old password then fails there and the new one works |
 | E9 | Change password with the wrong current password | Shown inline in the dialog: "Current password is incorrect" |
-| E10 | Read receipt turns blue live (`e2e/readReceipts.spec.js`) | Sent message shows one tick while unread; the moment the other person opens the chat, the SAME tick turns into two blue ticks, with no reload |
+| E10 | Ticks progress live (`e2e/readReceipts.spec.js`) | With the friend offline: one grey tick ("Sent"). They come back online without opening the chat: two grey ticks ("Delivered"), live. They open it: two blue ticks ("Read"), with no reload |
 | E11 | Read receipt when the chat is already open | A message sent while the recipient already has that chat open shows two blue ticks straight away |
-
+| E12 | Typing indicator | The friend sees "typing…" in the chat header while I type; it disappears once I send |
+| E13 | Settings: theme and Enter to send (`e2e/settings.spec.js`) | Choosing Dark sets `data-theme="dark"`; a brand-new browser logging in as the same user is dark too (saved on the account); the Enter-to-send switch turns off; back to Light |
+| E14 | Contact info, two browser contexts | Panel shows @username and "No photos or videos yet"; mute shows "Muted" on the Chats row; Clear chat empties my chat, not theirs; Block removes the friend on both sides live and the blocked person's search says "No user found"; Unblock in Settings → searchable again |
+| E15 | Messages while Settings is open | The friend's message makes the tab title "(1) PingMe" and shows "Delivered" to them - the socket stayed connected |
+| E16 | Failed Google sign-in | `/login?error=google_failed` shows the fixed message; no Google button when not configured |
 ---
 
 ## Manual
@@ -321,7 +377,7 @@ different browsers, or one normal and one private window.
 | M3.7 | Accept | B accepts | A gets "... accepted your friend request"; both see each other in Chats | | |
 | M3.8 | Decline is silent | B declines a request from C | C gets no notification; C's search shows "Add friend"; sending again gives "You can send another request later" | | |
 | M3.9 | Auto-accept | A requests B, then B searches A and clicks Accept (or Add friend) | Friends immediately | | |
-| M3.10 | Unfriend | Chat header → remove friend icon → OK | Friend disappears for both, live | | |
+| M3.10 | Unfriend | Chat header → friend's name → Contact info → Remove friend → confirm | Friend disappears for both, live | | |
 | M3.11 | API enforcement | In Postman, as a non-friend, `GET /api/conversations/<their id>/messages` | 404 | | |
 
 ### Phase 5 / 8 - chatting
@@ -352,7 +408,7 @@ different browsers, or one normal and one private window.
 | M10.3 | Friend sees it live | Friend has the chat open | My photo appears in their sidebar and chat header without refreshing | | |
 | M10.4 | Remove photo | Remove photo | Back to initials, everywhere | | |
 | M10.5 | Bio | Type 160+ characters | Stops at 160; counter shows 160 / 160; Save | | |
-| M10.6 | Friend's profile | Click a friend's name in the chat header | Their photo, name, @username and bio | | |
+| M10.6 | Friend's profile | Click a friend's name in the chat header | Contact info panel: their photo, name, @username and bio | | |
 | M10.7 | Change username | Change it, confirm the warning | Saved; login works with the new name; searching the old name gives "No user found" | | |
 | M10.8 | Cooldown | Open the profile again | Username field disabled, "You can change your username again on ..." | | |
 | M10.9 | Taken username | Try another account's username | "Username already taken" | | |
@@ -427,6 +483,44 @@ different browsers, or one normal and one private window.
 | M15.9 | Announcement banner | Settings tab → enable it, write a message → Save | The banner appears immediately at the top of the Chats page (no reload) and on the login/register pages | Confirmed - banner appeared live on the Chats page the moment "Saved." showed | Pass |
 | M15.10 | Registration closed | Settings tab → turn off "New accounts can register" → visit `/register` | The form is replaced with "Registration is currently closed" | Not re-verified by hand this run (covered by A15.6 and the RegisterPage conditional render) | |
 
+### Phase 16a - remember me, confirm password, logout, error screen, ticks, typing, notifications
+
+| ID | Scenario | Steps | Expected | Actual | Result |
+|---|---|---|---|---|---|
+| M16a.1 | Remember me ticked | Log in with it ticked, fully close the browser, reopen PingMe | Still logged in | Cookie confirmed as 30 days in a real browser | Pass |
+| M16a.2 | Remember me unticked | Log in without it, fully close the browser (all windows), reopen | Logged out, back to the login page | | |
+| M16a.3 | Confirm password mismatch | Register with two different passwords | "Passwords do not match", nothing sent | Confirmed | Pass |
+| M16a.4 | Logout confirmation | Click Log out → Cancel, then Log out → Log out | Cancel keeps you in; the second logs you out | Confirmed (also e2e E3) | Pass |
+| M16a.5 | Server unreachable | Stop the server, reload PingMe | "Something went wrong" + Try again (not the login page); Try again works once the server is back | Confirmed with the request blocked | Pass |
+| M16a.6 | Grey double tick | Send to a friend who is online but has NOT opened your chat | Two grey ticks at once | Covered by e2e E10 | Pass |
+| M16a.7 | Hidden tab stays grey | Friend has your chat open, then minimises their browser; send | Two GREY ticks; they turn blue only when the friend brings the tab back | | |
+| M16a.8 | Typing | Type (don't send) in a chat | The friend sees "typing…" in the header and in their Chats row; it disappears ~3 s after you stop | Covered by e2e E12 | Pass |
+| M16a.9 | Enable notifications | Click "Enable" in the sidebar offer, choose Allow | The offer disappears | | |
+| M16a.10 | Notification arrives | With notifications on, have a friend message you while a different chat is open (or the tab is minimised) | A system notification with their name and picture; clicking it opens that chat. Tab title shows "(1) PingMe" | | |
+| M16a.11 | No notification when looking | The friend messages you while their chat is open and visible | No notification | | |
+
+### Phase 16b - Google sign-in, Contact info, blocking, Settings, dark mode
+
+Google cases need `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` set (see
+`docs/DEPLOY.md`).
+
+| ID | Scenario | Steps | Expected | Actual | Result |
+|---|---|---|---|---|---|
+| M16b.1 | Google button appears | With the Google variables set, open `/login` and `/register` | "Continue with Google" under both forms | | |
+| M16b.2 | New Google account | Click it, pick a Google account never used on PingMe | Back in PingMe, logged in, username from the email; Settings → Sign-in method "Google" | | |
+| M16b.3 | Link to an existing account | Log out; Continue with Google using the SAME Gmail as a password account | The existing account (same friends and chats); Sign-in method "Password or Google" | | |
+| M16b.4 | Cancel on Google | Click the button, then "Cancel" / back on Google's page | Back on `/login` with "Google sign-in didn't work" | Checked the message itself in the browser | |
+| M16b.5 | Contact info | Click a friend's name in the chat header | Panel with photo, @username, bio, their shared photos/videos (click opens large) and documents (click downloads) | Checked in light and dark mode | Pass |
+| M16b.6 | Mute | Contact info → Mute notifications on; friend messages you from another chat | No notification pop-up; bell-off icon and grey unread badge on their row | | |
+| M16b.7 | Clear chat | Contact info → Clear chat → confirm | My chat is empty and the sidebar preview gone; the friend still has everything | Covered by e2e E14 | Pass |
+| M16b.8 | Block | Contact info → Block → confirm | They disappear from my Chats and I from theirs, live; neither can find the other by exact username | Covered by e2e E14 | Pass |
+| M16b.9 | Unblock | Settings → Privacy → Unblock | Removed from the list; they can be found and sent a new request | Covered by e2e E14 | Pass |
+| M16b.10 | Settings page | Click the gear icon | Settings opens; back arrow returns to chats; a message arriving meanwhile still updates the tab title | Covered by e2e E15 | Pass |
+| M16b.11 | Dark mode | Settings → Theme → Dark | Whole app dark at once (sidebar, chat, bubbles, dialogs, Settings); reload - no white flash | Checked visually | Pass |
+| M16b.12 | Same as device | Choose "Same as device", switch Windows/macOS between light and dark | PingMe follows immediately | | |
+| M16b.13 | Theme follows the account | Choose Dark, log in on another browser | Dark there too | Covered by e2e E13 | Pass |
+| M16b.14 | Enter to send off | Settings → Chats → Enter to send off; in a chat press Enter | A new line, not a send; the Send button still sends | | |
+| M16b.15 | Log out from Settings | Settings → Log out | The same "Log out?" confirmation | | |
 ### Phase 9 - deployment
 
 See the checklist in `docs/DEPLOY.md`, section 3.

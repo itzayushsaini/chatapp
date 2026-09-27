@@ -22,6 +22,13 @@ const initialState = {
   // null). Every message in that conversation with an id <= this one has
   // been seen by them - what draws a blue vs. grey double tick.
   readUpTo: {},
+  // The same, one step earlier: how far the other person's APP has received
+  // messages (they were online), read or not - the grey double tick.
+  deliveredUpTo: {},
+  // conversationId -> true while the other person is typing there. Cleared
+  // on their "stopped" event, when their message arrives, or by a timeout in
+  // useSocketEvents if a "stopped" event never comes (they went offline).
+  typing: {},
   activeConversationId: null,
   // conversationId -> number. Kept in the browser only: the spec has no
   // "read" state on the server, so counts start from zero after a reload.
@@ -257,6 +264,23 @@ export const useChatStore = create((set, get) => ({
       return { readUpTo: { ...s.readUpTo, [conversationId]: upToMessageId } }
     }),
 
+  // A message:delivered event - same forward-only rule as setReadUpTo.
+  setDeliveredUpTo: (conversationId, upToMessageId) =>
+    set((s) => {
+      const current = s.deliveredUpTo[conversationId]
+      if (current && current >= upToMessageId) return {}
+      return { deliveredUpTo: { ...s.deliveredUpTo, [conversationId]: upToMessageId } }
+    }),
+
+  setTyping: (conversationId, isTyping) =>
+    set((s) => {
+      if (Boolean(s.typing[conversationId]) === isTyping) return {}
+      const typing = { ...s.typing }
+      if (isTyping) typing[conversationId] = true
+      else delete typing[conversationId]
+      return { typing }
+    }),
+
   // ----- Messages ---------------------------------------------------------
 
   // The latest page. Used when a chat is first opened and after a reconnect,
@@ -286,6 +310,7 @@ export const useChatStore = create((set, get) => ({
             },
           },
           readUpTo: { ...s.readUpTo, [conversationId]: page.theirReadUpTo },
+          deliveredUpTo: { ...s.deliveredUpTo, [conversationId]: page.theirDeliveredUpTo },
         }
       })
     } catch (err) {
@@ -397,6 +422,24 @@ export const useChatStore = create((set, get) => ({
               ),
       })),
     ),
+
+  // "Clear chat" (from this tab, or the conversation:cleared event from my
+  // other tabs): the server has hidden every message from me, so empty the
+  // loaded history and the preview. Anything that arrives later shows as
+  // normal - it isn't cleared.
+  clearConversation: (conversationId) =>
+    set((s) => ({
+      ...patchConversation(s, conversationId, () => ({ messages: [], hasMore: false })),
+      friends: s.friends.map((f) => (f.conversationId === conversationId ? { ...f, lastMessage: null } : f)),
+      unreadCounts: { ...s.unreadCounts, [conversationId]: 0 },
+    })),
+
+  // A muted chat still gets messages and unread badges - just no
+  // notification pop-ups (see useSocketEvents).
+  setMuted: (conversationId, muted) =>
+    set((s) => ({
+      friends: s.friends.map((f) => (f.conversationId === conversationId ? { ...f, muted } : f)),
+    })),
 
   // Overwrites a friend's sidebar preview with a value the SERVER has
   // already decided (recomputed after a "delete for everyone"), so - unlike

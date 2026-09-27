@@ -42,6 +42,17 @@ const conversationSchema = new mongoose.Schema(
       of: new mongoose.Schema({ upTo: ObjectId, at: Date }, { _id: false }),
       default: {},
     },
+    // The same idea one step earlier: how far each participant's app has
+    // RECEIVED messages (it was online), whether or not they opened the chat.
+    // Drives the grey double tick; lastRead drives the blue one.
+    lastDelivered: {
+      type: Map,
+      of: new mongoose.Schema({ upTo: ObjectId, at: Date }, { _id: false }),
+      default: {},
+    },
+    // Participants who muted this chat: messages still arrive as normal,
+    // there is just no notification for them.
+    mutedBy: { type: [{ type: ObjectId, ref: 'User' }], default: [] },
   },
   { timestamps: true },
 )

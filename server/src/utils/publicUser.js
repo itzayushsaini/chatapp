@@ -34,5 +34,9 @@ export function selfUser(user) {
     // Whether an "Admin" link should appear for me - never sent about
     // anyone else (see publicUser above).
     isAdmin: user.isAdmin,
+    theme: user.theme ?? 'light',
+    // How I sign in, shown on the Settings page.
+    authProvider: user.authProvider ?? 'password',
+    googleLinked: Boolean(user.googleId),
   }
 }

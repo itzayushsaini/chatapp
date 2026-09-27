@@ -27,6 +27,63 @@
      small sent/delivered/read icons on a message. */
   --color-tick-sent: #8696a0; /* one grey tick: saved on the server */
   --color-tick-read: #53bdeb; /* two blue ticks: they opened the chat */
+
+  /* Three colours that are NOT simply "a shade of grey", so dark mode can't
+     get them by flipping the slate scale below:
+     - surface: cards, panels, dialogs (bg-surface - was bg-white)
+     - overlay: faint hover/pressed tints (bg-overlay/5 - was bg-black/5)
+     - meta: the time inside a message bubble (text-meta) */
+  --color-surface: #ffffff;
+  --color-overlay: #000000;
+  --color-meta: rgb(0 0 0 / 0.45);
+}
+
+/* ---------------------------------------------------------------------------
+   Dark mode. Every component is written once, with light-mode class names
+   (bg-slate-100, text-slate-900, ...). Tailwind turns each of those into a
+   CSS variable (var(--color-slate-100)), so redefining the variables here
+   re-colours the whole app at once - no "dark:" variant on every element.
+
+   The grey scale is flipped (50 is now the darkest background, 900 the
+   brightest text); the status colours get dark backgrounds with light text.
+   Colours are WhatsApp's own dark theme where it has one.
+
+   data-theme is set on <html> by utils/theme.js (and, before React loads,
+   by public/theme-init.js, so a dark-mode user never sees a white flash).
+   --------------------------------------------------------------------------- */
+:root[data-theme='dark'] {
+  color-scheme: dark; /* native scrollbars, checkboxes and date pickers too */
+
+  --color-surface: #111b21;
+  --color-overlay: #ffffff;
+  --color-meta: rgb(255 255 255 / 0.6);
+
+  --color-slate-50: #0b141a;
+  --color-slate-100: #202c33;
+  --color-slate-200: #2a3942;
+  --color-slate-300: #3b4a54;
+  --color-slate-400: #8696a0;
+  --color-slate-500: #8696a0;
+  --color-slate-600: #aebac1;
+  --color-slate-700: #d1d7db;
+  --color-slate-800: #e9edef;
+  --color-slate-900: #e9edef;
+
+  --color-brand-50: #0f2e27;
+  --color-brand-100: #005c4b; /* outgoing message bubble */
+  --color-brand-300: #1d6b5a; /* disabled send button */
+  --color-brand-700: #21c9a0; /* links/labels - must stay readable on dark */
+
+  --color-red-50: #3a1d20;
+  --color-red-100: #4a2226;
+  --color-red-700: #f8a5a5;
+  --color-emerald-50: #10302a;
+  --color-emerald-100: #15463b;
+  --color-emerald-700: #6ee7b7;
+  --color-amber-50: #3a2f12;
+  --color-amber-100: #4a3b14;
+  --color-amber-800: #fcd34d;
+  --color-amber-900: #fde68a;
 }
 
 body {
@@ -40,4 +97,9 @@ body {
   background-color: #efeae2;
   background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='100' height='100' viewBox='0 0 100 100'%3E%3Cg fill='none' stroke='%23d8d0c3' stroke-width='1.2'%3E%3Ccircle cx='20' cy='20' r='6'/%3E%3Cpath d='M45 15h20M45 25h14'/%3E%3Cpath d='M10 55c6-6 14-6 20 0s14 6 20 0'/%3E%3Ccircle cx='75' cy='60' r='5'/%3E%3Cpath d='M15 85h18M15 92h10'/%3E%3Cpath d='M60 80c5-5 12-5 17 0'/%3E%3Ccircle cx='88' cy='30' r='4'/%3E%3C/g%3E%3C/svg%3E");
   background-size: 100px 100px;
+}
+
+:root[data-theme='dark'] .chat-background {
+  background-color: #0b141a;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='100' height='100' viewBox='0 0 100 100'%3E%3Cg fill='none' stroke='%23182229' stroke-width='1.2'%3E%3Ccircle cx='20' cy='20' r='6'/%3E%3Cpath d='M45 15h20M45 25h14'/%3E%3Cpath d='M10 55c6-6 14-6 20 0s14 6 20 0'/%3E%3Ccircle cx='75' cy='60' r='5'/%3E%3Cpath d='M15 85h18M15 92h10'/%3E%3Cpath d='M60 80c5-5 12-5 17 0'/%3E%3Ccircle cx='88' cy='30' r='4'/%3E%3C/g%3E%3C/svg%3E");
 }

@@ -4,10 +4,12 @@ import { Link } from 'react-router'
 import { useAuth } from '../../context/AuthContext.jsx'
 import { useChatStore } from '../../store/useChatStore.js'
 import Avatar from '../common/Avatar.jsx'
-import { LogoutIcon, ShieldIcon } from '../common/Icons.jsx'
+import { LogoutIcon, SettingsIcon, ShieldIcon } from '../common/Icons.jsx'
+import LogoutDialog from '../common/LogoutDialog.jsx'
 import ProfileDialog from '../profile/ProfileDialog.jsx'
 import AddFriendTab from './AddFriendTab.jsx'
 import ChatsTab from './ChatsTab.jsx'
+import NotificationPrompt from './NotificationPrompt.jsx'
 import RequestsTab from './RequestsTab.jsx'
 
 const TABS = [
@@ -17,11 +19,12 @@ const TABS = [
 ]
 
 export default function Sidebar({ className = '' }) {
-  const { user, logout } = useAuth()
+  const { user } = useAuth()
   const tab = useChatStore((s) => s.sidebarTab)
   const setTab = useChatStore((s) => s.setSidebarTab)
   const incomingCount = useChatStore((s) => s.requests.incoming.length)
   const [profileOpen, setProfileOpen] = useState(false)
+  const [confirmLogout, setConfirmLogout] = useState(false)
 
   // Arrow keys move between tabs - the standard keyboard pattern for tabs.
   function handleTabKey(event) {
@@ -34,14 +37,14 @@ export default function Sidebar({ className = '' }) {
   }
 
   return (
-    <aside className={`flex-col border-r border-slate-200 bg-white ${className}`}>
+    <aside className={`flex-col border-r border-slate-200 bg-surface ${className}`}>
       {/* My avatar (opens my profile) on the left, log out on the right -
           the same top-bar layout WhatsApp uses, instead of a footer. */}
       <div className="flex items-center justify-between bg-slate-100 px-3 py-2.5">
         <button
           type="button"
           onClick={() => setProfileOpen(true)}
-          className="flex min-w-0 items-center gap-2.5 rounded-lg py-1 pr-2 pl-1 text-left hover:bg-black/5 focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:outline-none"
+          className="flex min-w-0 items-center gap-2.5 rounded-lg py-1 pr-2 pl-1 text-left hover:bg-overlay/5 focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:outline-none"
           aria-label="Edit your profile"
           title="Edit your profile"
         >
@@ -57,17 +60,25 @@ export default function Sidebar({ className = '' }) {
           {user.isAdmin && (
             <Link
               to="/admin"
-              className="rounded-full p-2 text-slate-600 hover:bg-black/5 hover:text-brand-700 focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:outline-none"
+              className="rounded-full p-2 text-slate-600 hover:bg-overlay/5 hover:text-brand-700 focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:outline-none"
               aria-label="Admin panel"
               title="Admin panel"
             >
               <ShieldIcon className="h-5 w-5" />
             </Link>
           )}
+          <Link
+            to="/settings"
+            className="rounded-full p-2 text-slate-600 hover:bg-overlay/5 hover:text-brand-700 focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:outline-none"
+            aria-label="Settings"
+            title="Settings"
+          >
+            <SettingsIcon className="h-5 w-5" />
+          </Link>
           <button
             type="button"
-            onClick={logout}
-            className="rounded-full p-2 text-slate-600 hover:bg-black/5 hover:text-red-600 focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:outline-none"
+            onClick={() => setConfirmLogout(true)}
+            className="rounded-full p-2 text-slate-600 hover:bg-overlay/5 hover:text-red-600 focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:outline-none"
             aria-label="Log out"
             title="Log out"
           >
@@ -75,6 +86,8 @@ export default function Sidebar({ className = '' }) {
           </button>
         </div>
       </div>
+
+      <NotificationPrompt />
 
       <div role="tablist" aria-label="Sidebar" className="flex gap-1 px-3 pt-2 pb-1.5" onKeyDown={handleTabKey}>
         {TABS.map((t) => {
@@ -121,6 +134,8 @@ export default function Sidebar({ className = '' }) {
       </div>
 
       <ProfileDialog open={profileOpen} onClose={() => setProfileOpen(false)} />
+
+      <LogoutDialog open={confirmLogout} onClose={() => setConfirmLogout(false)} />
     </aside>
   )
 }

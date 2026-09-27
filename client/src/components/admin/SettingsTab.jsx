@@ -42,6 +42,18 @@ export default function SettingsTab() {
     setSaved(false)
   }
 
+  // A dedicated updater for the nested `announcement` object. Building the
+  // merged object outside setForm's updater (e.g. `{ ...form.announcement, enabled: v }`
+  // passed to `set`) closes over whatever `form` was at render time - if the
+  // checkbox and the text field are both changed in quick succession, the
+  // second call's stale closure can silently clobber the first one's update.
+  // Merging entirely inside the functional updater, against the latest state
+  // React actually has, avoids that regardless of timing.
+  function setAnnouncement(patch) {
+    setForm((f) => ({ ...f, announcement: { ...f.announcement, ...patch } }))
+    setSaved(false)
+  }
+
   async function handleSubmit(event) {
     event.preventDefault()
     setError('')
@@ -74,7 +86,7 @@ export default function SettingsTab() {
 
   return (
     <form onSubmit={handleSubmit} className="max-w-xl space-y-6">
-      <section className="space-y-3 rounded-xl border border-slate-200 bg-white p-5">
+      <section className="space-y-3 rounded-xl border border-slate-200 bg-surface p-5">
         <h2 className="font-semibold text-slate-900">Sign-up</h2>
         <Toggle
           label="New accounts can register"
@@ -93,7 +105,7 @@ export default function SettingsTab() {
               setSaved(false)
             }}
             placeholder="gmail.com, college.edu"
-            className="block w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 focus:border-brand-500 focus:ring-2 focus:ring-brand-500/30 focus:outline-none"
+            className="block w-full rounded-lg border border-slate-300 bg-surface px-3 py-2 text-sm text-slate-900 focus:border-brand-500 focus:ring-2 focus:ring-brand-500/30 focus:outline-none"
           />
           <p className="mt-1 text-xs text-slate-500">
             Comma-separated. Signing up with any other email is refused - this is what keeps out
@@ -102,7 +114,7 @@ export default function SettingsTab() {
         </div>
       </section>
 
-      <section className="space-y-3 rounded-xl border border-slate-200 bg-white p-5">
+      <section className="space-y-3 rounded-xl border border-slate-200 bg-surface p-5">
         <h2 className="font-semibold text-slate-900">Features</h2>
         <Toggle
           label="Attachments (photos, videos, documents)"
@@ -125,25 +137,25 @@ export default function SettingsTab() {
             max={10080}
             value={form.deleteForEveryoneWindowMinutes}
             onChange={(e) => set({ deleteForEveryoneWindowMinutes: Number(e.target.value) })}
-            className="block w-32 rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 focus:border-brand-500 focus:ring-2 focus:ring-brand-500/30 focus:outline-none"
+            className="block w-32 rounded-lg border border-slate-300 bg-surface px-3 py-2 text-sm text-slate-900 focus:border-brand-500 focus:ring-2 focus:ring-brand-500/30 focus:outline-none"
           />
         </div>
       </section>
 
-      <section className="space-y-3 rounded-xl border border-slate-200 bg-white p-5">
+      <section className="space-y-3 rounded-xl border border-slate-200 bg-surface p-5">
         <h2 className="font-semibold text-slate-900">Announcement banner</h2>
         <Toggle
           label="Show a banner to everyone"
           checked={form.announcement.enabled}
-          onChange={(v) => set({ announcement: { ...form.announcement, enabled: v } })}
+          onChange={(v) => setAnnouncement({ enabled: v })}
         />
         <textarea
           value={form.announcement.text}
-          onChange={(e) => set({ announcement: { ...form.announcement, text: e.target.value } })}
+          onChange={(e) => setAnnouncement({ text: e.target.value })}
           maxLength={200}
           rows={2}
           placeholder="e.g. Under maintenance until 6pm"
-          className="block w-full resize-none rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 focus:border-brand-500 focus:ring-2 focus:ring-brand-500/30 focus:outline-none"
+          className="block w-full resize-none rounded-lg border border-slate-300 bg-surface px-3 py-2 text-sm text-slate-900 focus:border-brand-500 focus:ring-2 focus:ring-brand-500/30 focus:outline-none"
         />
       </section>
 

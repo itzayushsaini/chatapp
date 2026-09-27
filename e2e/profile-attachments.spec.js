@@ -68,7 +68,8 @@ test('photos and documents are delivered, and profile changes appear live', asyn
   const sentPhoto = amanLog.getByRole('img', { name: 'poster.png' })
   await expect(sentPhoto).toHaveAttribute('src', /^\/api\/attachments\/[a-f0-9]{24}$/)
   await expect.poll(() => imageLoaded(sentPhoto)).toBe(true)
-  await expect(amanLog.getByText('Sent')).toBeVisible()
+  // Priya is online, so it is delivered straight away.
+  await expect(amanLog.getByText('Delivered', { exact: true })).toBeVisible()
 
   // Priya sees the preview in her sidebar, then the photo itself.
   await expect(priya.getByText('📷 Our poster')).toBeVisible()
@@ -104,7 +105,11 @@ test('photos and documents are delivered, and profile changes appear live', asyn
   await expect(aman.getByText('Profile saved')).toBeVisible()
 
   await priya.getByRole('heading', { name: 'Aman Kumar' }).getByRole('button').click()
-  await expect(priya.getByRole('dialog', { name: 'Profile' }).getByText('Team lead')).toBeVisible()
+  const info = priya.getByRole('complementary', { name: 'Contact info' })
+  await expect(info.getByText('Team lead')).toBeVisible()
+  // The chat's shared photo and document are listed there too.
+  await expect(info.getByRole('button', { name: 'Open photo poster.png' })).toBeVisible()
+  await expect(info.getByRole('link', { name: /notes\.pdf/ })).toBeVisible()
 
   await amanContext.close()
   await priyaContext.close()

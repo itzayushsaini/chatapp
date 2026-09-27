@@ -10,7 +10,13 @@ import { sendPasswordResetEmail } from './emailService.js'
 import { getSettings } from './settingsService.js'
 
 const BCRYPT_COST = 12
+const DAY_MS = 24 * 60 * 60 * 1000
+// "Remember me" off: the cookie is a browser-session cookie (gone when the
+// browser closes), and the token itself stops working after this many days
+// even if a browser is simply never closed.
 const SESSION_DAYS = 7
+// "Remember me" on: the cookie survives browser restarts for this long.
+const REMEMBER_DAYS = 30
 
 export const SESSION_COOKIE = 'token'
 
@@ -19,12 +25,17 @@ export const SESSION_COOKIE = 'token'
 // sameSite 'lax': the browser does not send it on cross-site POSTs, which
 //   blocks CSRF.
 // secure in production: only ever sent over HTTPS.
-export const cookieOptions = {
+export const baseCookieOptions = {
   httpOnly: true,
   sameSite: 'lax',
   secure: isProduction,
   path: '/',
-  maxAge: SESSION_DAYS * 24 * 60 * 60 * 1000,
+}
+
+// No maxAge at all is what makes a cookie a "session cookie" - the browser
+// deletes it when it closes.
+export function sessionCookieOptions(remember) {
+  return remember ? { ...baseCookieOptions, maxAge: REMEMBER_DAYS * DAY_MS } : { ...baseCookieOptions }
 }
 
 // Used to make a failed login for an unknown user take as long as a wrong
@@ -72,7 +83,10 @@ export async function login({ identifier, password }) {
     $or: [{ username: identifier }, { email: identifier }],
   }).select('+passwordHash')
 
-  const ok = await bcrypt.compare(password, user ? user.passwordHash : DUMMY_HASH)
+  // An account made with Google has no password at all: compare against the
+  // dummy hash, which can never match, so it gets the same 401 (and takes the
+  // same time) as a wrong password.
+  const ok = await bcrypt.compare(password, user?.passwordHash ?? DUMMY_HASH)
 
   // Same status and message for "no such user" and "wrong password", so the
   // login form cannot be used to discover which accounts exist.
@@ -85,14 +99,17 @@ export async function login({ identifier, password }) {
   return user
 }
 
-export function signToken(userId) {
+export function signToken(userId, { remember = true } = {}) {
   // `ts` is our own millisecond-precision issued-at time. JWT's own `iat` is
   // only ever whole seconds, which is not fine enough here: a cookie
   // reissued moments after a password change (to keep the current tab
   // logged in) could round down to the very second `passwordChangedAt`
   // falls in, making the two indistinguishable. `ts` never has that problem.
-  return jwt.sign({ sub: String(userId), ts: Date.now() }, env.JWT_SECRET, {
-    expiresIn: `${SESSION_DAYS}d`,
+  //
+  // `rm` records the "Remember me" choice, so a cookie reissued later (after
+  // a password change) keeps the same lifetime the user originally picked.
+  return jwt.sign({ sub: String(userId), ts: Date.now(), rm: remember }, env.JWT_SECRET, {
+    expiresIn: `${remember ? REMEMBER_DAYS : SESSION_DAYS}d`,
   })
 }
 
@@ -185,6 +202,13 @@ export async function resetPassword({ email, token, password }) {
 
 export async function changePassword(meId, { currentPassword, newPassword }) {
   const user = await User.findById(meId).select('+passwordHash')
+
+  if (!user.passwordHash) {
+    throw new AppError(
+      400,
+      'This account signs in with Google and has no password yet - use "Forgot password" to set one',
+    )
+  }
 
   // 400, not 401: the request already passed requireAuth, so the SESSION is
   // valid - this is a rejected form value, not an authentication failure.

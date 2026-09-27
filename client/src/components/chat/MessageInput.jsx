@@ -2,11 +2,16 @@ import { useEffect, useRef, useState } from 'react'
 
 import { useChatStore } from '../../store/useChatStore.js'
 import { ACCEPT, checkFile, formatBytes, kindOf } from '../../utils/files.js'
+import { enterToSend } from '../../utils/preferences.js'
 import { FileIcon, PaperclipIcon, SendIcon, VideoIcon } from '../common/Icons.jsx'
 
 const MAX_LENGTH = 2000
 // Show the character counter only once the user is getting close.
 const COUNTER_FROM = 1800
+// While typing, "I am typing" is re-sent at most this often (not on every
+// keystroke), and "stopped" is sent after this long without a keystroke.
+const TYPING_REPEAT_MS = 3000
+const TYPING_IDLE_MS = 3000
 
 function attachmentSnippetLabel(kind) {
   if (kind === 'image') return '📷 Photo'
@@ -19,18 +24,60 @@ function attachmentSnippetLabel(kind) {
 // `replyTarget` is the message being replied to (or null), and `onCancelReply`
 // clears it - both owned by the parent, since a reply started from a bubble
 // must reach this sibling component.
-export default function MessageInput({ onSend, disabled, replyTarget, myId, friendName, onCancelReply }) {
+// onTyping(isTyping) tells the other person "typing..." starts or stops. The
+// parent renders this component with key={conversationId}, so one instance
+// only ever belongs to one chat.
+export default function MessageInput({
+  onSend,
+  onTyping,
+  disabled,
+  replyTarget,
+  myId,
+  friendName,
+  onCancelReply,
+}) {
   const [text, setText] = useState('')
   const [file, setFile] = useState(null)
   const textareaRef = useRef(null)
   const fileInputRef = useRef(null)
   const addToast = useChatStore((s) => s.addToast)
+  // Read once per chat opened - this component remounts for each chat.
+  const [sendOnEnter] = useState(enterToSend)
+  // { lastSent, idleTimer, stop } - `stop` is set while "typing" is active.
+  const typing = useRef({ lastSent: 0, idleTimer: null, stop: null })
 
   const trimmed = text.trim()
   const canSend = !disabled && (trimmed.length > 0 || file) && text.length <= MAX_LENGTH
 
+  function stopTyping() {
+    const t = typing.current
+    clearTimeout(t.idleTimer)
+    t.stop?.()
+    t.stop = null
+    t.lastSent = 0
+  }
+
+  // Called on every keystroke, but only emits when it matters: the first
+  // keystroke, then at most once every few seconds while it continues.
+  function noteTyping(value) {
+    if (!value.trim()) return stopTyping()
+    const t = typing.current
+    const now = Date.now()
+    if (!t.stop || now - t.lastSent > TYPING_REPEAT_MS) {
+      onTyping(true)
+      t.lastSent = now
+      t.stop = () => onTyping(false)
+    }
+    clearTimeout(t.idleTimer)
+    t.idleTimer = setTimeout(stopTyping, TYPING_IDLE_MS)
+  }
+
+  // Leaving the chat (or the page) while mid-sentence still says "stopped".
+  useEffect(() => stopTyping, [])
+
   function submit() {
     if (!canSend) return
+    stopTyping()
     onSend(trimmed, file, replyTarget?.id ?? null)
     setText('')
     setFile(null)
@@ -39,10 +86,12 @@ export default function MessageInput({ onSend, disabled, replyTarget, myId, frie
     textareaRef.current?.focus()
   }
 
-  // Enter sends; Shift+Enter adds a new line. isComposing is true while an
-  // input method (e.g. for Hindi or Japanese) is still building a word -
-  // Enter then confirms the word and must not send.
+  // Enter sends; Shift+Enter adds a new line - unless "Enter to send" is
+  // switched off in Settings, when Enter is just a new line. isComposing is
+  // true while an input method (e.g. for Hindi or Japanese) is still
+  // building a word - Enter then confirms the word and must not send.
   function handleKeyDown(event) {
+    if (!sendOnEnter) return
     if (event.key === 'Enter' && !event.shiftKey && !event.nativeEvent.isComposing) {
       event.preventDefault()
       submit()
@@ -102,7 +151,7 @@ export default function MessageInput({ onSend, disabled, replyTarget, myId, frie
         />
         {/* The paperclip and the text field share one white pill, the way
             WhatsApp's composer does; Send is its own circular button. */}
-        <div className="flex flex-1 items-end gap-1 rounded-3xl bg-white pr-1 pl-1.5 shadow-sm">
+        <div className="flex flex-1 items-end gap-1 rounded-3xl bg-surface pr-1 pl-1.5 shadow-sm">
           <button
             type="button"
             onClick={() => fileInputRef.current.click()}
@@ -124,6 +173,7 @@ export default function MessageInput({ onSend, disabled, replyTarget, myId, frie
             onChange={(e) => {
               setText(e.target.value)
               resize(e.target.value)
+              noteTyping(e.target.value)
             }}
             onKeyDown={handleKeyDown}
             maxLength={MAX_LENGTH}

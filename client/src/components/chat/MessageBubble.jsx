@@ -40,13 +40,15 @@ function attachmentSnippetLabel(kind) {
 // There is no dangerouslySetInnerHTML anywhere in the app.
 // `whitespace-pre-wrap` keeps the user's line breaks (Shift+Enter).
 //
-// `read` is only meaningful when `mine` is true: has the OTHER person read
-// up to this message yet? Drives the single-grey vs double-blue tick.
+// `delivered` and `read` are only meaningful when `mine` is true: has the
+// OTHER person's app received this message yet, and have they read it?
+// Together they drive the single grey / double grey / double blue tick.
 export default function MessageBubble({
   message,
   mine,
   myId,
   read,
+  delivered,
   friendName,
   onRetry,
   onOpenImage,
@@ -64,7 +66,7 @@ export default function MessageBubble({
   if (deletedForEveryone) {
     return (
       <li className={`flex ${mine ? 'justify-end' : 'justify-start'}`}>
-        <div className="max-w-[80%] rounded-lg bg-white/70 px-2.5 py-1.5 text-sm text-slate-500 italic shadow-sm sm:max-w-[65%]">
+        <div className="max-w-[80%] rounded-lg bg-surface/70 px-2.5 py-1.5 text-sm text-slate-500 italic shadow-sm sm:max-w-[65%]">
           This message was deleted
         </div>
       </li>
@@ -106,11 +108,11 @@ export default function MessageBubble({
       <div className={`flex max-w-[80%] items-start gap-1 sm:max-w-[65%] ${mine ? 'flex-row-reverse' : ''}`}>
         <div
           className={`overflow-hidden rounded-lg text-sm shadow-sm ${
-            mine ? 'rounded-tr-none bg-brand-100 text-slate-900' : 'rounded-tl-none bg-white text-slate-900'
+            mine ? 'rounded-tr-none bg-brand-100 text-slate-900' : 'rounded-tl-none bg-surface text-slate-900'
           } ${status === 'failed' ? 'opacity-70' : ''} ${attachment ? 'p-1' : 'px-2.5 py-1.5'}`}
         >
           {replyTo && (
-            <div className="mx-1 mt-1 mb-1.5 rounded-md border-l-4 border-brand-500 bg-black/5 px-2 py-1 text-xs">
+            <div className="mx-1 mt-1 mb-1.5 rounded-md border-l-4 border-brand-500 bg-overlay/5 px-2 py-1 text-xs">
               <p className="font-medium text-brand-700">{replyTo.senderId === myId ? 'You' : friendName}</p>
               <p className="truncate text-slate-600">
                 {replyTo.textSnippet || attachmentSnippetLabel(replyTo.attachmentKind)}
@@ -137,9 +139,11 @@ export default function MessageBubble({
 
           {/* Time and tick sit INSIDE the bubble, bottom-right - the same
               place WhatsApp puts them, rather than as a caption below it. */}
-          <div className={`flex items-center justify-end gap-1 text-[11px] text-black/45 ${attachment && !text ? 'px-2 pb-1' : ''}`}>
+          <div className={`flex items-center justify-end gap-1 text-[11px] text-meta ${attachment && !text ? 'px-2 pb-1' : ''}`}>
             <span>{formatTime(message.createdAt)}</span>
-            {mine && <MessageStatus status={status} read={read} onRetry={() => onRetry(message)} />}
+            {mine && (
+              <MessageStatus status={status} read={read} delivered={delivered} onRetry={() => onRetry(message)} />
+            )}
           </div>
         </div>
 
@@ -216,7 +220,7 @@ function ActionsMenu({ items, onClose, align }) {
     <div
       ref={ref}
       role="menu"
-      className={`absolute top-full z-10 mt-1 w-40 rounded-lg bg-white py-1 shadow-lg ring-1 ring-black/5 ${
+      className={`absolute top-full z-10 mt-1 w-40 rounded-lg bg-surface py-1 shadow-lg ring-1 ring-overlay/5 ${
         align === 'right' ? 'right-0' : 'left-0'
       }`}
     >
@@ -245,9 +249,10 @@ function ActionsMenu({ items, onClose, align }) {
 }
 
 // The little status icon after my own message's timestamp: a clock while it
-// is on its way, a tick once saved (single grey, or double blue once they
-// have read it), or a Retry link if it failed.
-function MessageStatus({ status, read, onRetry }) {
+// is on its way, then the WhatsApp ticks - one grey (saved), two grey
+// (reached their app), two blue (they opened the chat) - or a Retry link if
+// it failed.
+function MessageStatus({ status, read, delivered, onRetry }) {
   if (status === 'sending' || status === 'uploading') {
     return (
       <span className="inline-flex items-center">
@@ -272,13 +277,23 @@ function MessageStatus({ status, read, onRetry }) {
     )
   }
 
-  // Saved: one grey tick, or two blue ticks once they have read it.
-  return read ? (
-    <span className="inline-flex items-center text-tick-read">
-      <CheckCheckIcon className="h-4 w-4" />
-      <span className="sr-only">Read</span>
-    </span>
-  ) : (
+  if (read) {
+    return (
+      <span className="inline-flex items-center text-tick-read">
+        <CheckCheckIcon className="h-4 w-4" />
+        <span className="sr-only">Read</span>
+      </span>
+    )
+  }
+  if (delivered) {
+    return (
+      <span className="inline-flex items-center text-tick-sent">
+        <CheckCheckIcon className="h-4 w-4" />
+        <span className="sr-only">Delivered</span>
+      </span>
+    )
+  }
+  return (
     <span className="inline-flex items-center text-tick-sent">
       <CheckIcon className="h-3.5 w-3.5" />
       <span className="sr-only">Sent</span>
@@ -330,7 +345,7 @@ function Attachment({ attachment, mine, onOpenImage, onMediaLoad }) {
       href={url}
       download={name}
       className={`flex min-w-56 items-center gap-3 rounded-md p-2.5 focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:outline-none ${
-        mine ? 'bg-black/5 hover:bg-black/10' : 'bg-slate-100 hover:bg-slate-200'
+        mine ? 'bg-overlay/5 hover:bg-overlay/10' : 'bg-slate-100 hover:bg-slate-200'
       }`}
     >
       <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-brand-100 text-brand-700">
@@ -351,7 +366,7 @@ function UploadProgress({ progress }) {
   return (
     <div className="px-2 pt-2 pb-1">
       <div
-        className="h-1.5 overflow-hidden rounded-full bg-black/10"
+        className="h-1.5 overflow-hidden rounded-full bg-overlay/10"
         role="progressbar"
         aria-valuenow={percent}
         aria-valuemin={0}
@@ -360,7 +375,7 @@ function UploadProgress({ progress }) {
       >
         <div className="h-full bg-brand-600" style={{ width: `${percent}%` }} />
       </div>
-      <p className="mt-1 text-[11px] text-black/45">Uploading {percent}%</p>
+      <p className="mt-1 text-[11px] text-meta">Uploading {percent}%</p>
     </div>
   )
 }

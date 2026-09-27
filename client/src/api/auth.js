@@ -5,8 +5,8 @@ export const me = () => http.get('/auth/me').then((r) => r.data.user)
 
 export const register = (fields) => http.post('/auth/register', fields).then((r) => r.data.user)
 
-export const login = (identifier, password) =>
-  http.post('/auth/login', { identifier, password }).then((r) => r.data.user)
+export const login = (identifier, password, rememberMe = false) =>
+  http.post('/auth/login', { identifier, password, rememberMe }).then((r) => r.data.user)
 
 export const logout = () => http.post('/auth/logout')
 

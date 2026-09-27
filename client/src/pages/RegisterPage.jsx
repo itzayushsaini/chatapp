@@ -4,6 +4,7 @@ import { Link } from 'react-router'
 import { errorMessage } from '../api/http.js'
 import { getPublicSettings } from '../api/settings.js'
 import Button from '../components/common/Button.jsx'
+import GoogleButton from '../components/common/GoogleButton.jsx'
 import Spinner from '../components/common/Spinner.jsx'
 import TextField from '../components/common/TextField.jsx'
 import AuthLayout from '../components/layout/AuthLayout.jsx'
@@ -14,6 +15,9 @@ const EMPTY = { username: '', displayName: '', email: '', password: '' }
 export default function RegisterPage() {
   const { register } = useAuth()
   const [fields, setFields] = useState(EMPTY)
+  // Kept out of `fields` on purpose: it is only ever compared here in the
+  // browser, never sent to the server.
+  const [confirmPassword, setConfirmPassword] = useState('')
   const [error, setError] = useState('')
   const [submitting, setSubmitting] = useState(false)
   // Just a quick hint and an early "closed" message - the server enforces
@@ -32,6 +36,12 @@ export default function RegisterPage() {
   async function handleSubmit(event) {
     event.preventDefault()
     setError('')
+    // Only guards against a typo in a password nobody can see as they type
+    // it - so it is a browser-side check, with nothing for the server to do.
+    if (fields.password !== confirmPassword) {
+      setError('Passwords do not match')
+      return
+    }
     setSubmitting(true)
     try {
       // The server validates everything again - the browser's checks are
@@ -106,6 +116,15 @@ export default function RegisterPage() {
             maxLength={72}
             required
           />
+          <TextField
+            label="Confirm password"
+            type="password"
+            value={confirmPassword}
+            onChange={(e) => setConfirmPassword(e.target.value)}
+            autoComplete="new-password"
+            maxLength={72}
+            required
+          />
 
           {error && (
             <p className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700" role="alert">
@@ -119,6 +138,7 @@ export default function RegisterPage() {
           </Button>
         </form>
       )}
+      <GoogleButton />
     </AuthLayout>
   )
 }

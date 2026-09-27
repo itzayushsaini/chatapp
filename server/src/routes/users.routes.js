@@ -26,6 +26,7 @@ const profileSchema = z.object({
     .toLowerCase()
     .regex(USERNAME_REGEX, 'must be 3-20 characters: letters, numbers, _ or .')
     .optional(),
+  theme: z.enum(['light', 'dark', 'system']).optional(),
 })
 
 const router = Router()
@@ -40,6 +41,12 @@ router.get(
 )
 
 router.patch('/me', profileLimiter, validate({ body: profileSchema }), users.updateMe)
+
+// Blocking. /me/blocked is registered before /:id/... so "me" is never read
+// as a user id.
+router.get('/me/blocked', users.blocked)
+router.post('/:id/block', profileLimiter, validate({ params: z.object({ id: objectId }) }), users.block)
+router.delete('/:id/block', profileLimiter, validate({ params: z.object({ id: objectId }) }), users.unblock)
 router.put('/me/avatar', profileLimiter, singleFile('avatar', AVATAR_MAX_BYTES), users.setAvatar)
 router.delete('/me/avatar', profileLimiter, users.removeAvatar)
 

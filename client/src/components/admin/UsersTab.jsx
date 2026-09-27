@@ -72,7 +72,7 @@ export default function UsersTab() {
           onChange={(e) => setSearch(e.target.value)}
           placeholder="Search by username or email"
           aria-label="Search users"
-          className="block w-full max-w-sm rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 placeholder:text-slate-400 focus:border-brand-500 focus:ring-2 focus:ring-brand-500/30 focus:outline-none"
+          className="block w-full max-w-sm rounded-lg border border-slate-300 bg-surface px-3 py-2 text-sm text-slate-900 placeholder:text-slate-400 focus:border-brand-500 focus:ring-2 focus:ring-brand-500/30 focus:outline-none"
         />
         <Button type="submit" size="sm">
           Search
@@ -87,7 +87,7 @@ export default function UsersTab() {
         </div>
       ) : (
         <>
-          <div className="overflow-hidden rounded-xl border border-slate-200 bg-white">
+          <div className="overflow-hidden rounded-xl border border-slate-200 bg-surface">
             <table className="w-full text-left text-sm">
               <thead className="bg-slate-50 text-xs tracking-wide text-slate-500 uppercase">
                 <tr>

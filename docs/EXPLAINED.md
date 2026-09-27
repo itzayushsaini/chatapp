@@ -1578,3 +1578,228 @@ entire purpose is letting one trusted account manage every other account is
 supposed to be able to search broadly; restricting it to exact-match would
 make it useless for the job it exists to do, without adding any real
 privacy protection, since only that one trusted account can reach it.
+
+# Phase 16a - Remember me, confirm password, logout confirmation, error screen, delivered ticks, typing, notifications
+
+## 1. "Remember me" - what it actually changes
+
+A login cookie can be one of two kinds. A cookie with an expiry date (a
+`maxAge`) survives closing and reopening the browser. A cookie **without** one
+is a "session cookie": the browser deletes it the moment it closes. Ticking
+Remember me gives a 30-day cookie; leaving it unticked gives a session cookie -
+the safe default on a shared or college-lab computer, where the next person to
+open the browser should not find themselves logged into your account.
+
+The server also remembers the choice inside the login token itself (a small
+`rm` flag). That matters when you change your password: the server hands this
+tab a fresh cookie so it stays logged in, and it uses `rm` to give that new
+cookie the same lifetime you originally chose, instead of quietly switching it.
+
+## 2. Confirm password - deliberately browser-only
+
+Typing a password twice only protects against a typo in something you cannot
+see as you type it. The server has nothing to check - it only ever receives
+the one password - so the comparison is done in the browser, before anything is
+sent, and "Passwords do not match" appears straight away.
+
+## 3. Asking before logging out
+
+Logging out is a one-click action that is annoying to undo (you have to type
+your password again), and the button sits right next to other icons. A small
+"Log out?" dialog with Cancel and Log out prevents an accidental click from
+costing anything. It reuses the same `Dialog` component as every other dialog,
+so Escape and clicking outside it both cancel.
+
+## 4. The error screen - two different failures
+
+- **The server cannot be reached at all** when the page first loads. Before,
+  this was treated exactly like "not logged in", so someone who WAS logged in
+  but briefly offline was shown the login page. Now the app tells the two
+  apart: a 401 from the server is a real answer ("not logged in"), while no
+  answer at all shows "Something went wrong" with a Try again button that
+  simply asks again.
+- **A bug crashes the page while drawing it.** Without protection React would
+  leave a blank white page. An "error boundary" - which in React must be a
+  class component, there is no hook for it - catches the crash and shows the
+  same friendly screen, with a button that reloads the page.
+
+## 5. The grey double tick - "delivered, but not read"
+
+Phase 13 deliberately had only two ticks. The team asked for WhatsApp's third
+state, so it was added, using exactly the same idea as read receipts: one
+small pointer per person per conversation, "everything up to this message has
+reached their app", that only ever moves forward.
+
+Who decides a message is delivered? The **server**, not the recipient's
+browser:
+
+- If the recipient is online at the moment a message is sent, the server has
+  just pushed it to their open connection - so it is delivered, immediately.
+- If they are offline, nothing happens yet. The moment they connect again, the
+  server marks everything waiting for them as delivered and tells each sender.
+
+Each sender's tabs then turn the single grey tick into two grey ticks, live.
+The blue ticks still mean the same as before - they opened that chat.
+
+One consistency fix came with it: a chat left open in a **minimised** tab used
+to mark every arriving message as read instantly, even though nobody could see
+it. Now "read" waits until the tab is actually visible - otherwise the new grey
+state would have been skipped straight to blue for messages nobody had seen.
+
+## 6. "typing..."
+
+While you type, your browser tells the server "I'm typing" on the first
+keystroke and then at most once every three seconds (not on every key), and
+"I've stopped" after three quiet seconds, when you send, or when you leave the
+chat. The server passes it on to the other person only - after the same two
+checks as sending a message (you are in this conversation, and you are still
+friends) - and never saves it, because it is only true for a few seconds.
+
+If a "stopped" message ever goes missing (your internet drops mid-sentence),
+the other person's "typing..." simply disappears on its own after six seconds.
+
+## 7. Notifications
+
+When a message arrives and you are not looking at that chat - another chat is
+open, or the PingMe tab is hidden or minimised - the browser shows a system
+notification with the sender's name and picture. Clicking it brings PingMe to
+the front and opens that conversation. The browser tab's title also shows how
+many unread messages are waiting, like "(3) PingMe".
+
+Three details worth knowing:
+
+- **Asking permission.** Browsers only allow notifications after the user
+  agrees, and several browsers ignore a permission request the user did not
+  directly ask for. So PingMe shows a small "Enable" offer and only opens the
+  browser's permission popup when that button is clicked.
+- **A tiny service worker.** Android Chrome refuses notifications created
+  directly by a web page; they must go through a "service worker". PingMe's
+  service worker does only this one job - no offline mode, no caching.
+- **What it does not do.** Notifications arrive while PingMe is open in any tab,
+  even minimised - not when the browser is fully closed. That would need "Web
+  Push" (server keys, stored subscriptions, a separate push service), a
+  noticeably bigger system that the team did not ask for.
+
+---
+
+# Phase 16b - Google sign-in, Contact info, blocking, Settings page, dark mode
+
+## 1. "Continue with Google" - how the round trip works
+
+Google sign-in uses the standard OAuth 2.0 "authorization code" flow. It is
+four hops, and the browser only ever carries one short-lived code - never
+Google's tokens or our client secret:
+
+1. The button is a plain link to `/api/auth/google`. The server makes a random
+   `state` value, puts it in a cookie, and redirects the browser to Google's
+   sign-in page with our client id, the `state`, and where to come back to.
+2. The person picks their Google account. Google sends the browser back to
+   `/api/auth/google/callback?code=...&state=...`.
+3. The server checks that the `state` in the URL matches the one in the cookie.
+   This proves the sign-in was started by THIS browser - without it, an
+   attacker could trick your browser into finishing a sign-in into the
+   attacker's account ("login CSRF").
+4. The server swaps the `code` for an access token (a server-to-server call
+   that includes the client secret), asks Google who the person is (their
+   id, email, name, and whether Google has verified the email), then finds or
+   creates the PingMe account and sets our normal session cookie - exactly the
+   same cookie a password login gives.
+
+All of this is ordinary `fetch()` calls in `googleAuthService.js`, the same
+approach as the Brevo email - no Passport, no Google library - so every line
+can be read and explained.
+
+**Which account do you get?**
+- Signed in with Google before -> the same account (found by the Google id).
+- A password account with the same email -> that account, now linked. Google
+  has verified the email, so it is the same person; making a second account
+  would split their chats.
+- Otherwise -> a new account, with a username made from the email (plus a few
+  random digits if taken), which they can change later from their profile.
+
+An email Google has NOT verified is refused outright, and a suspended account
+or "registration closed" (for new accounts only) are respected. Every failure
+sends the browser back to `/login?error=<code>`, and the login page shows a
+fixed message for each known code - never text taken from the URL, so the URL
+cannot be used to put words on our page.
+
+> **Likely question: why doesn't the Gmail-only rule apply to Google?**
+> That rule exists to stop throwaway email addresses. An account that Google
+> itself has verified is not a throwaway, so it would only get in the way.
+
+> **Likely question: can a Google user log in with a password?**
+> Not until they set one. Their account has no password hash, so a password
+> login gives the same "Invalid credentials" as any wrong password. "Forgot
+> password" sets one, since it proves they own the email.
+
+## 2. Contact info panel
+
+Clicking a friend's name or picture in the chat header opens a panel (beside
+the chat on a wide screen, over it on a small one) with their profile, every
+photo, video and document sent in this chat, and the actions below. The file
+list comes from `GET /api/conversations/:id/attachments`, which - like every
+message route - first checks you are in the conversation (404 otherwise), and
+leaves out anything deleted for everyone or deleted/cleared for you.
+
+## 3. Mute, clear chat and block - three different strengths
+
+- **Mute** only stops the pop-up notifications for that chat. Messages still
+  arrive and the unread badge still counts (in grey). It is stored as a list
+  of who muted it on the conversation (`mutedBy`), so it follows you to your
+  other devices, and it changes nothing for the other person.
+- **Clear chat** hides every message in the chat from YOU only. It is exactly
+  Phase 14's "delete for me", applied to all the messages in one database
+  update. The other person keeps their whole history.
+- **Block** is the strongest. It removes the friendship (the chat becomes
+  read-only, like after an unfriend) and, from then on, neither person can
+  find the other by username or send a friend request. It works in both
+  directions and gives the same "No user found" as a username that does not
+  exist, so being blocked can never be detected. Unblocking (from Settings)
+  just removes the block - they can then find each other and send a new
+  request.
+
+Each of these asks first in a `ConfirmDialog` (except mute, which is a simple
+switch and easy to undo).
+
+## 4. The Settings page
+
+`/settings` gathers everything about your account and this device: your
+profile, email and sign-in method, blocked contacts, notifications, "Enter to
+send", theme, help (a link to the project's GitHub issues) and log out.
+
+The important design point is where it sits. Before, the socket lived inside
+the chat page, so leaving the chat page would have disconnected it. Now one
+`LoggedInLayout` holds the socket, all its listeners, the banners and the
+toasts, and both `/` and `/settings` are drawn inside it. Moving between them
+keeps the connection open: while Settings is open, messages still arrive, the
+tab title still counts them, and the sender still sees "Delivered".
+
+Some settings are saved on the **account** (theme - it should follow you to
+any device), others only in **this browser** (notifications and Enter to send
+- they depend on the device and keyboard you are using right now).
+
+## 5. Dark mode - one set of colours, flipped
+
+The obvious way to add dark mode with Tailwind is to add a `dark:` class to
+every element - hundreds of changes, easy to miss one. We did not need that.
+Tailwind v4 writes every colour class as a CSS variable - `bg-slate-100`
+becomes `background: var(--color-slate-100)` - so `index.css` simply gives
+those variables different values when `<html data-theme="dark">` is set: the
+grey scale is flipped (the lightest grey becomes the darkest background, the
+darkest grey the brightest text), and the status colours get dark backgrounds
+with light text. Every component re-colours itself with no change to its
+code.
+
+Only pure white and black could not be flipped that way (white text on a
+green button must stay white), so the places that meant "the card colour" now
+use a new `bg-surface`, faint hover tints use `bg-overlay/5`, and the time in a
+bubble uses `text-meta`.
+
+**No white flash.** React takes a moment to start, so the theme is applied
+first by a tiny plain script, `public/theme-init.js`, in the page's `<head>`,
+from a copy of the choice kept in localStorage. Then, once we know who is
+logged in, the saved account theme is applied (in case they chose it on another
+device). It has to be a separate file, not inline code, because our Content
+Security Policy forbids inline scripts - a protection against script injection
+we did not want to weaken. "Same as device" follows the operating system, and
+even switches live if the OS changes while PingMe is open.

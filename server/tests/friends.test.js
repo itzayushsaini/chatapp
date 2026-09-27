@@ -209,6 +209,7 @@ describe('accept / decline / cancel', () => {
       lastMessage: null,
       online: false,
       lastSeen: null,
+      muted: false,
     })
     expect(await Conversation.countDocuments()).toBe(1)
   })

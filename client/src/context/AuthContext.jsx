@@ -3,6 +3,7 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useState } 
 import * as authApi from '../api/auth.js'
 import { setUnauthorizedHandler } from '../api/http.js'
 import { useChatStore } from '../store/useChatStore.js'
+import { applyTheme } from '../utils/theme.js'
 
 const AuthContext = createContext(null)
 
@@ -12,6 +13,10 @@ const AuthContext = createContext(null)
 export function AuthProvider({ children }) {
   const [user, setUser] = useState(null)
   const [loading, setLoading] = useState(true)
+  // True when the very first "am I logged in?" check could not reach the
+  // server at all (offline, server down) - shown as an error screen with a
+  // Try Again button, instead of wrongly showing the login page.
+  const [bootError, setBootError] = useState(false)
 
   // Forget the user AND everything we loaded for them, so the next person
   // to log in on this computer cannot see any of it.
@@ -20,15 +25,32 @@ export function AuthProvider({ children }) {
     useChatStore.getState().reset()
   }, [])
 
-  useEffect(() => {
-    // The cookie is httpOnly, so JavaScript cannot check it directly. Asking
-    // the server is the only way to know whether we are logged in.
+  // The cookie is httpOnly, so JavaScript cannot check it directly. Asking
+  // the server is the only way to know whether we are logged in.
+  const checkSession = useCallback(() => {
+    setLoading(true)
+    setBootError(false)
     authApi
       .me()
       .then(setUser)
-      .catch(() => setUser(null))
+      .catch((err) => {
+        // A 401 is a real answer ("not logged in"). No response at all, or a
+        // server error, means we simply do not know yet.
+        if (err.response?.status === 401) setUser(null)
+        else setBootError(true)
+      })
       .finally(() => setLoading(false))
   }, [])
+
+  useEffect(checkSession, [checkSession])
+
+  // My saved theme wins over whatever this browser remembered - so it
+  // follows me to a new device - and changes live when I (or my other tab)
+  // pick a different one.
+  const theme = user?.theme
+  useEffect(() => {
+    if (theme) applyTheme(theme)
+  }, [theme])
 
   // Merges changes into my profile: after I edit it, or when my other tab
   // edits it (the user:updated socket event).
@@ -43,8 +65,11 @@ export function AuthProvider({ children }) {
     () => ({
       user,
       loading,
+      bootError,
+      retrySession: checkSession,
       updateUser,
-      login: async (identifier, password) => setUser(await authApi.login(identifier, password)),
+      login: async (identifier, password, rememberMe) =>
+        setUser(await authApi.login(identifier, password, rememberMe)),
       register: async (fields) => setUser(await authApi.register(fields)),
       logout: async () => {
         try {
@@ -54,7 +79,7 @@ export function AuthProvider({ children }) {
         }
       },
     }),
-    [user, loading, clearSession, updateUser],
+    [user, loading, bootError, checkSession, clearSession, updateUser],
   )
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>

@@ -15,7 +15,7 @@ export default function Toasts() {
         <div
           key={t.id}
           className={`pointer-events-auto flex max-w-sm items-start gap-3 rounded-xl px-4 py-3 text-sm shadow-lg ${
-            t.kind === 'error' ? 'bg-red-600 text-white' : 'bg-slate-900 text-white'
+            t.kind === 'error' ? 'bg-red-600 text-white' : 'bg-neutral-800 text-white'
           }`}
           role={t.kind === 'error' ? 'alert' : 'status'}
         >

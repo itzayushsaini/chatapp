@@ -136,6 +136,7 @@ function ProfileForm({ onDone }) {
 // Its own form with its own Save button: unrelated fields and validation to
 // the profile form above, so a mistake in one never blocks the other.
 function ChangePasswordSection() {
+  const { user } = useAuth()
   const addToast = useChatStore((s) => s.addToast)
   const [currentPassword, setCurrentPassword] = useState('')
   const [newPassword, setNewPassword] = useState('')
@@ -172,6 +173,14 @@ function ChangePasswordSection() {
   return (
     <form onSubmit={handleSubmit} className="space-y-4">
       <h3 className="text-sm font-semibold text-slate-900">Change password</h3>
+      {user.authProvider === 'google' && (
+        // Their account was made by "Continue with Google", so unless they
+        // have since set one, there is no current password to type here.
+        <p className="rounded-lg bg-slate-100 px-3 py-2 text-xs text-slate-600">
+          You signed up with Google, so you may not have a password yet. To set one, log out and use
+          &quot;Forgot password?&quot; on the login page with {user.email}.
+        </p>
+      )}
       <TextField
         label="Current password"
         type="password"
@@ -273,7 +282,7 @@ function PictureEditor() {
       <span className="relative">
         <Avatar user={user} size="xl" />
         {busy && (
-          <span className="absolute inset-0 flex items-center justify-center rounded-full bg-white/70">
+          <span className="absolute inset-0 flex items-center justify-center rounded-full bg-surface/70">
             <Spinner />
           </span>
         )}

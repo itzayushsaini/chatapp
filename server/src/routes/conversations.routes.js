@@ -2,7 +2,7 @@ import { Router } from 'express'
 import { z } from 'zod'
 
 import * as conversations from '../controllers/conversations.controller.js'
-import { uploadLimiter } from '../middleware/rateLimits.js'
+import { profileLimiter, uploadLimiter } from '../middleware/rateLimits.js'
 import { requireAuth } from '../middleware/requireAuth.js'
 import { singleFile } from '../middleware/upload.js'
 import { objectId, validate } from '../middleware/validate.js'
@@ -37,6 +37,17 @@ router.post(
   conversations.checkCanUpload,
   singleFile('file', UPLOAD_MAX_BYTES),
   conversations.upload,
+)
+
+// The contact info panel. Clearing and muting are per-user preferences with
+// the same generous per-user budget as profile edits.
+router.get('/:id/attachments', conversationParams, conversations.sharedAttachments)
+router.post('/:id/clear', profileLimiter, conversationParams, conversations.clear)
+router.patch(
+  '/:id/mute',
+  profileLimiter,
+  validate({ params: z.object({ id: objectId }), body: z.object({ muted: z.boolean() }) }),
+  conversations.mute,
 )
 
 export default router

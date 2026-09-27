@@ -64,7 +64,8 @@ test('two people find each other, become friends and chat in real time', async (
   // Rendered as text, never as HTML.
   const amanLog = aman.getByRole('log', { name: 'Messages' })
   await expect(amanLog.getByText('Hello <b>Priya</b>')).toBeVisible()
-  await expect(amanLog.getByText('Sent')).toBeVisible()
+  // Priya is online, so it reaches her app at once: grey double tick.
+  await expect(amanLog.getByText('Delivered', { exact: true })).toBeVisible()
 
   // Priya sees an unread badge and the preview, then opens the chat.
   await priya.getByRole('tab', { name: 'Chats' }).click()
@@ -96,6 +97,13 @@ test('logging out ends the session', async ({ page }) => {
   await register(page, 'rahul_e2e', 'Rahul')
 
   await page.getByRole('button', { name: 'Log out' }).click()
+  // It asks first - cancelling keeps you logged in.
+  const confirm = page.getByRole('dialog', { name: 'Log out?' })
+  await confirm.getByRole('button', { name: 'Cancel' }).click()
+  await expect(page.getByText('@rahul_e2e').first()).toBeVisible()
+
+  await page.getByRole('button', { name: 'Log out' }).click()
+  await confirm.getByRole('button', { name: 'Log out' }).click()
   await expect(page).toHaveURL(/\/login$/)
 
   // The cookie is gone: going back to the app redirects to login again.

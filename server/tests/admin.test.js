@@ -19,6 +19,8 @@ describe('GET /api/settings/public', () => {
       registrationOpen: true,
       allowedEmailDomains: ['gmail.com'],
       announcement: { enabled: false, text: '' },
+      // No Google credentials in the test environment.
+      googleSignIn: false,
     })
   })
 })
@@ -66,6 +68,7 @@ describe('settings', () => {
       registrationOpen: false,
       allowedEmailDomains: ['gmail.com', 'college.edu'],
       announcement: { enabled: true, text: 'Under maintenance' },
+      googleSignIn: false,
     })
   })
 

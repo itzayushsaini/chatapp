@@ -2,7 +2,7 @@
 
 A new session should be able to read this file and carry on from it.
 
-Last updated: 2026-09-27 (Phase 15 added same day)
+Last updated: 2026-09-27 (Phases 16a and 16b added same day - both awaiting the team's OK to commit)
 
 ---
 
@@ -25,8 +25,27 @@ Last updated: 2026-09-27 (Phase 15 added same day)
 | 13 | Read receipts (blue double tick) and a full WhatsApp-style visual reskin (green theme, bubble layout, doodle background, pill composer, sidebar top bar) | **Done** |
 | 14 | Message actions: reply (quoted preview), delete for me / delete for everyone (1-hour window), copy, forward (multi-select) | **Done** |
 | 15 | Admin panel: database-backed settings (Gmail-only sign-up, feature toggles, announcement banner), user management (suspend/delete), live stats, `isAdmin` accounts | **Done** |
+| 16a | Remember me, confirm password, logout confirmation, error screen, delivered (grey double) ticks, typing indicator, browser notifications | **Done** |
+| 16b | Google sign-in, Contact info panel (media, shared files, block, clear chat, mute), Settings page, real dark mode, Enter-to-send switch | **Done** (code + tests). Google sign-in stays hidden until `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` are set - see Known issues 16 |
 
-**Verification (2026-09-27, after Phase 15):** `npm test` 221/221 pass, lint
+**Verification (2026-09-27, after Phase 16b):** `npm test` 261/261 pass (30
+new: 15 Google sign-in with Google's endpoints faked, 15 block / clear / mute /
+shared files / theme), `npm run test:e2e` 16/16 pass (4 new in
+`settings.spec.js`), lint clean, `npm run build` succeeds. Checked visually
+against an isolated in-memory server (never the shared Atlas DB): chat,
+Contact info panel, block confirmation and Settings in both light and dark
+mode, and the Google error message on the login page. The real Google round
+trip could not be tried yet - it needs the team's OAuth credentials.
+
+**Earlier verification (2026-09-27, after Phase 16a):** `npm test` 231/231 pass,
+`npm run test:e2e` 12/12 pass (including two new specs: the offline → online
+→ opened tick progression, and "typing…"), lint clean, `npm run build`
+succeeds (and ships `sw.js`). Also checked in a real browser against an
+isolated in-memory server: Remember me produces a 30-day cookie; "Passwords do
+not match" blocks a mistyped sign-up; the "Log out?" dialog; the error screen
+when `/auth/me` cannot be reached.
+
+**Earlier verification (2026-09-27, after Phase 15):** `npm test` 221/221 pass, lint
 clean in both workspaces, `npm run build` succeeds. Also checked by hand in
 the browser as a real admin account (`aman`, promoted via `npm run make-admin`):
 Overview/Users/Settings tabs all load and work; suspending `priya` showed
@@ -235,6 +254,58 @@ cleanly, so one commit "Phases 1-9: complete ChatApp (later renamed PingMe)" is 
   `server/src/scripts/seed.js` was NOT changed, since it inserts users
   directly and never goes through the registration check at all.
 
+### Phase 16a additions
+- Server: `authService` gained `sessionCookieOptions(remember)` /
+  `baseCookieOptions` (replacing the single `cookieOptions`) and a `rm` claim in
+  `signToken`; `loginSchema` gained `rememberMe`. `Conversation.lastDelivered`;
+  `messageService.markDelivered` (one atomic forward-only update) and
+  `catchUpDelivered`; `getHistory` returns `theirDeliveredUpTo`.
+  `messageHandlers.js` marks delivered after a send/forward when the recipient
+  is online; new `socket/handlers/deliveryHandlers.js` (catch-up on connect)
+  and `typingHandlers.js` (the `typing` relay).
+- Client: `components/common/ErrorScreen.jsx` (`ErrorScreen` +
+  `ErrorBoundary`, wrapped around the app in `main.jsx`); `AuthContext` gained
+  `bootError` / `retrySession`; Remember me on `LoginPage`; Confirm password
+  on `RegisterPage`; "Log out?" dialog and `NotificationPrompt.jsx` in the
+  sidebar; `utils/notifications.js` + `public/sw.js`; the store gained
+  `deliveredUpTo`, `typing`, `setDeliveredUpTo`, `setTyping`; grey double tick
+  in `MessageBubble`; "typing…" in the chat header and Chats row; unread count
+  in the tab title (`ChatPage`); read-marking now waits for the tab to be
+  visible (`ChatWindow`, `useSocketEvents`).
+- Tests: `server/tests/deliveryTyping.test.js` (8 cases), 2 Remember-me cases in
+  `auth.test.js`; e2e: `readReceipts.spec.js` rewritten for three states plus a
+  typing spec; `chat.spec.js` and `profile-attachments.spec.js` now expect
+  "Delivered" (the friend is online) and confirm the logout dialog;
+  `e2e/helpers.js` fills Confirm password.
+
+### Phase 16b additions
+- Server: `models/Block.js`; `User` gained `authProvider`, `googleId`,
+  `theme` (and `passwordHash` is no longer required); `Conversation.mutedBy`;
+  `services/googleAuthService.js` + `googleStart` / `googleCallback` in
+  `auth.controller.js` (`GET /api/auth/google`, `/api/auth/google/callback`);
+  `friendService` gained `isBlockedEitherWay`, `blockUser`, `unblockUser`,
+  `listBlocked`, a per-person `muted` flag on friend rows, and hides a preview
+  I deleted/cleared; `messageService` gained `listSharedAttachments`,
+  `clearConversation`, `setMuted`; routes `GET /api/users/me/blocked`,
+  `POST|DELETE /api/users/:id/block`, `GET /api/conversations/:id/attachments`,
+  `POST /api/conversations/:id/clear`, `PATCH /api/conversations/:id/mute`;
+  `PATCH /api/users/me` accepts `theme`; public settings report `googleSignIn`;
+  SelfUser adds `theme`, `authProvider`, `googleLinked`.
+- Client: `components/layout/LoggedInLayout.jsx` (one socket + listeners +
+  banners + toasts shared by `/` and the new `/settings`, so nothing
+  disconnects when Settings opens); `pages/SettingsPage.jsx`;
+  `components/chat/ContactInfoPanel.jsx` (replaces the old
+  `UserProfileDialog.jsx`, now deleted); `common/ConfirmDialog.jsx`,
+  `LogoutDialog.jsx`, `Switch.jsx`, `GoogleButton.jsx`;
+  `hooks/useFriendStatus.js`; `utils/theme.js`, `utils/preferences.js`,
+  `public/theme-init.js`; dark-mode variables in `index.css`; new
+  `bg-surface` / `bg-overlay/*` / `text-meta` tokens replacing hard-coded
+  white/black classes everywhere; muted chats show a bell-off icon and a grey
+  unread badge; the header's "Remove friend" button moved into Contact info.
+- Tests: `server/tests/google.test.js`, `server/tests/chatControls.test.js`;
+  `e2e/settings.spec.js`; `profile-attachments.spec.js` now checks the
+  Contact info panel instead of the old profile dialog.
+
 ### Tests and deployment
 - `server/tests/` - `health`, `auth`, `rateLimits`, `friends`,
   `conversations`, `socket` + `setup.js`, `helpers.js`
@@ -310,6 +381,9 @@ cleanly, so one commit "Phases 1-9: complete ChatApp (later renamed PingMe)" is 
     way there is for a mobile app relying on push delivery. Faking that
     middle state would be theatre, not information. Decided with the team
     alongside the "full look-alike, light-only" WhatsApp reskin request.
+    **Superseded in Phase 16a** - the team asked for the grey double tick, so
+    "delivered" now means "reached their app because they were online" (see
+    decision 35).
 21. **Read receipts are tracked per conversation** (one pointer per
     participant), not per message - far cheaper than a per-message "read by"
     flag, and how WhatsApp itself models a 1:1 chat's read state.
@@ -392,6 +466,59 @@ cleanly, so one commit "Phases 1-9: complete ChatApp (later renamed PingMe)" is 
     browsing the directory" rule - that rule protects against an ORDINARY
     user listing everyone; an admin's own tool doing the opposite is the
     entire point of it, and it is gated by `isAdmin` regardless.
+35. **"Delivered" is decided by the server, not reported by the client.** The
+    moment the recipient is online, the `message:new` just emitted to their
+    room has reached their app; on connect, everything already waiting has.
+    Both are forward-only pointer moves. This needs no extra client event at
+    all, and cannot be faked by a client claiming delivery it never had.
+36. **A chat open in a hidden/minimised tab is not "read".** Before Phase 16a
+    the client marked messages read the moment they arrived in the open chat,
+    visible or not; with a separate "delivered" state (and notifications),
+    that would have turned ticks blue for messages nobody had seen. Reading
+    now waits for `document.hidden` to be false.
+37. **Remember me unticked means a true browser-session cookie** (no
+    `maxAge`), not merely a shorter one - the conventional meaning, and the
+    safe default on a shared or lab computer. Registration behaves as ticked.
+38. **Notifications work while PingMe is open (any tab, even minimised), not
+    when the browser is closed.** The closed-browser case would need Web Push
+    (VAPID keys, stored push subscriptions, a push library) - a meaningful
+    extra system; left out unless the team asks. A service worker is used
+    anyway, only because Android Chrome refuses page-created notifications.
+39. **The composer is now keyed per conversation**, so switching chats clears
+    an unsent draft. Before, the text typed for one friend stayed in the box
+    when opening another - more likely to cause a message sent to the wrong
+    person than to save anyone's draft.
+40. **Google sign-in is written by hand with `fetch`**, the same way as the
+    Brevo email (no Passport, no Google SDK): about 100 lines in
+    `googleAuthService.js`, which the team can read and explain line by line.
+    A random `state` in a short-lived cookie stops login CSRF.
+41. **A Google account with the same email as a password account is linked,
+    not duplicated** - Google has verified the email, so it is the same
+    person. New Google accounts get a username from the email (with random
+    digits if taken), changeable later. Registration being closed still
+    applies to NEW Google accounts; the allowed-email-domains rule does not
+    (it exists to stop throwaway emails, and a verified Google account is not
+    one). A Google-only account has no password, so password login gives the
+    usual 401 and "Forgot password" is how to set one.
+42. **Blocking works in both directions and is silent.** Either side blocking
+    makes search and friend requests act as if the other did not exist (404
+    "No user found"), so being blocked cannot be detected. It ends the
+    friendship but keeps the history, exactly like an unfriend.
+43. **Clear chat is "delete for me" on every message at once** (one
+    `updateMany` adding me to `deletedFor`), and mute is a per-person list on
+    the conversation - both reuse existing mechanisms instead of new
+    collections, and neither changes anything for the other person.
+44. **Dark mode flips CSS variables instead of adding `dark:` classes.**
+    Tailwind v4 writes every colour utility as `var(--color-...)`, so
+    redefining the grey scale and a few status colours under
+    `[data-theme='dark']` re-colours every component with no per-element
+    changes. Only true white/black needed new tokens (`surface`, `overlay`,
+    `meta`). The theme is saved on the account (follows you to any device)
+    and cached in localStorage so `theme-init.js` can apply it before the
+    first paint.
+45. **Enter-to-send and notifications are per-device settings** (this
+    browser only), because they depend on the keyboard/device, while theme is
+    per-account.
 
 ---
 
@@ -415,6 +542,9 @@ cleanly, so one commit "Phases 1-9: complete ChatApp (later renamed PingMe)" is 
    (set up 2026-09-26), so `npm run dev` and `npm run seed` work without a
    local MongoDB. Tests and e2e use an in-memory MongoDB. Rotate the Atlas
    user's password before deploying - it was shared in a chat once.
+   **This is also the database the live Render site uses** - `npm run dev`,
+   `npm run seed` and any manual testing all write to real, live data. A
+   separate development cluster (or a local MongoDB) would be safer.
 7. **Storage size.** The free Atlas cluster holds 512 MB in total, shared by
    all data and files. Fine for a demo or viva; heavy video use needs a paid
    tier or object storage (only `storageService.js` would change).
@@ -431,12 +561,13 @@ cleanly, so one commit "Phases 1-9: complete ChatApp (later renamed PingMe)" is 
 12. **Sessions from before Phase 12 shipped** have no `ts` claim, so the
     "log out every other device" check is skipped for them specifically
     (never for sessions created after that point). They age out within 7 days.
-13. **Playwright e2e was not re-run for Phases 14 or 15** (both were verified
-    with passing server tests and by hand in the browser instead). Its
-    registration helper (`e2e/helpers.js`) WAS updated to use `@gmail.com`
-    addresses, so it should still pass once run - just not confirmed this
-    session. Dedicated specs for message actions and the admin panel are
-    still worth adding later.
+13. **No e2e specs yet for message actions (Phase 14) or the admin panel
+    (Phase 15)** - both are covered by server tests and were checked by hand.
+    The whole e2e suite (16 specs) was re-run and passes after Phase 16b.
+15. **Notifications cannot be seen in automated tests** - headless Chromium
+    reports the permission as already decided, so the "Enable" offer stays
+    hidden and no notification is shown. They need a manual check (see
+    `docs/TEST_CASES.md`, M16a).
 14. **The admin panel's client-side "can I still delete for everyone" hint**
     (in `MessageBubble.jsx`) does not read the admin-configured
     `deleteForEveryoneWindowMinutes` - it is hardcoded to 60 minutes. If an
@@ -444,15 +575,26 @@ cleanly, so one commit "Phases 1-9: complete ChatApp (later renamed PingMe)" is 
     late compared to what the server would actually allow; the server always
     enforces the real, current value regardless, so this can only ever hide
     the button too early, never let through a delete the server would refuse.
+16. **Google sign-in needs setting up once** in Google Cloud Console (see
+    `docs/DEPLOY.md`): an OAuth client of type "Web application" with the
+    redirect URIs `http://localhost:5173/api/auth/google/callback` and
+    `https://chatapp-xu38.onrender.com/api/auth/google/callback`, then
+    `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` in `server/.env` and on
+    Render. Until then the button is simply not shown. While the consent
+    screen is in "Testing" mode, only the Google accounts added as test users
+    can sign in.
+17. **Dark mode's red text is the same red as light mode** (`red-600`) - it
+    passes contrast on the dark background but is not as soft as WhatsApp's
+    own; changing it would also change the danger button, so it was left.
 
 ---
 
 ## How to verify everything
 
 1. `npm install`
-2. `npm test` - 221 pass
+2. `npm test` - 261 pass
 3. `npm run lint` - no errors
-4. `npx playwright install chromium` (once), then `npm run test:e2e` - 11 pass
+4. `npx playwright install chromium` (once), then `npm run test:e2e` - 16 pass
 5. `cp server/.env.example server/.env`, fill in `MONGO_URI` and `JWT_SECRET`
 6. `npm run seed`, then `npm run dev`, open <http://localhost:5173>
 7. `npm run make-admin -- aman` to try the admin panel, then log in as `aman`

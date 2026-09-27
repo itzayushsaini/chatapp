@@ -28,6 +28,11 @@ const envSchema = z.object({
   // Used to build the link inside password-reset emails. Vite's address in
   // development; set this to the deployed URL in production.
   APP_URL: z.string().url().default('http://localhost:5173'),
+  // "Continue with Google". Optional - without both, the button is hidden
+  // and /api/auth/google just sends the visitor back to the login page.
+  // Google's redirect URI to register is `${APP_URL}/api/auth/google/callback`.
+  GOOGLE_CLIENT_ID: z.string().optional(),
+  GOOGLE_CLIENT_SECRET: z.string().optional(),
 })
 
 const result = envSchema.safeParse(process.env)

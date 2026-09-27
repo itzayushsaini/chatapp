@@ -1,7 +1,9 @@
 import mongoose from 'mongoose'
 
+import { Block } from '../models/Block.js'
 import { Conversation } from '../models/Conversation.js'
 import { Friendship } from '../models/Friendship.js'
+import { Message } from '../models/Message.js'
 import { User } from '../models/User.js'
 import { emitToUser } from '../socket/emitter.js'
 import { AppError } from '../utils/AppError.js'
@@ -46,14 +48,17 @@ function lastMessageView(lastMessage) {
 }
 
 // One row of the Chats list. online/lastSeen are only ever built here, and
-// this is only ever sent to a friend - never to strangers.
-function friendItem(friendUser, conversation) {
+// this is only ever sent to a friend - never to strangers. `meId` is whose
+// list this row is for (mute is per person). `hidePreview` is set when the
+// preview message is one I deleted "for me" or cleared from this chat.
+function friendItem(friendUser, conversation, meId, hidePreview = false) {
   return {
     friend: publicUser(friendUser),
     conversationId: String(conversation._id),
-    lastMessage: lastMessageView(conversation.lastMessage),
+    lastMessage: hidePreview ? null : lastMessageView(conversation.lastMessage),
     online: isOnline(friendUser._id),
     lastSeen: friendUser.lastSeen ?? null,
+    muted: (conversation.mutedBy ?? []).some((id) => sameId(id, meId)),
   }
 }
 
@@ -111,7 +116,9 @@ export async function getContactIds(userId) {
 // account by searching "a", "b", "c"... which is what this app must prevent.
 export async function searchByUsername(meId, username) {
   const user = await User.findOne({ username })
-  if (!user) throw new AppError(404, 'No user found')
+  // Blocked either way looks exactly like "no such user" - neither side can
+  // tell a block from a typo, so a block can never be discovered this way.
+  if (!user || (await isBlockedEitherWay(meId, user._id))) throw new AppError(404, 'No user found')
 
   return { user: publicUser(user), relationship: await relationshipWith(meId, user._id) }
 }
@@ -136,7 +143,7 @@ async function relationshipWith(meId, otherId) {
 // lists them.
 export async function sendRequest(meId, username) {
   const target = await User.findOne({ username })
-  if (!target) throw new AppError(404, 'No user found')
+  if (!target || (await isBlockedEitherWay(meId, target._id))) throw new AppError(404, 'No user found')
   if (sameId(target._id, meId)) throw new AppError(400, "You can't add yourself")
 
   const key = pairKey(meId, target._id)
@@ -217,8 +224,8 @@ export async function acceptRequest(meId, requestId) {
     User.findById(meId),
     User.findById(friendship.requester),
   ])
-  const itemForMe = friendItem(requester, conversation)
-  const itemForRequester = friendItem(me, conversation)
+  const itemForMe = friendItem(requester, conversation, me._id)
+  const itemForRequester = friendItem(me, conversation, requester._id)
 
   // The requester learns they have a new friend. My own other tabs get the
   // same news (the tab that clicked Accept also gets the HTTP response, and
@@ -293,12 +300,23 @@ export async function listFriends(meId) {
   const userById = new Map(users.map((u) => [String(u._id), u]))
   const conversationByKey = new Map(conversations.map((c) => [c.pairKey, c]))
 
+  // The preview is shared by both people, but a message I deleted "for me"
+  // (or cleared along with the whole chat) must not show in MY list. One
+  // query for the whole list finds which previews those are.
+  const previewIds = conversations.map((c) => c.lastMessage?.messageId).filter(Boolean)
+  const hiddenFromMe = new Set(
+    (await Message.find({ _id: { $in: previewIds }, deletedFor: meId }, { _id: 1 })).map((m) =>
+      String(m._id),
+    ),
+  )
+
   const rows = friendships
     .map((f) => {
       const user = userById.get(String(sameId(f.requester, meId) ? f.recipient : f.requester))
       const conversation = conversationByKey.get(f.pairKey)
       if (!user || !conversation) return null
-      return { item: friendItem(user, conversation), friendsSince: f.respondedAt }
+      const hide = hiddenFromMe.has(String(conversation.lastMessage?.messageId))
+      return { item: friendItem(user, conversation, meId, hide), friendsSince: f.respondedAt }
     })
     .filter(Boolean)
 
@@ -331,4 +349,59 @@ export async function listRequests(meId) {
     incoming: incoming.filter((f) => f.requester).map((f) => requestItem(f, f.requester)),
     outgoing: outgoing.filter((f) => f.recipient).map((f) => requestItem(f, f.recipient)),
   }
+}
+
+// ---------------------------------------------------------------------------
+// Blocking
+// ---------------------------------------------------------------------------
+
+export async function isBlockedEitherWay(userA, userB) {
+  return Boolean(
+    await Block.exists({
+      $or: [
+        { blocker: userA, blocked: userB },
+        { blocker: userB, blocked: userA },
+      ],
+    }),
+  )
+}
+
+// Blocking ends any friendship or pending request between us (they vanish
+// live from both lists, through the same events as an unfriend or a
+// cancelled request), and from then on neither of us can find the other by
+// username or send a request. The conversation and its history are kept,
+// exactly as after an unfriend - it simply becomes read-only.
+export async function blockUser(meId, otherId) {
+  if (sameId(meId, otherId)) throw new AppError(400, "You can't block yourself")
+  if (!(await User.exists({ _id: otherId }))) throw new AppError(404, 'User not found')
+
+  await Block.updateOne(
+    { blocker: meId, blocked: otherId },
+    { $setOnInsert: { blocker: meId, blocked: otherId } },
+    { upsert: true },
+  )
+
+  const friendship = await Friendship.findOneAndDelete({ pairKey: pairKey(meId, otherId) })
+  if (friendship?.status === 'accepted') {
+    emitToUser(meId, 'friend:removed', { userId: String(otherId) })
+    emitToUser(otherId, 'friend:removed', { userId: String(meId) })
+  } else if (friendship?.status === 'pending') {
+    // Gone from whichever side's Requests list it was in.
+    const requestId = String(friendship._id)
+    emitToUser(meId, 'friend:request:cancelled', { requestId })
+    emitToUser(otherId, 'friend:request:cancelled', { requestId })
+  }
+}
+
+export async function unblockUser(meId, otherId) {
+  await Block.deleteOne({ blocker: meId, blocked: otherId })
+}
+
+// The people I have blocked, for the Settings page - newest first.
+export async function listBlocked(meId) {
+  const blocks = await Block.find({ blocker: meId })
+    .sort({ createdAt: -1 })
+    .populate('blocked', PUBLIC_FIELDS)
+  // populate() gives null if that account has since been deleted.
+  return blocks.filter((b) => b.blocked).map((b) => publicUser(b.blocked))
 }
