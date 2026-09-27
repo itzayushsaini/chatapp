@@ -2,7 +2,7 @@
 
 A new session should be able to read this file and carry on from it.
 
-Last updated: 2026-09-27 (Phase 12 added same day)
+Last updated: 2026-09-27 (Phase 13 added same day)
 
 ---
 
@@ -22,8 +22,15 @@ Last updated: 2026-09-27 (Phase 12 added same day)
 | 10 | Profiles: picture (GridFS), bio, display name, username change (once per 30 days), live `user:updated` | **Done** |
 | 11 | Attachments: photos, videos, documents - upload, magic-byte type check, permission-checked download with Range, cleanup, chat UI | **Done** |
 | 12 | Forgot password (Brevo email) and change password (from profile), with cross-device session invalidation | **Done** |
+| 13 | Read receipts (blue double tick) and a full WhatsApp-style visual reskin (green theme, bubble layout, doodle background, pill composer, sidebar top bar) | **Done** |
 
-**Verification (2026-09-27, after Phase 12):** `npm test` 189/189 pass,
+**Verification (2026-09-27, after Phase 13):** `npm test` 194/194 pass,
+`npm run test:e2e` 11/11 pass (run three times, no flakes), lint clean in both
+workspaces, `npm run build` succeeds, `npm audit --omit=dev` 0
+vulnerabilities. Also checked by hand in the browser: the green theme, pill
+tabs and top-bar sidebar render correctly.
+
+**Earlier verification (2026-09-27, after Phase 12):** `npm test` 189/189 pass,
 `npm run test:e2e` 9/9 pass (run three times, no flakes), lint clean in both
 workspaces, `npm run build` succeeds, `npm audit --omit=dev` 0
 vulnerabilities.
@@ -118,6 +125,30 @@ cleanly, so one commit "Phases 1-9: complete ChatApp (later renamed PingMe)" is 
   of forgot/reset is covered at the server level instead, since e2e has no
   real Brevo key configured).
 
+### Phase 13 additions
+- Server: `Conversation.lastRead` (a Map, keyed by user id, of
+  `{ upTo, at }`); `messageService.markRead` (the "only moves forward" atomic
+  update) and `getHistory`'s new `theirReadUpTo` field;
+  `socket/handlers/readHandlers.js` (`conversation:read` in,
+  `message:read` out - fire-and-forget, no ack required, its own small
+  per-socket rate limit).
+- Client: `store/useChatStore.js` gained `readUpTo` + `setReadUpTo`;
+  `useSocketEvents.js` emits `conversation:read` the moment a message
+  arrives in the currently-open chat, and `ChatWindow.jsx` emits it when a
+  chat is opened (and again after a reconnect); `MessageBubble.jsx` shows a
+  clock, a single grey tick, or two blue ticks accordingly.
+- **The whole visual style moved to a WhatsApp look**: `index.css` defines a
+  `--color-brand-*` scale (WhatsApp green) and a `.chat-background` doodle
+  pattern; every component that used Tailwind's `blue-*` utilities now uses
+  `brand-*` at the same shade number; `MessageBubble`, `MessageInput` and
+  `Sidebar` were restyled (pale-green vs. white bubbles with the
+  timestamp/tick inside them, a pill composer with a circular send button, a
+  sidebar top bar in place of the old footer). Requested and approved as a
+  spec change to the previously-fixed "blue primary colour" style rule.
+- Tests: `server/tests/readReceipts.test.js` (5 cases) and
+  `e2e/readReceipts.spec.js` (2 cases, live blue-tick behaviour on both
+  triggers - opening a chat, and a message arriving while already open).
+
 ### Tests and deployment
 - `server/tests/` - `health`, `auth`, `rateLimits`, `friends`,
   `conversations`, `socket` + `setup.js`, `helpers.js`
@@ -186,7 +217,21 @@ cleanly, so one commit "Phases 1-9: complete ChatApp (later renamed PingMe)" is 
     custom millisecond `ts` claim rather than JWT's own `iat` (see
     `docs/EXPLAINED.md` Phase 12 for the two real timing bugs this caught,
     and a third bug in the e2e tests themselves - ambiguous label matching).
-20. **Root cause of a login "Network error" in development:** `node --watch`
+20. **Read receipts show only 2 states (sent, read), not WhatsApp's 3**
+    (sent, delivered, read) - by design. A "delivered" state would be
+    meaningless here: full history is always one REST call away, so there is
+    no real distinction between "their client has this" and "it exists" the
+    way there is for a mobile app relying on push delivery. Faking that
+    middle state would be theatre, not information. Decided with the team
+    alongside the "full look-alike, light-only" WhatsApp reskin request.
+21. **Read receipts are tracked per conversation** (one pointer per
+    participant), not per message - far cheaper than a per-message "read by"
+    flag, and how WhatsApp itself models a 1:1 chat's read state.
+22. **The colour retheme is one token, not scattered hex values**: every
+    `blue-*` Tailwind class became `brand-*` at the identical shade number,
+    and the scale is defined once in `index.css`. Changing the look again
+    later only touches that one file.
+23. **Root cause of a login "Network error" in development:** `node --watch`
     watched `node_modules` too, and something (likely OneDrive) touching files
     there restarted the server mid-request. `npm run dev` now uses
     `--watch-path=src`.
@@ -235,9 +280,9 @@ cleanly, so one commit "Phases 1-9: complete ChatApp (later renamed PingMe)" is 
 ## How to verify everything
 
 1. `npm install`
-2. `npm test` - 189 pass
+2. `npm test` - 194 pass
 3. `npm run lint` - no errors
-4. `npx playwright install chromium` (once), then `npm run test:e2e` - 9 pass
+4. `npx playwright install chromium` (once), then `npm run test:e2e` - 11 pass
 5. `cp server/.env.example server/.env`, fill in `MONGO_URI` and `JWT_SECRET`
 6. `npm run seed`, then `npm run dev`, open <http://localhost:5173>
 7. Work through the manual tables in `docs/TEST_CASES.md`

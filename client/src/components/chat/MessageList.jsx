@@ -11,7 +11,7 @@ import MessageBubble from './MessageBubble.jsx'
 const NEAR_BOTTOM_PX = 120
 const LOAD_OLDER_PX = 80
 
-export default function MessageList({ conversationId, messages, hasMore, myId, onRetry }) {
+export default function MessageList({ conversationId, messages, hasMore, myId, readUpTo, onRetry }) {
   const fetchOlder = useChatStore((s) => s.fetchOlder)
   const listRef = useRef(null)
   const nearBottom = useRef(true)
@@ -89,7 +89,7 @@ export default function MessageList({ conversationId, messages, hasMore, myId, o
       <div
         ref={listRef}
         onScroll={handleScroll}
-        className="h-full overflow-y-auto px-3 py-4 sm:px-6"
+        className="chat-background h-full overflow-y-auto px-3 py-4 sm:px-6"
         role="log"
         aria-label="Messages"
       >
@@ -125,6 +125,8 @@ export default function MessageList({ conversationId, messages, hasMore, myId, o
                 <MessageBubble
                   message={m}
                   mine={m.senderId === myId}
+                  // Same-length hex ids compare correctly as strings.
+                  read={Boolean(m.id && readUpTo && m.id <= readUpTo)}
                   onRetry={onRetry}
                   onOpenImage={setViewing}
                   onMediaLoad={handleMediaLoad}
@@ -139,7 +141,7 @@ export default function MessageList({ conversationId, messages, hasMore, myId, o
         <button
           type="button"
           onClick={scrollToBottom}
-          className="absolute bottom-3 left-1/2 inline-flex -translate-x-1/2 items-center gap-1.5 rounded-full bg-blue-600 px-4 py-2 text-sm font-medium text-white shadow-lg hover:bg-blue-700 focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2 focus-visible:outline-none"
+          className="absolute bottom-3 left-1/2 inline-flex -translate-x-1/2 items-center gap-1.5 rounded-full bg-brand-600 px-4 py-2 text-sm font-medium text-white shadow-lg hover:bg-brand-700 focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:ring-offset-2 focus-visible:outline-none"
         >
           New messages
           <ArrowDownIcon className="h-4 w-4" />
@@ -154,7 +156,7 @@ export default function MessageList({ conversationId, messages, hasMore, myId, o
               <a
                 href={viewing.url}
                 download={viewing.name}
-                className="inline-flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium text-blue-700 hover:bg-blue-50 focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:outline-none"
+                className="inline-flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium text-brand-700 hover:bg-brand-50 focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:outline-none"
               >
                 <DownloadIcon className="h-4 w-4" />
                 Download

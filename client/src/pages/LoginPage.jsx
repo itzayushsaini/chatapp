@@ -38,7 +38,7 @@ export default function LoginPage() {
       footer={
         <>
           Don&apos;t have an account?{' '}
-          <Link to="/register" className="font-medium text-blue-600 hover:underline">
+          <Link to="/register" className="font-medium text-brand-600 hover:underline">
             Sign up
           </Link>
         </>
@@ -70,7 +70,7 @@ export default function LoginPage() {
           />
           <Link
             to="/forgot-password"
-            className="mt-1.5 inline-block rounded text-sm font-medium text-blue-600 hover:underline focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:outline-none"
+            className="mt-1.5 inline-block rounded text-sm font-medium text-brand-600 hover:underline focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:outline-none"
           >
             Forgot password?
           </Link>

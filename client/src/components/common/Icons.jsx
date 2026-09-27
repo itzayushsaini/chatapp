@@ -132,3 +132,9 @@ export const VideoIcon = (p) => (
     <path d="m16 10 6-3v10l-6-3" />
   </Icon>
 )
+export const CheckCheckIcon = (p) => (
+  <Icon {...p}>
+    <path d="M2.5 12.5 7 17l9-11" />
+    <path d="M8.5 12.5 13 17l9-11" />
+  </Icon>
+)

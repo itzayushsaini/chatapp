@@ -24,12 +24,26 @@ export default function ChatWindow({ conversationId }) {
   const { user } = useAuth()
   const item = useChatStore((s) => s.friends.find((f) => f.conversationId === conversationId))
   const entry = useChatStore((s) => s.messagesByConversation[conversationId])
+  const readUpTo = useChatStore((s) => s.readUpTo[conversationId] ?? null)
   const store = useChatStore.getState
 
   // Load the latest page the first time this chat is opened.
   useEffect(() => {
     if (!store().messagesByConversation[conversationId]) store().fetchLatest(conversationId)
   }, [conversationId, store])
+
+  // Opening a chat marks everything currently in it as read - the same
+  // moment WhatsApp does. (New messages that arrive while it stays open are
+  // marked read separately, in useSocketEvents.)
+  useEffect(() => {
+    const messages = entry?.messages
+    if (entry?.status !== 'ready' || !messages?.length) return
+    const latest = [...messages].reverse().find((m) => m.id)
+    if (latest) socket.emit('conversation:read', { conversationId, upToMessageId: latest.id })
+    // Only re-run when the LATEST message actually changes, not on every
+    // store update (e.g. presence ticking) that happens to touch this entry.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [conversationId, entry?.status, entry?.messages?.at(-1)?.id])
 
   if (!item) return null
   const { friend } = item
@@ -154,6 +168,7 @@ export default function ChatWindow({ conversationId }) {
           messages={entry.messages}
           hasMore={entry.hasMore}
           myId={user.id}
+          readUpTo={readUpTo}
           onRetry={retry}
         />
       )}
@@ -179,7 +194,7 @@ function ChatHeader({ friend, onBack, onUnfriend }) {
       <button
         type="button"
         onClick={onBack}
-        className="rounded-lg p-1.5 text-slate-600 hover:bg-slate-100 focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:outline-none md:hidden"
+        className="rounded-lg p-1.5 text-slate-600 hover:bg-slate-100 focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:outline-none md:hidden"
         aria-label="Back to chats"
       >
         <BackIcon />
@@ -200,7 +215,7 @@ function ChatHeader({ friend, onBack, onUnfriend }) {
           <button
             type="button"
             onClick={() => setProfileOpen(true)}
-            className="max-w-full truncate rounded text-left hover:underline focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:outline-none"
+            className="max-w-full truncate rounded text-left hover:underline focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:outline-none"
             title="View profile"
           >
             {friend.displayName}
@@ -213,7 +228,7 @@ function ChatHeader({ friend, onBack, onUnfriend }) {
       <button
         type="button"
         onClick={onUnfriend}
-        className="rounded-lg p-2 text-slate-500 hover:bg-slate-100 hover:text-red-600 focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:outline-none"
+        className="rounded-lg p-2 text-slate-500 hover:bg-slate-100 hover:text-red-600 focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:outline-none"
         aria-label={`Remove ${friend.displayName} from friends`}
         title="Remove friend"
       >

@@ -38,7 +38,7 @@ export default function Dialog({ open, onClose, title, children, wide = false })
             <button
               type="button"
               onClick={onClose}
-              className="rounded-lg px-2 py-1 text-xl leading-none text-slate-500 hover:bg-slate-100 hover:text-slate-800 focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:outline-none"
+              className="rounded-lg px-2 py-1 text-xl leading-none text-slate-500 hover:bg-slate-100 hover:text-slate-800 focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:outline-none"
               aria-label="Close"
             >
               ×

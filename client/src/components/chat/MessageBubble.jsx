@@ -1,23 +1,31 @@
 import { formatBytes } from '../../utils/files.js'
 import { formatTime } from '../../utils/time.js'
-import { AlertIcon, CheckIcon, ClockIcon, DownloadIcon, FileIcon } from '../common/Icons.jsx'
+import {
+  AlertIcon,
+  CheckCheckIcon,
+  CheckIcon,
+  ClockIcon,
+  DownloadIcon,
+  FileIcon,
+} from '../common/Icons.jsx'
 
 // Message text is rendered as a plain React text node, which React always
 // escapes - so a message containing <script> just shows those characters.
 // There is no dangerouslySetInnerHTML anywhere in the app.
 // `whitespace-pre-wrap` keeps the user's line breaks (Shift+Enter).
-export default function MessageBubble({ message, mine, onRetry, onOpenImage, onMediaLoad }) {
+//
+// `read` is only meaningful when `mine` is true: has the OTHER person read
+// up to this message yet? Drives the single-grey vs double-blue tick.
+export default function MessageBubble({ message, mine, read, onRetry, onOpenImage, onMediaLoad }) {
   const { status, attachment, text } = message
 
   return (
     <li className={`flex ${mine ? 'justify-end' : 'justify-start'}`}>
-      <div className="max-w-[80%] sm:max-w-[70%]">
+      <div className="max-w-[80%] sm:max-w-[65%]">
         <div
-          className={`overflow-hidden rounded-2xl text-sm ${
-            mine
-              ? 'rounded-br-md bg-blue-600 text-white'
-              : 'rounded-bl-md bg-white text-slate-900 shadow-sm'
-          } ${status === 'failed' ? 'opacity-70' : ''} ${attachment ? 'p-1' : 'px-3.5 py-2'}`}
+          className={`overflow-hidden rounded-lg text-sm shadow-sm ${
+            mine ? 'rounded-tr-none bg-brand-100 text-slate-900' : 'rounded-tl-none bg-white text-slate-900'
+          } ${status === 'failed' ? 'opacity-70' : ''} ${attachment ? 'p-1' : 'px-2.5 py-1.5'}`}
         >
           {attachment && (
             <Attachment
@@ -27,48 +35,62 @@ export default function MessageBubble({ message, mine, onRetry, onOpenImage, onM
               onMediaLoad={onMediaLoad}
             />
           )}
-          {status === 'uploading' && <UploadProgress progress={message.progress ?? 0} mine={mine} />}
+          {status === 'uploading' && <UploadProgress progress={message.progress ?? 0} />}
           {text && (
-            <p className={`break-words whitespace-pre-wrap ${attachment ? 'px-2.5 pt-1.5 pb-1' : ''}`}>
-              {text}
-            </p>
+            <p className={`break-words whitespace-pre-wrap ${attachment ? 'px-2 pt-1.5' : ''}`}>{text}</p>
           )}
-        </div>
 
-        <div
-          className={`mt-0.5 flex items-center gap-1 text-[11px] text-slate-500 ${
-            mine ? 'justify-end' : 'justify-start'
-          }`}
-        >
-          <span>{formatTime(message.createdAt)}</span>
-          {mine && (status === 'sending' || status === 'uploading') && (
-            <span className="inline-flex items-center gap-0.5">
-              <ClockIcon className="h-3 w-3" />
-              <span className="sr-only">{status === 'uploading' ? 'Uploading' : 'Sending'}</span>
-            </span>
-          )}
-          {mine && !status && (
-            <span className="inline-flex items-center">
-              <CheckIcon className="h-3 w-3" />
-              <span className="sr-only">Sent</span>
-            </span>
-          )}
-          {mine && status === 'failed' && (
-            <span className="inline-flex items-center gap-1 text-red-600">
-              <AlertIcon className="h-3 w-3" />
-              Not sent ·
-              <button
-                type="button"
-                onClick={() => onRetry(message)}
-                className="rounded font-semibold underline focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:outline-none"
-              >
-                Retry
-              </button>
-            </span>
-          )}
+          {/* Time and tick sit INSIDE the bubble, bottom-right - the same
+              place WhatsApp puts them, rather than as a caption below it. */}
+          <div className={`flex items-center justify-end gap-1 text-[11px] text-black/45 ${attachment && !text ? 'px-2 pb-1' : ''}`}>
+            <span>{formatTime(message.createdAt)}</span>
+            {mine && <MessageStatus status={status} read={read} onRetry={() => onRetry(message)} />}
+          </div>
         </div>
       </div>
     </li>
+  )
+}
+
+// The little status icon after my own message's timestamp: a clock while it
+// is on its way, a tick once saved (single grey, or double blue once they
+// have read it), or a Retry link if it failed.
+function MessageStatus({ status, read, onRetry }) {
+  if (status === 'sending' || status === 'uploading') {
+    return (
+      <span className="inline-flex items-center">
+        <ClockIcon className="h-3.5 w-3.5" />
+        <span className="sr-only">{status === 'uploading' ? 'Uploading' : 'Sending'}</span>
+      </span>
+    )
+  }
+
+  if (status === 'failed') {
+    return (
+      <span className="inline-flex items-center gap-1 text-red-600">
+        <AlertIcon className="h-3.5 w-3.5" />
+        <button
+          type="button"
+          onClick={onRetry}
+          className="rounded font-semibold underline focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:outline-none"
+        >
+          Retry
+        </button>
+      </span>
+    )
+  }
+
+  // Saved: one grey tick, or two blue ticks once they have read it.
+  return read ? (
+    <span className="inline-flex items-center text-tick-read">
+      <CheckCheckIcon className="h-4 w-4" />
+      <span className="sr-only">Read</span>
+    </span>
+  ) : (
+    <span className="inline-flex items-center text-tick-sent">
+      <CheckIcon className="h-3.5 w-3.5" />
+      <span className="sr-only">Sent</span>
+    </span>
   )
 }
 
@@ -84,14 +106,14 @@ function Attachment({ attachment, mine, onOpenImage, onMediaLoad }) {
       <button
         type="button"
         onClick={() => onOpenImage(attachment)}
-        className="block rounded-xl focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:outline-none"
+        className="block rounded-md focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:outline-none"
         aria-label={`Open photo ${name}`}
       >
         <img
           src={url}
           alt={name}
           onLoad={onMediaLoad}
-          className="max-h-72 w-auto max-w-full rounded-xl bg-slate-200 object-cover"
+          className="max-h-72 w-auto max-w-full rounded-md bg-slate-200 object-cover"
         />
       </button>
     )
@@ -104,7 +126,7 @@ function Attachment({ attachment, mine, onOpenImage, onMediaLoad }) {
         controls
         preload="metadata"
         onLoadedMetadata={onMediaLoad}
-        className="max-h-72 max-w-full rounded-xl bg-black"
+        className="max-h-72 max-w-full rounded-md bg-black"
       >
         <track kind="captions" />
       </video>
@@ -115,42 +137,38 @@ function Attachment({ attachment, mine, onOpenImage, onMediaLoad }) {
     <a
       href={url}
       download={name}
-      className={`flex min-w-56 items-center gap-3 rounded-xl p-2.5 focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:outline-none ${
-        mine ? 'bg-blue-700/60 hover:bg-blue-700' : 'bg-slate-100 hover:bg-slate-200'
+      className={`flex min-w-56 items-center gap-3 rounded-md p-2.5 focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:outline-none ${
+        mine ? 'bg-black/5 hover:bg-black/10' : 'bg-slate-100 hover:bg-slate-200'
       }`}
     >
-      <span
-        className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-lg ${
-          mine ? 'bg-white/20' : 'bg-blue-100 text-blue-700'
-        }`}
-      >
+      <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-brand-100 text-brand-700">
         <FileIcon />
       </span>
       <span className="min-w-0 flex-1">
         <span className="block truncate font-medium">{name}</span>
-        <span className={`block text-xs ${mine ? 'text-blue-100' : 'text-slate-500'}`}>{formatBytes(size)}</span>
+        <span className="block text-xs text-slate-500">{formatBytes(size)}</span>
       </span>
-      <DownloadIcon className="h-5 w-5 shrink-0" />
+      <DownloadIcon className="h-5 w-5 shrink-0 text-slate-600" />
       <span className="sr-only">Download</span>
     </a>
   )
 }
 
-function UploadProgress({ progress, mine }) {
+function UploadProgress({ progress }) {
   const percent = Math.round(progress * 100)
   return (
     <div className="px-2 pt-2 pb-1">
       <div
-        className={`h-1.5 overflow-hidden rounded-full ${mine ? 'bg-blue-400' : 'bg-slate-200'}`}
+        className="h-1.5 overflow-hidden rounded-full bg-black/10"
         role="progressbar"
         aria-valuenow={percent}
         aria-valuemin={0}
         aria-valuemax={100}
         aria-label="Upload progress"
       >
-        <div className={`h-full ${mine ? 'bg-white' : 'bg-blue-600'}`} style={{ width: `${percent}%` }} />
+        <div className="h-full bg-brand-600" style={{ width: `${percent}%` }} />
       </div>
-      <p className={`mt-1 text-[11px] ${mine ? 'text-blue-100' : 'text-slate-500'}`}>Uploading {percent}%</p>
+      <p className="mt-1 text-[11px] text-black/45">Uploading {percent}%</p>
     </div>
   )
 }

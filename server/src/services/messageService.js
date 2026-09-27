@@ -28,7 +28,7 @@ export function messageView(message) {
 // shifts every page by one, so you see a message twice or miss one; skip also
 // gets slower the further back you go. A cursor has neither problem.
 export async function getHistory(meId, conversationId, { before, limit }) {
-  await assertParticipant(conversationId, meId)
+  const conversation = await assertParticipant(conversationId, meId)
 
   const filter = { conversation: conversationId }
   if (before) filter._id = { $lt: before }
@@ -42,7 +42,37 @@ export async function getHistory(meId, conversationId, { before, limit }) {
   const hasMore = rows.length > limit
   const page = rows.slice(0, limit).reverse() // oldest -> newest for display
 
-  return { messages: page.map(messageView), hasMore }
+  const otherId = conversation.participants.find((p) => String(p) !== String(meId))
+  const theirRead = conversation.lastRead?.get(String(otherId))
+
+  return {
+    messages: page.map(messageView),
+    hasMore,
+    // How far the OTHER person has read, so the client can show the right
+    // tick colour on my own messages without waiting for a live event.
+    theirReadUpTo: theirRead?.upTo ? String(theirRead.upTo) : null,
+  }
+}
+
+// Records that I have read up to `upToMessageId` in this conversation.
+// Returns the other participant's id, so the caller can tell them, or null
+// if this was not actually a step forward (nothing to announce).
+export async function markRead(meId, conversationId, upToMessageId) {
+  const conversation = await assertParticipant(conversationId, meId)
+  const otherId = conversation.participants.find((p) => String(p) !== String(meId))
+
+  const key = `lastRead.${meId}`
+  const current = conversation.lastRead?.get(String(meId))
+
+  // A read pointer only ever moves forward. Comparing by string works
+  // because same-length hex ObjectIds sort the same as their timestamps.
+  if (current?.upTo && String(current.upTo) >= String(upToMessageId)) return null
+
+  await Conversation.updateOne(
+    { _id: conversationId },
+    { $set: { [key]: { upTo: upToMessageId, at: new Date() } } },
+  )
+  return String(otherId)
 }
 
 async function findExisting(meId, clientId) {

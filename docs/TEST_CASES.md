@@ -2,12 +2,12 @@
 
 Kept up to date at the end of every phase.
 
-- **Automated** cases run with `npm test` (server: 189 tests) and
-  `npm run test:e2e` (Playwright: 9 browser tests).
+- **Automated** cases run with `npm test` (server: 194 tests) and
+  `npm run test:e2e` (Playwright: 11 browser tests).
 - **Manual** cases are the ones a person checks in the browser. Fill in the
   Actual and Result columns when you run them.
 
-Last full run: 2026-09-27 - **189/189 server tests pass, 9/9 end-to-end tests
+Last full run: 2026-09-27 - **194/194 server tests pass, 11/11 end-to-end tests
 pass (run three times), lint clean.**
 
 ---
@@ -201,12 +201,23 @@ pass (run three times), lint clean.**
 | A12.13 | New password too short | 400 |
 | A12.14 | Change password without login | 401 |
 
+### Phase 13 - `server/tests/readReceipts.test.js`
+
+| ID | Case | Expected |
+|---|---|---|
+| A13.1 | Mark read up to a real message | Ack `{ ok: true }`; the sender's socket gets `message:read { conversationId, upToMessageId }`; `Conversation.lastRead` has the reader's pointer set |
+| A13.2 | `GET .../messages` after marking read | `theirReadUpTo` is null before, the message id after |
+| A13.3 | Marking read again with an older or equal id | Ack `{ ok: true }`, but the sender gets **no** second `message:read` - the pointer only moves forward |
+| A13.4 | An outsider (not in the conversation) tries to mark it read | Silently rejected; `lastRead` stays empty; nobody is notified |
+| A13.5 | Malformed or missing payload (`null`, missing `upToMessageId`) | Acked `{ ok: false }` - never left hanging with no reply, and the socket stays connected |
+
 ---
 
 ## Automated - end-to-end (`npm run test:e2e`)
 
-Files: `e2e/chat.spec.js`, `e2e/profile-attachments.spec.js`, `e2e/password.spec.js`.
-Run against the production build and server with an in-memory database.
+Files: `e2e/chat.spec.js`, `e2e/profile-attachments.spec.js`, `e2e/password.spec.js`,
+`e2e/readReceipts.spec.js`. Run against the production build and server with
+an in-memory database.
 Forgot/reset password's email-dependent half (does the link actually work) is
 covered at the server level instead - see A12.1-A12.8 - since e2e has no real
 email provider configured.
@@ -222,6 +233,8 @@ email provider configured.
 | E7 | A reset link missing its token | Shows "Invalid reset link", not a broken form |
 | E8 | Change password, two browser contexts (two "devices") | Wrong current password shown inline, session NOT ended; correct current password: success message, this device stays logged in after reload, the OTHER device is redirected to `/login` on its next request, old password then fails there and the new one works |
 | E9 | Change password with the wrong current password | Shown inline in the dialog: "Current password is incorrect" |
+| E10 | Read receipt turns blue live (`e2e/readReceipts.spec.js`) | Sent message shows one tick while unread; the moment the other person opens the chat, the SAME tick turns into two blue ticks, with no reload |
+| E11 | Read receipt when the chat is already open | A message sent while the recipient already has that chat open shows two blue ticks straight away |
 
 ---
 
@@ -335,6 +348,17 @@ different browsers, or one normal and one private window.
 | M12.8 | Change password | Profile → Change password → correct current password, matching new ones → Update password | "Password changed. Your other devices have been logged out."; still logged in | | |
 | M12.9 | Wrong current password | Same, with the wrong current password | "Current password is incorrect" shown in the dialog - **not** logged out | | |
 | M12.10 | Other devices signed out | Log in as the same account in a second browser first, then change the password in the first | The second browser gets sent to `/login` on its next action | | |
+
+### Phase 13 - read receipts and the WhatsApp look
+
+| ID | Scenario | Steps | Expected | Actual | Result |
+|---|---|---|---|---|---|
+| M13.1 | Send while they have not opened the chat | Send a message | One grey tick, inside the bubble bottom-right | | |
+| M13.2 | They open the chat | Friend opens the same conversation on their side | Your tick turns blue (two ticks), live, no reload | | |
+| M13.3 | They already have it open | Open the chat on both sides first, then send | Tick is blue immediately, no delay | | |
+| M13.4 | Reload after being read | Refresh the page that sent the message | Tick is still blue (loaded from the server, not just remembered locally) | | |
+| M13.5 | Ticks are private | Log in as the recipient | No tick appears on messages you received (ticks are sender-only) | | |
+| M13.6 | Overall look | Open the app | Green accent colour throughout, pale green outgoing bubbles vs white incoming, doodle-pattern chat background, pill-shaped composer with a circular send button, sidebar has a top bar (avatar + name + logout) instead of a footer | | |
 
 ### Phase 9 - deployment
 

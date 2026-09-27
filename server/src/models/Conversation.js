@@ -30,6 +30,15 @@ const conversationSchema = new mongoose.Schema(
       ),
       default: null,
     },
+    // How far each participant has read, keyed by their user id (a string,
+    // since Map keys are always strings). Only 2 entries ever exist. Read
+    // per-conversation rather than per-message: "everything up to this
+    // message id is read" needs one small write, not one per message.
+    lastRead: {
+      type: Map,
+      of: new mongoose.Schema({ upTo: ObjectId, at: Date }, { _id: false }),
+      default: {},
+    },
   },
   { timestamps: true },
 )

@@ -4,7 +4,7 @@ export default function Logo({ small = false }) {
   return (
     <span className="inline-flex items-center gap-2">
       <span
-        className={`inline-flex items-center justify-center rounded-xl bg-blue-600 text-white ${
+        className={`inline-flex items-center justify-center rounded-xl bg-brand-600 text-white ${
           small ? 'h-8 w-8' : 'h-10 w-10'
         }`}
       >

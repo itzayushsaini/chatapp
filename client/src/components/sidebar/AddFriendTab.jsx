@@ -60,7 +60,7 @@ export default function AddFriendTab() {
             autoComplete="off"
             spellCheck="false"
             maxLength={20}
-            className="min-w-0 flex-1 rounded-lg border border-slate-300 px-3 py-2 text-sm placeholder:text-slate-400 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/30 focus:outline-none"
+            className="min-w-0 flex-1 rounded-lg border border-slate-300 px-3 py-2 text-sm placeholder:text-slate-400 focus:border-brand-500 focus:ring-2 focus:ring-brand-500/30 focus:outline-none"
           />
           <Button type="submit" disabled={searching || !query.trim()} aria-label="Search">
             {searching ? <Spinner light className="h-4 w-4" /> : <SearchIcon className="h-4 w-4" />}

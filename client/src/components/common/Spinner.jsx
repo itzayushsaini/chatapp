@@ -5,7 +5,7 @@ export default function Spinner({ className = 'h-6 w-6', light = false }) {
   return (
     <span
       className={`${className} inline-block animate-spin rounded-full border-2 border-t-transparent ${
-        light ? 'border-white' : 'border-blue-600'
+        light ? 'border-white' : 'border-brand-600'
       }`}
       role="status"
       aria-label="Loading"

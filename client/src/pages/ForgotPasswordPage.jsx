@@ -37,7 +37,7 @@ export default function ForgotPasswordPage() {
         title="Check your email"
         subtitle={`If an account exists for ${email}, we've sent a link to reset your password. It expires in 1 hour.`}
         footer={
-          <Link to="/login" className="font-medium text-blue-600 hover:underline">
+          <Link to="/login" className="font-medium text-brand-600 hover:underline">
             Back to log in
           </Link>
         }
@@ -47,7 +47,7 @@ export default function ForgotPasswordPage() {
           <button
             type="button"
             onClick={() => setSent(false)}
-            className="rounded font-medium text-blue-600 hover:underline focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:outline-none"
+            className="rounded font-medium text-brand-600 hover:underline focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:outline-none"
           >
             try again
           </button>
@@ -62,7 +62,7 @@ export default function ForgotPasswordPage() {
       title="Forgot your password?"
       subtitle="Enter your email and we'll send you a reset link"
       footer={
-        <Link to="/login" className="font-medium text-blue-600 hover:underline">
+        <Link to="/login" className="font-medium text-brand-600 hover:underline">
           Back to log in
         </Link>
       }

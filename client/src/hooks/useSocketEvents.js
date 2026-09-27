@@ -24,7 +24,24 @@ export function useSocketEvents() {
 
     let hasConnectedBefore = false
 
-    function onConnect() {
+    // The latest saved (has an .id) message in a conversation, or null.
+    function latestMessageId(conversationId) {
+      const messages = store().messagesByConversation[conversationId]?.messages ?? []
+      for (let i = messages.length - 1; i >= 0; i--) {
+        if (messages[i].id) return messages[i].id
+      }
+      return null
+    }
+
+    // Tells the server (and so the other person) that I have now read up to
+    // the latest message in this conversation - only meaningful while it is
+    // the one actually on screen.
+    function markRead(conversationId) {
+      const upToMessageId = latestMessageId(conversationId)
+      if (upToMessageId) socket.emit('conversation:read', { conversationId, upToMessageId })
+    }
+
+    async function onConnect() {
       store().setConnection('connected')
       // After a RE-connect we may have missed events while offline. MongoDB
       // is the source of truth, so simply fetch everything again.
@@ -32,7 +49,10 @@ export function useSocketEvents() {
         store().fetchFriends()
         store().fetchRequests()
         const open = store().activeConversationId
-        if (open) store().fetchLatest(open)
+        if (open) {
+          await store().fetchLatest(open)
+          markRead(open) // catches up on anything that arrived while offline
+        }
       }
       hasConnectedBefore = true
     }
@@ -43,6 +63,19 @@ export function useSocketEvents() {
 
     function onMessage(message) {
       store().receiveMessage(message, myId)
+      // Already looking at this chat when it arrived: mark it read at once,
+      // rather than waiting for the next time the chat is opened.
+      const fromThem = message.senderId !== myId
+      if (fromThem && message.conversationId === store().activeConversationId) {
+        socket.emit('conversation:read', {
+          conversationId: message.conversationId,
+          upToMessageId: message.id,
+        })
+      }
+    }
+
+    function onMessageRead({ conversationId, upToMessageId }) {
+      store().setReadUpTo(conversationId, upToMessageId)
     }
 
     function onPresenceSnapshot({ online }) {
@@ -84,6 +117,7 @@ export function useSocketEvents() {
     socket.on('connect', onConnect)
     socket.on('disconnect', onDisconnect)
     socket.on('message:new', onMessage)
+    socket.on('message:read', onMessageRead)
     socket.on('presence:snapshot', onPresenceSnapshot)
     socket.on('presence:update', onPresenceUpdate)
     socket.on('friend:request:new', onRequestNew)
@@ -99,6 +133,7 @@ export function useSocketEvents() {
       socket.off('connect', onConnect)
       socket.off('disconnect', onDisconnect)
       socket.off('message:new', onMessage)
+      socket.off('message:read', onMessageRead)
       socket.off('presence:snapshot', onPresenceSnapshot)
       socket.off('presence:update', onPresenceUpdate)
       socket.off('friend:request:new', onRequestNew)

@@ -184,6 +184,7 @@ Indexes: `{ recipient: 1, status: 1 }`, `{ requester: 1, status: 1 }`.
 | `participants` | `[ObjectId, ObjectId]`, sorted |
 | `pairKey` | String, unique |
 | `lastMessage` | `{ text, sender, createdAt, attachment: { kind, name } \| null }` for the sidebar preview |
+| `lastRead` | Map, keyed by user id (a string) → `{ upTo: ObjectId, at: Date }`. Only 2 entries ever exist - one per participant. How far each has read, tracked per conversation rather than per message. |
 | timestamps | |
 
 The conversation is created when a request is accepted, by upserting on `pairKey` with `$setOnInsert`. If the pair becomes friends again later, the old conversation and history are reused.
@@ -202,6 +203,8 @@ The conversation is created when a request is accepted, by upserting on `pairKey
 Indexes: `{ conversation: 1, _id: -1 }`, and a unique index on `{ sender: 1, clientId: 1 }` (this makes retries idempotent).
 
 Message payload sent to clients: `{ id, conversationId, senderId, text, clientId, attachment, createdAt }`, where `attachment` is null or `{ id, name, mimeType, size, kind, url }`.
+
+Read status is **not** stored per message - see "Read receipts" below.
 
 ### Attachment
 
@@ -384,6 +387,43 @@ If anything fails before the save, nothing is emitted and the handler calls `ack
 
 ---
 
+## Read receipts
+
+Two states only, not three: a single tick (saved on the server) and a
+double **blue** tick (the other person has opened that chat) - no separate
+"delivered" state. In a web chat where full history is always available on
+refetch, a delivered-but-not-read state would not carry an honest signal the
+way it does for a mobile app with push delivery.
+
+- Tracked **per conversation**, not per message: `Conversation.lastRead` maps
+  a user id to how far they have read (`upTo`, a Message id). A message is
+  "read" on screen if its id is \<= the OTHER participant's `upTo` - same-length
+  hex ids compare correctly as plain strings, so no per-message flag is ever
+  written.
+- **`conversation:read` (client → server, no ack required)**
+  `{ conversationId, upToMessageId }`. Order: rate limit (20 per 5 seconds per
+  socket) → validate → `assertParticipant` → only if `upToMessageId` is
+  **further** than the caller's current pointer, update it and tell the other
+  participant. An older or equal pointer is silently ignored - a pointer only
+  ever moves forward.
+- **`message:read` (server → client)** `{ conversationId, upToMessageId }` -
+  sent to the OTHER participant only, so a client never gets its own read
+  events echoed back.
+- **`GET /api/conversations/:id/messages`** additionally returns
+  `theirReadUpTo` (a Message id, or null): the other participant's current
+  pointer, so the client can render the right tick colour immediately on
+  load, without waiting for a live event.
+- **The client emits `conversation:read`:**
+  - the moment a chat is opened, for the latest loaded message;
+  - immediately when a new message arrives while that chat is already the
+    open one;
+  - after a reconnect, once the refetched history is in, for whatever is now
+    the latest message (catches up on anything that arrived while offline).
+- Ticks are shown only on **my own** sent messages - never on messages I
+  received.
+
+---
+
 ## Real-time (Socket.IO) rules
 
 - Attach Socket.IO to the same `http.Server` as Express, using the default path `/socket.io`.
@@ -420,6 +460,8 @@ If anything fails before the save, nothing is emitted and the handler calls `ack
 | `friend:request:cancelled` | server → client | `{ requestId }` |
 | `friend:removed` | server → client | `{ userId }` |
 | `user:updated` | server → client | `{ user }` - PublicUser to contacts, SelfUser to the user's own tabs |
+| `conversation:read` | client → server, no ack required | `{ conversationId, upToMessageId }` |
+| `message:read` | server → client | `{ conversationId, upToMessageId }` |
 
 ---
 
@@ -442,7 +484,7 @@ All responses are JSON (except the two file downloads). Errors use the shape `{ 
 | POST | `/api/friends/requests/:id/accept` | yes | `{ friend }` |
 | POST | `/api/friends/requests/:id/decline` | yes | 204 |
 | DELETE | `/api/friends/requests/:id` | yes | Cancel, returns 204 |
-| GET | `/api/conversations/:id/messages` | yes | `{ messages, hasMore }` |
+| GET | `/api/conversations/:id/messages` | yes | `{ messages, hasMore, theirReadUpTo }` |
 | PATCH | `/api/users/me` | yes | `{ displayName?, bio?, username? }` → `{ user }` (SelfUser) |
 | PUT | `/api/users/me/avatar` | yes | multipart `avatar` → `{ user }` |
 | DELETE | `/api/users/me/avatar` | yes | `{ user }` |
@@ -539,6 +581,11 @@ All responses are JSON (except the two file downloads). Errors use the shape `{ 
   - Scrolling to the top loads older messages while keeping the scroll position steady.
 - **Reconnection:** show a "Reconnecting…" banner while disconnected. On a reconnect (not the first connect), refetch friends, requests and the open conversation's latest page.
 - **Toasts:** a new friend request, a request accepted, and errors.
+- **Read receipts:** the timestamp and status icon sit INSIDE the bubble,
+  bottom-right (not as a caption below it) - a clock while sending, a single
+  grey tick once saved, two blue ticks once the other person has opened the
+  chat. Computed from `theirReadUpTo` (loaded with history) and the live
+  `message:read` event, never from a per-message flag.
 
 ### Login, forgot password, reset password
 
@@ -565,7 +612,14 @@ All responses are JSON (except the two file downloads). Errors use the shape `{ 
 
 ### Style
 
-Clean and simple, like a modern messenger (blue primary colour, white and light-grey surfaces). Use accessible labels, visible focus rings, good contrast and full keyboard use.
+A WhatsApp-style look: a green accent colour (`--color-brand-*` in
+`index.css` - every Tailwind utility that used to read `blue-*` now reads
+`brand-*` at the same shade number, so the whole scale moves together), pale
+green outgoing bubbles (`brand-100`) against white incoming ones, a subtle
+doodle-pattern chat background (`.chat-background`), a circular send button,
+and a top bar in the sidebar (my avatar + name, log out) instead of a footer.
+Light theme only - no dark mode. Use accessible labels, visible focus rings,
+good contrast and full keyboard use.
 
 ---
 

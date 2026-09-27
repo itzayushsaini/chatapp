@@ -3,6 +3,7 @@ import { Server } from 'socket.io'
 import { setIo } from './emitter.js'
 import { registerMessageHandlers } from './handlers/messageHandlers.js'
 import { registerPresenceHandlers } from './handlers/presenceHandlers.js'
+import { registerReadHandlers } from './handlers/readHandlers.js'
 import { socketAuth } from './socketAuth.js'
 
 // Attaches Socket.IO to the SAME http.Server as Express, on the default path
@@ -20,6 +21,7 @@ export function initSocket(httpServer) {
 
     registerMessageHandlers(socket)
     registerPresenceHandlers(socket)
+    registerReadHandlers(socket)
   })
 
   // From now on, services' emitToUser calls actually reach clients.

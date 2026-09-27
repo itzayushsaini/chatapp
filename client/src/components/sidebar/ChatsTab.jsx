@@ -37,7 +37,7 @@ export default function ChatsTab() {
   if (friends.length === 0) return <NoFriends />
 
   return (
-    <ul className="px-2 pb-2">
+    <ul className="divide-y divide-slate-100">
       {friends.map((item) => (
         <li key={item.friend.id}>
           <FriendRow item={item} />
@@ -68,8 +68,8 @@ function FriendRow({ item }) {
       type="button"
       onClick={() => open(conversationId)}
       aria-current={isActive ? 'true' : undefined}
-      className={`flex w-full items-center gap-3 rounded-xl px-2 py-2.5 text-left focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:outline-none ${
-        isActive ? 'bg-blue-50' : 'hover:bg-slate-50'
+      className={`flex w-full items-center gap-3 px-3 py-3 text-left focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-brand-500 focus-visible:outline-none ${
+        isActive ? 'bg-slate-100' : 'hover:bg-slate-50'
       }`}
     >
       <Avatar user={friend} online={online} />
@@ -86,7 +86,7 @@ function FriendRow({ item }) {
           </span>
           {unread > 0 && (
             <span
-              className="min-w-5 shrink-0 rounded-full bg-blue-600 px-1.5 text-center text-xs leading-5 font-semibold text-white"
+              className="min-w-5 shrink-0 rounded-full bg-brand-600 px-1.5 text-center text-xs leading-5 font-semibold text-white"
               aria-label={`${unread} unread`}
             >
               {unread}
@@ -125,7 +125,7 @@ function NoFriends() {
         <button
           type="button"
           onClick={copy}
-          className="rounded-md p-1.5 text-slate-500 hover:bg-white hover:text-slate-800 focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:outline-none"
+          className="rounded-md p-1.5 text-slate-500 hover:bg-white hover:text-slate-800 focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:outline-none"
           aria-label={copied ? 'Copied' : 'Copy username'}
         >
           {copied ? <CheckIcon className="h-4 w-4 text-emerald-600" /> : <CopyIcon className="h-4 w-4" />}

@@ -27,7 +27,7 @@ export default function ResetPasswordPage() {
         title="Invalid reset link"
         subtitle="This link is missing some information. Request a new one below."
         footer={
-          <Link to="/login" className="font-medium text-blue-600 hover:underline">
+          <Link to="/login" className="font-medium text-brand-600 hover:underline">
             Back to log in
           </Link>
         }

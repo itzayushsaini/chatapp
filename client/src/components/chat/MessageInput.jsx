@@ -66,7 +66,7 @@ export default function MessageInput({ onSend, disabled }) {
         e.preventDefault()
         submit()
       }}
-      className="border-t border-slate-200 bg-white px-3 py-3 sm:px-4"
+      className="bg-slate-100 px-3 py-2.5 sm:px-4"
     >
       {file && <ChosenFile file={file} onRemove={() => setFile(null)} />}
 
@@ -80,37 +80,41 @@ export default function MessageInput({ onSend, disabled }) {
           aria-label="Attach a file"
           data-testid="attach-input"
         />
-        <button
-          type="button"
-          onClick={() => fileInputRef.current.click()}
-          disabled={disabled}
-          className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-xl text-slate-500 hover:bg-slate-100 hover:text-slate-800 focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:outline-none disabled:text-slate-300"
-          aria-label="Attach a photo, video or document"
-          title="Attach a photo, video or document"
-        >
-          <PaperclipIcon />
-        </button>
-        <label htmlFor="message-input" className="sr-only">
-          Type a message
-        </label>
-        <textarea
-          id="message-input"
-          ref={textareaRef}
-          rows={1}
-          value={text}
-          onChange={(e) => {
-            setText(e.target.value)
-            resize(e.target.value)
-          }}
-          onKeyDown={handleKeyDown}
-          maxLength={MAX_LENGTH}
-          placeholder={file ? 'Add a caption (optional)...' : 'Type a message...'}
-          className="block max-h-32 min-h-10 flex-1 resize-none rounded-xl border border-slate-300 bg-slate-50 px-3.5 py-2 text-sm text-slate-900 placeholder:text-slate-400 focus:border-blue-500 focus:bg-white focus:ring-2 focus:ring-blue-500/30 focus:outline-none"
-        />
+        {/* The paperclip and the text field share one white pill, the way
+            WhatsApp's composer does; Send is its own circular button. */}
+        <div className="flex flex-1 items-end gap-1 rounded-3xl bg-white pr-1 pl-1.5 shadow-sm">
+          <button
+            type="button"
+            onClick={() => fileInputRef.current.click()}
+            disabled={disabled}
+            className="mb-1 inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-slate-500 hover:bg-slate-100 hover:text-slate-800 focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:outline-none disabled:text-slate-300"
+            aria-label="Attach a photo, video or document"
+            title="Attach a photo, video or document"
+          >
+            <PaperclipIcon />
+          </button>
+          <label htmlFor="message-input" className="sr-only">
+            Type a message
+          </label>
+          <textarea
+            id="message-input"
+            ref={textareaRef}
+            rows={1}
+            value={text}
+            onChange={(e) => {
+              setText(e.target.value)
+              resize(e.target.value)
+            }}
+            onKeyDown={handleKeyDown}
+            maxLength={MAX_LENGTH}
+            placeholder={file ? 'Add a caption (optional)...' : 'Type a message'}
+            className="block max-h-32 min-h-10 flex-1 resize-none bg-transparent py-2 text-sm text-slate-900 placeholder:text-slate-400 focus:outline-none"
+          />
+        </div>
         <button
           type="submit"
           disabled={!canSend}
-          className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-blue-600 text-white hover:bg-blue-700 focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2 focus-visible:outline-none disabled:bg-blue-300"
+          className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-brand-600 text-white hover:bg-brand-700 focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:ring-offset-2 focus-visible:outline-none disabled:bg-brand-300"
           aria-label="Send message"
         >
           <SendIcon className="h-5 w-5" />
@@ -147,7 +151,7 @@ function ChosenFile({ file, onRemove }) {
       {kind === 'image' && previewUrl ? (
         <img src={previewUrl} alt="" className="h-12 w-12 rounded-lg object-cover" />
       ) : (
-        <span className="flex h-12 w-12 items-center justify-center rounded-lg bg-blue-100 text-blue-700">
+        <span className="flex h-12 w-12 items-center justify-center rounded-lg bg-brand-100 text-brand-700">
           {kind === 'video' ? <VideoIcon /> : <FileIcon />}
         </span>
       )}
@@ -158,7 +162,7 @@ function ChosenFile({ file, onRemove }) {
       <button
         type="button"
         onClick={onRemove}
-        className="rounded-lg px-2 py-1 text-xl leading-none text-slate-500 hover:bg-slate-200 hover:text-slate-800 focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:outline-none"
+        className="rounded-lg px-2 py-1 text-xl leading-none text-slate-500 hover:bg-slate-200 hover:text-slate-800 focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:outline-none"
         aria-label={`Remove ${file.name}`}
       >
         ×

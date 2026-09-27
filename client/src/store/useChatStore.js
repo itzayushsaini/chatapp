@@ -18,6 +18,10 @@ const initialState = {
   // conversationId -> { messages, hasMore, status: 'loading' | 'ready' | 'error' }
   messagesByConversation: {},
   presence: {}, // userId -> { online, lastSeen }
+  // conversationId -> the OTHER participant's read pointer (a message id, or
+  // null). Every message in that conversation with an id <= this one has
+  // been seen by them - what draws a blue vs. grey double tick.
+  readUpTo: {},
   activeConversationId: null,
   // conversationId -> number. Kept in the browser only: the spec has no
   // "read" state on the server, so counts start from zero after a reload.
@@ -241,6 +245,18 @@ export const useChatStore = create((set, get) => ({
       },
     })),
 
+  // ----- Read receipts ------------------------------------------------------
+
+  // A message:read event: the other person has now read up to this message.
+  // Same-length hex ids compare correctly as strings, and the pointer only
+  // ever moves forward - a stale, out-of-order event can never move it back.
+  setReadUpTo: (conversationId, upToMessageId) =>
+    set((s) => {
+      const current = s.readUpTo[conversationId]
+      if (current && current >= upToMessageId) return {}
+      return { readUpTo: { ...s.readUpTo, [conversationId]: upToMessageId } }
+    }),
+
   // ----- Messages ---------------------------------------------------------
 
   // The latest page. Used when a chat is first opened and after a reconnect,
@@ -269,6 +285,7 @@ export const useChatStore = create((set, get) => ({
               status: 'ready',
             },
           },
+          readUpTo: { ...s.readUpTo, [conversationId]: page.theirReadUpTo },
         }
       })
     } catch (err) {

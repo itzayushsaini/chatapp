@@ -1173,3 +1173,142 @@ proving one is logged out while the other stays in.
 > moment a page is still transitioning between routes, because the *old*
 > page's fields can briefly still be in the DOM. Every ambiguous label in the
 > test suite now uses `exact: true`.
+
+---
+
+# Phase 13 - read receipts and a WhatsApp-style look
+
+**Goal:** the app was reskinned to look like WhatsApp, and gained a real new
+feature along the way: the blue double-tick that shows when someone has
+actually read your message.
+
+## 1. Read receipts - the data model
+
+WhatsApp shows three states (sent, delivered, read). This app only shows
+**two**: a single grey tick once a message is saved, and two **blue** ticks
+once the other person has actually opened that chat. A middle "delivered"
+state was deliberately left out - in a web chat where the full history is
+always one REST call away, "delivered" would not carry an honest signal the
+way it does for a mobile app relying on push notifications. Faking that
+extra step would be theatre, not information.
+
+The read pointer is stored **per conversation, not per message**:
+
+```js
+Conversation.lastRead = Map<userId, { upTo: messageId, at: Date }>
+```
+
+Only two entries ever exist - one per participant. "Have they read message
+X?" is then just `X.id <= theirPointer.upTo` - a plain string comparison,
+because MongoDB ObjectIds are the same length and sort the same way whether
+compared as ObjectIds or as hex strings. This is far cheaper than writing a
+"read by" flag onto every message row, and it is exactly how WhatsApp itself
+models it (a read pointer, not per-message receipts, for a 1:1 chat).
+
+## 2. The socket event, and why it needs no ack
+
+`conversation:read { conversationId, upToMessageId }` is fire-and-forget: the
+client does not wait for a reply. Unlike `message:send`, there is nothing
+here that could be lost silently - if the event never arrives, the recipient
+simply keeps their existing tick colour, and the next read event (opening the
+chat again, or a later message) fixes it. That is a meaningfully different
+risk profile from a chat message, which is why it gets a lighter contract.
+
+**The pointer only ever moves forward.** The handler compares the incoming
+`upToMessageId` against the caller's current pointer and does nothing if it
+is not actually further along:
+
+```js
+if (current?.upTo && String(current.upTo) >= String(upToMessageId)) return null
+```
+
+This means an event that arrives out of order (network reordering, or two
+tabs both reporting "read") can never move the pointer *backwards*, and the
+sender is only ever told about it once - `markRead` returns `null` when
+nothing changed, and the socket handler only emits `message:read` when it
+gets a real id back.
+
+## 3. Three moments the client marks something as read
+
+1. **Opening a chat.** `ChatWindow` has an effect that fires whenever the
+   *latest loaded message's id* changes (not on every store update - the
+   dependency is specifically `entry.messages.at(-1)?.id`, so things like a
+   presence tick elsewhere in the store cannot cause a needless re-emit).
+2. **A message arriving while that chat is already open.** Handled in
+   `useSocketEvents`' `onMessage`, right next to where the message is added
+   to the store - if it is from the other person AND this conversation is
+   the currently active one, `conversation:read` fires immediately, so the
+   tick turns blue without the sender having to wait for the recipient to
+   "open" anything they already have open.
+3. **After a reconnect**, for whatever the refetched history's latest message
+   turns out to be - catches up on anything that arrived while offline.
+
+## 4. Showing it without waiting for a live event
+
+`GET /api/conversations/:id/messages` now also returns `theirReadUpTo` - the
+other participant's current pointer - so a freshly opened chat shows the
+correct tick colours on old messages immediately, without waiting for a
+`message:read` event that might never come again (they already read it
+yesterday; nothing new will re-announce that).
+
+The client keeps this in the store as `readUpTo[conversationId]`, updated
+either from that REST field or from a live `message:read` event -
+`setReadUpTo` applies the exact same "only move forward" rule client-side as
+the server does, so a stale event can never flicker a tick backwards.
+
+> **A bug caught by e2e tests, twice.** The very first version of the new
+> read-receipt end-to-end test asserted on `getByText('Read')`, and it kept
+> failing - not because read receipts were broken, but because the test's own
+> message text was `"Hi, already looking?"`, and `"alREADy"` contains the
+> substring `"read"`. Playwright's `getByText` matches by substring by
+> default, so the assertion matched the message bubble's own text instead of
+> the tick's status label. The fix (used everywhere a similarly generic word
+> could collide, e.g. "Email" inside "Username or **email**", back in Phase
+> 12) is `{ exact: true }` on any status label that is a short, everyday
+> word.
+
+## 5. The WhatsApp look - one colour token, not scattered hex values
+
+Every place the app used Tailwind's `blue-*` classes (`bg-blue-600`,
+`ring-blue-500`, `hover:bg-blue-700`, ...) now uses `brand-*` at the *same*
+shade number instead. The actual colours are defined once, in `index.css`:
+
+```css
+@theme {
+  --color-brand-600: #00a884; /* buttons, links, active states */
+  --color-brand-100: #d9fdd3; /* outgoing message bubble */
+  --color-tick-read: #53bdeb; /* the blue double tick */
+}
+```
+
+Tailwind v4 turns any `--color-*` variable in `@theme` into a full set of
+utilities automatically (`bg-brand-600`, `text-brand-600`, `hover:bg-brand-700`,
+...), which is why a single find-and-replace of `blue-` → `brand-` across
+every component, followed by defining the scale once, was enough to retheme
+the whole app consistently. If the colour ever needs to change again, only
+`index.css` has to change.
+
+Specific WhatsApp details recreated:
+
+- **Bubbles:** pale green (`brand-100`) for my own messages, white for
+  theirs, with one sharp corner (`rounded-tr-none` / `rounded-tl-none`)
+  instead of a fully rounded rectangle.
+- **Timestamp and tick live *inside* the bubble**, bottom-right, rather than
+  as a caption below it - closer to WhatsApp's actual layout than the
+  previous design.
+- **Chat background:** a flat warm-white tone plus a very faint repeating
+  SVG doodle pattern (`.chat-background`, a small inline `data:image/svg+xml`
+  - no image file to ship).
+- **Composer:** the paperclip and the text field share one white pill; Send
+  is a separate circular green button - matching WhatsApp's actual composer
+  shape, rather than the previous row of square icon buttons.
+- **Sidebar:** my avatar and name moved from a footer to a top bar (with log
+  out as a small icon on the right), and the three tabs became green pill
+  buttons - the same top-bar-plus-tabs layout WhatsApp Web uses, adapted to
+  this app's Chats / Requests / Add Friend tabs (which have no WhatsApp
+  equivalent, since WhatsApp does not have a friend-request system).
+
+**Deliberately not changed:** dark mode was explicitly requested to stay out
+of scope for this phase - the app remains light-only. Adding it later would
+mean giving every one of these colours a dark-mode counterpart via
+`@media (prefers-color-scheme: dark)`, which is real, separate work.

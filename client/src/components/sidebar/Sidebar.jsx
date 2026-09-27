@@ -4,7 +4,6 @@ import { useAuth } from '../../context/AuthContext.jsx'
 import { useChatStore } from '../../store/useChatStore.js'
 import Avatar from '../common/Avatar.jsx'
 import { LogoutIcon } from '../common/Icons.jsx'
-import Logo from '../common/Logo.jsx'
 import ProfileDialog from '../profile/ProfileDialog.jsx'
 import AddFriendTab from './AddFriendTab.jsx'
 import ChatsTab from './ChatsTab.jsx'
@@ -35,11 +34,36 @@ export default function Sidebar({ className = '' }) {
 
   return (
     <aside className={`flex-col border-r border-slate-200 bg-white ${className}`}>
-      <div className="flex items-center justify-between px-4 pt-4 pb-3">
-        <Logo small />
+      {/* My avatar (opens my profile) on the left, log out on the right -
+          the same top-bar layout WhatsApp uses, instead of a footer. */}
+      <div className="flex items-center justify-between bg-slate-100 px-3 py-2.5">
+        <button
+          type="button"
+          onClick={() => setProfileOpen(true)}
+          className="flex min-w-0 items-center gap-2.5 rounded-lg py-1 pr-2 pl-1 text-left hover:bg-black/5 focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:outline-none"
+          aria-label="Edit your profile"
+          title="Edit your profile"
+        >
+          <Avatar user={user} size="sm" />
+          <span className="min-w-0">
+            <span className="block max-w-40 truncate text-sm font-medium text-slate-900">
+              {user.displayName}
+            </span>
+            <span className="block truncate text-xs text-slate-500">@{user.username}</span>
+          </span>
+        </button>
+        <button
+          type="button"
+          onClick={logout}
+          className="rounded-full p-2 text-slate-600 hover:bg-black/5 hover:text-red-600 focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:outline-none"
+          aria-label="Log out"
+          title="Log out"
+        >
+          <LogoutIcon className="h-5 w-5" />
+        </button>
       </div>
 
-      <div role="tablist" aria-label="Sidebar" className="flex gap-1 px-3" onKeyDown={handleTabKey}>
+      <div role="tablist" aria-label="Sidebar" className="flex gap-1 px-3 pt-2 pb-1.5" onKeyDown={handleTabKey}>
         {TABS.map((t) => {
           const selected = t.id === tab
           return (
@@ -52,14 +76,16 @@ export default function Sidebar({ className = '' }) {
               aria-controls={`panel-${t.id}`}
               tabIndex={selected ? 0 : -1}
               onClick={() => setTab(t.id)}
-              className={`relative flex flex-1 items-center justify-center gap-1.5 rounded-lg px-2 py-2 text-sm font-medium focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:outline-none ${
-                selected ? 'bg-blue-50 text-blue-700' : 'text-slate-600 hover:bg-slate-100'
+              className={`relative flex flex-1 items-center justify-center gap-1.5 rounded-full px-2 py-1.5 text-sm font-medium focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:outline-none ${
+                selected ? 'bg-brand-600 text-white' : 'text-slate-600 hover:bg-slate-100'
               }`}
             >
               {t.label}
               {t.id === 'requests' && incomingCount > 0 && (
                 <span
-                  className="min-w-5 rounded-full bg-blue-600 px-1.5 text-xs leading-5 font-semibold text-white"
+                  className={`min-w-5 rounded-full px-1.5 text-xs leading-5 font-semibold ${
+                    selected ? 'bg-white/25 text-white' : 'bg-brand-600 text-white'
+                  }`}
                   aria-label={`${incomingCount} incoming`}
                 >
                   {incomingCount}
@@ -74,38 +100,13 @@ export default function Sidebar({ className = '' }) {
         id={`panel-${tab}`}
         role="tabpanel"
         aria-labelledby={`tab-${tab}`}
-        className="mt-2 min-h-0 flex-1 overflow-y-auto"
+        className="min-h-0 flex-1 overflow-y-auto"
       >
         {tab === 'chats' && <ChatsTab />}
         {tab === 'requests' && <RequestsTab />}
         {tab === 'add' && <AddFriendTab />}
       </div>
 
-      {/* Me (click to edit my profile), and logout */}
-      <div className="flex items-center gap-2 border-t border-slate-200 px-2 py-2">
-        <button
-          type="button"
-          onClick={() => setProfileOpen(true)}
-          className="flex min-w-0 flex-1 items-center gap-3 rounded-lg px-2 py-1.5 text-left hover:bg-slate-50 focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:outline-none"
-          aria-label="Edit your profile"
-          title="Edit your profile"
-        >
-          <Avatar user={user} size="sm" />
-          <span className="min-w-0 flex-1">
-            <span className="block truncate text-sm font-medium text-slate-900">{user.displayName}</span>
-            <span className="block truncate text-xs text-slate-500">@{user.username}</span>
-          </span>
-        </button>
-        <button
-          type="button"
-          onClick={logout}
-          className="rounded-lg p-2 text-slate-500 hover:bg-slate-100 hover:text-red-600 focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:outline-none"
-          aria-label="Log out"
-          title="Log out"
-        >
-          <LogoutIcon />
-        </button>
-      </div>
       <ProfileDialog open={profileOpen} onClose={() => setProfileOpen(false)} />
     </aside>
   )

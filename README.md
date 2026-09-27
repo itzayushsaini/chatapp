@@ -19,6 +19,7 @@ they **accept**. Privacy is enforced on the server, not just hidden in the UI.
 - Register / log in with username or email; session in an httpOnly cookie
 - Exact-username search, friend requests (accept, decline, cancel), unfriend
 - Real-time one-to-one messaging with optimistic sending, retry and no duplicates
+- Read receipts: a single tick once sent, two blue ticks once they open the chat
 - Online / last-seen presence, visible to friends only
 - Profiles: photo, bio, display name, and username changes (once every 30 days)
 - Forgot password (emailed reset link, via Brevo) and change password from
@@ -29,6 +30,8 @@ they **accept**. Privacy is enforced on the server, not just hidden in the UI.
 - Unread badges, date separators, infinite scroll back through history
 - Automatic reconnection with a "Reconnecting…" banner and state refetch
 - Responsive: list and chat side by side on desktop, one at a time on mobile
+- A WhatsApp-style look: green theme, pale-green message bubbles, a
+  doodle-pattern chat background, and a pill-shaped composer
 
 ## Tech stack
 
