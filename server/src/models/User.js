@@ -45,6 +45,12 @@ const userSchema = new mongoose.Schema(
     resetPasswordTokenHash: { type: String, select: false, default: null },
     resetPasswordExpires: { type: Date, select: false, default: null },
     lastSeen: { type: Date },
+    // Grants access to the admin panel. Never sent about anyone but myself
+    // (see utils/publicUser.js) - other users have no reason to know it.
+    isAdmin: { type: Boolean, default: false },
+    // Set by an admin. Blocks login, and any EXISTING session stops working
+    // immediately too - see authService.userFromToken.
+    suspended: { type: Boolean, default: false },
   },
   { timestamps: true },
 )

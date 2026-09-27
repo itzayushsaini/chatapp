@@ -8,6 +8,7 @@ import { Message } from '../models/Message.js'
 import { AppError } from '../utils/AppError.js'
 import { attachmentView } from './attachmentService.js'
 import { assertFriends, assertParticipant } from './friendService.js'
+import { getSettings } from './settingsService.js'
 
 // A quoted reply is shown as its snapshot from send time (see the model
 // comment) - the id lets the client jump to the original if it's still here.
@@ -227,11 +228,6 @@ export async function sendMessage(meId, { conversationId, text, clientId, attach
   return { message: view, otherId, created: true }
 }
 
-// How long after sending a message can still be deleted "for everyone".
-// Matches the intent of WhatsApp's own limit: long enough to undo a mistake,
-// short enough that it can't rewrite a conversation's history much later.
-const DELETE_FOR_EVERYONE_WINDOW_MS = 60 * 60 * 1000
-
 // The client shape of a sidebar preview - see lastMessageView in
 // friendService.js, which this deliberately matches.
 function lastMessageClientView(snapshot) {
@@ -279,7 +275,12 @@ export async function deleteMessage(meId, { conversationId, messageId, mode }) {
     if (String(message.sender) !== String(meId)) {
       throw new AppError(403, 'You can only delete your own messages for everyone')
     }
-    if (Date.now() - message.createdAt.getTime() > DELETE_FOR_EVERYONE_WINDOW_MS) {
+    // Admin-editable (default 60 minutes) - matches the intent of WhatsApp's
+    // own limit: long enough to undo a mistake, short enough that it can't
+    // rewrite a conversation's history much later.
+    const settings = await getSettings()
+    const windowMs = settings.deleteForEveryoneWindowMinutes * 60 * 1000
+    if (Date.now() - message.createdAt.getTime() > windowMs) {
       throw new AppError(400, 'This message is too old to delete for everyone')
     }
     let lastMessage
@@ -302,6 +303,9 @@ export async function deleteMessage(meId, { conversationId, messageId, mode }) {
 // checked independently, so being unfriended with one recipient doesn't
 // block forwarding to the rest.
 export async function forwardMessage(meId, { messageId, toConversationIds }) {
+  const settings = await getSettings()
+  if (!settings.forwardingEnabled) throw new AppError(403, 'Forwarding is currently disabled')
+
   const source = await Message.findById(messageId).populate('attachment')
   if (!source) throw new AppError(404, 'Message not found')
   await assertParticipant(source.conversation, meId)

@@ -1445,3 +1445,136 @@ them, rather than being implied by the original spec:
   checklist, and one click can send the same message to several friends in
   one request - each one checked and reported on independently, so being
   unfriended with one of them does not block the rest from receiving it.
+
+# Phase 15 - the admin panel
+
+## 1. "Control everything from one place" - what that actually became
+
+The team's request for this phase was, in their own words, an admin panel
+where "all the features can be added or removed" and where "whatever comes
+to mind in future" could be changed without touching code again. Taken
+completely literally, that is not something any system can do - nobody can
+build a settings screen for a feature that does not exist yet, because
+nobody knows what it will need to look like.
+
+What was actually built is the closest real thing to that request: instead
+of each on/off rule living as a hardcoded constant scattered across
+different files (the way the "delete for everyone" time limit did in Phase
+14, or the way the Gmail-only rule would have if built as originally
+suggested), every such rule now lives as one field on one database document
+- a single `Setting`, always exactly one document, read fresh by whatever
+part of the app needs it. Turning a feature on or off, or changing a limit,
+is now a database write the admin makes through a form, not a code change
+followed by a redeploy. Adding a genuinely NEW toggle later (something the
+team has not thought of yet) is still real work - one new field on the
+schema, one new form control, one new place that reads it - but it is a
+small, contained change to an existing system, not new architecture each
+time.
+
+## 2. Why the Gmail-only rule became a *setting*, not an *if statement*
+
+The very first version of "block temp-mail signups" could have been a
+single line: reject any email that does not end in `@gmail.com`. That would
+have worked, but it would also have been exactly the kind of thing the
+admin panel was requested to prevent - a rule baked into the code that
+needs a new deployment to ever change.
+
+Instead, the list of allowed domains (`gmail.com` by default) lives on the
+same `Setting` document as everything else, and the admin's Settings screen
+edits it directly. This solves two problems the team mentioned in the same
+breath, with one mechanism: it keeps out temporary/disposable email
+addresses (none of those services use a real, permanent domain like
+`gmail.com`), and it means if the team later wants to also allow, say, their
+college's own email domain, that is a text box in the admin panel, not a
+line of code.
+
+A maintained list of "known temp-mail providers" was considered and
+rejected: such lists go stale constantly as new disposable-mail services
+appear, so keeping one accurate would be ongoing work with no clear end.
+Restricting to a small allowlist of real, permanent providers achieves the
+same actual goal (no temp-mail signups) far more simply, and never needs
+updating on its own.
+
+## 3. One admin, promoted by a script - and why that is not a shortcut
+
+The very first admin account cannot be created by clicking a button inside
+the admin panel, for a simple reason: before anyone is an admin, there is no
+admin panel to click a button inside. This is the same chicken-and-egg
+problem every system with permission levels eventually has to solve once,
+right at the start.
+
+The solution is a one-line command run directly on the server,
+`npm run make-admin -- <username>`, which sets a single field
+(`isAdmin: true`) on an account that already exists. After that, the panel
+itself is reachable normally by logging in as that account - a small shield
+icon appears next to the usual "log out" button, visible only to accounts
+with that flag. Promoting a SECOND admin later still goes through this same
+script rather than a button inside the panel - deliberately, since letting
+one admin grant admin rights to anyone else from inside the UI is a much
+bigger permission decision than anything else the panel does, and keeping
+it as a script means it can never happen by an accidental click.
+
+## 4. Suspend vs. delete - two very different kinds of "remove a user"
+
+The team asked for the ability to manage misbehaving or unwanted accounts,
+and there are two genuinely different things that could mean:
+
+- **Suspend** is reversible. The account still exists, still has its
+  friends, messages and history - it just cannot log in, and any tab it
+  currently has open is disconnected immediately. An admin who suspends
+  someone by mistake, or wants to give a warning rather than end an account
+  permanently, can undo it with one click.
+- **Delete** is not reversible. The account is gone.
+
+Because delete cannot be undone, it needed a decision about what happens to
+everything that account was connected to. The choice made here mirrors a
+rule this app already had from a much earlier phase: when two people
+unfriend each other, their past conversation is kept, not erased, because
+destroying one person's message history as a side effect of the OTHER
+person's decision would not be fair to them. Deleting a user follows the
+same principle - their friendships are removed (so they disappear live from
+every friend's chat list, exactly the way an unfriend already does, reusing
+that same live update instead of building a new one), but the conversations
+and messages those friendships led to are left alone. The person who stays
+keeps their own memory of the conversation; only the deleted account itself
+is actually gone.
+
+## 5. Making "suspended" mean *right now*, not *eventually*
+
+Simply marking an account as suspended in the database would not, by
+itself, stop that person from continuing to use an already-open browser
+tab - their existing login session would keep working until it happened to
+expire on its own (session cookies here last up to 7 days). That is a real
+gap for something meant to take effect immediately, for example if an
+account is actively causing a problem at the moment it gets suspended.
+
+Two things happen together the moment an admin suspends someone. First, any
+tab that account has open right now is disconnected outright - the server
+tells Socket.IO to force-close every connection in that person's private
+room. Second, the very next time that account tries anything at all - a
+page reload, a new tab, any request - the same check that already looks for
+a stale password (built in Phase 12, for a different reason) also rejects a
+suspended account's session. Between the two, "suspended" reliably means the
+account stops working immediately, from every angle, not just "the next
+time they happen to log in fresh".
+
+## 6. Why the admin's own user search is allowed to be different from everyone else's
+
+A core, repeatedly-emphasised rule in this app is that an ordinary user can
+only ever find someone by typing their *exact* username - never a partial
+match, because a partial match would let anyone slowly browse the entire
+list of accounts, which is precisely the privacy guarantee this whole
+project exists to provide.
+
+The admin panel's own search deliberately breaks that exact-match rule -
+typing part of a username or email finds every account that contains it.
+This is not a contradiction of the privacy rule; it is the same reasoning
+applied correctly to a different situation. The exact-match rule protects
+against an ORDINARY account discovering who else uses the app. The admin
+panel is not reachable by an ordinary account at all - every route behind it
+checks, on every single request, that the account asking has the `isAdmin`
+flag set, with no partial or read-only version of that check. A tool whose
+entire purpose is letting one trusted account manage every other account is
+supposed to be able to search broadly; restricting it to exact-match would
+make it useless for the job it exists to do, without adding any real
+privacy protection, since only that one trusted account can reach it.

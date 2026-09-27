@@ -22,14 +22,14 @@ describe('POST /api/auth/forgot-password', () => {
     await registerUser('aman')
     const before = sentEmails.length
 
-    const res = await request(app).post('/api/auth/forgot-password').send({ email: 'aman@example.com' })
+    const res = await request(app).post('/api/auth/forgot-password').send({ email: 'aman@gmail.com' })
 
     expect(res.status).toBe(200)
     expect(res.body).toEqual({
       message: "If an account exists for that email, we've sent a password reset link.",
     })
     expect(sentEmails).toHaveLength(before + 1)
-    expect(sentEmails.at(-1).to).toBe('aman@example.com')
+    expect(sentEmails.at(-1).to).toBe('aman@gmail.com')
     expect(sentEmails.at(-1).html).toContain('/reset-password?token=')
   })
 
@@ -38,7 +38,7 @@ describe('POST /api/auth/forgot-password', () => {
 
     const res = await request(app)
       .post('/api/auth/forgot-password')
-      .send({ email: 'nobody@example.com' })
+      .send({ email: 'nobody@gmail.com' })
 
     expect(res.status).toBe(200)
     expect(res.body).toEqual({
@@ -56,7 +56,7 @@ describe('POST /api/auth/forgot-password', () => {
 describe('POST /api/auth/reset-password', () => {
   it('resets the password: old password stops working, new one works', async () => {
     await registerUser('aman')
-    await request(app).post('/api/auth/forgot-password').send({ email: 'aman@example.com' })
+    await request(app).post('/api/auth/forgot-password').send({ email: 'aman@gmail.com' })
     const { token, email } = lastResetLink()
 
     const res = await request(app)
@@ -79,7 +79,7 @@ describe('POST /api/auth/reset-password', () => {
 
   it('cannot be used twice', async () => {
     await registerUser('aman')
-    await request(app).post('/api/auth/forgot-password').send({ email: 'aman@example.com' })
+    await request(app).post('/api/auth/forgot-password').send({ email: 'aman@gmail.com' })
     const { token, email } = lastResetLink()
 
     const first = await request(app)
@@ -96,7 +96,7 @@ describe('POST /api/auth/reset-password', () => {
 
   it('rejects a wrong token, an expired one, and an unknown email', async () => {
     await registerUser('aman')
-    await request(app).post('/api/auth/forgot-password').send({ email: 'aman@example.com' })
+    await request(app).post('/api/auth/forgot-password').send({ email: 'aman@gmail.com' })
     const { token, email } = lastResetLink()
 
     const wrongToken = await request(app)
@@ -112,25 +112,25 @@ describe('POST /api/auth/reset-password', () => {
 
     const unknownEmail = await request(app)
       .post('/api/auth/reset-password')
-      .send({ email: 'nobody@example.com', token, password: 'new-password-456' })
+      .send({ email: 'nobody@gmail.com', token, password: 'new-password-456' })
     expect(unknownEmail.status).toBe(400)
   })
 
   it('rejects a malformed token and a short password with 400', async () => {
     const short = await request(app)
       .post('/api/auth/reset-password')
-      .send({ email: 'aman@example.com', token: 'not-a-real-token', password: 'new-password-456' })
+      .send({ email: 'aman@gmail.com', token: 'not-a-real-token', password: 'new-password-456' })
     expect(short.status).toBe(400)
 
     const shortPassword = await request(app)
       .post('/api/auth/reset-password')
-      .send({ email: 'aman@example.com', token: 'f'.repeat(64), password: 'short' })
+      .send({ email: 'aman@gmail.com', token: 'f'.repeat(64), password: 'short' })
     expect(shortPassword.status).toBe(400)
   })
 
   it('logs out every device once the reset completes', async () => {
     const { cookie } = await registerUser('aman')
-    await request(app).post('/api/auth/forgot-password').send({ email: 'aman@example.com' })
+    await request(app).post('/api/auth/forgot-password').send({ email: 'aman@gmail.com' })
     const { token, email } = lastResetLink()
 
     await request(app).post('/api/auth/reset-password').send({ email, token, password: 'new-password-456' })

@@ -7,6 +7,7 @@ import { env, isProduction } from '../config/env.js'
 import { User } from '../models/User.js'
 import { AppError } from '../utils/AppError.js'
 import { sendPasswordResetEmail } from './emailService.js'
+import { getSettings } from './settingsService.js'
 
 const BCRYPT_COST = 12
 const SESSION_DAYS = 7
@@ -30,7 +31,24 @@ export const cookieOptions = {
 // password. Without it, the response time would reveal which usernames exist.
 const DUMMY_HASH = bcrypt.hashSync('timing-equaliser-not-a-real-password', BCRYPT_COST)
 
+// Both checks are admin-editable settings, not hardcoded, so either can be
+// changed from the admin panel without a code change or a deploy.
+async function assertRegistrationAllowed(email) {
+  const settings = await getSettings()
+
+  if (!settings.registrationOpen) throw new AppError(403, 'Registration is currently closed')
+
+  const domain = email.split('@')[1] ?? ''
+  const allowed = settings.allowedEmailDomains.some((d) => domain === d.toLowerCase())
+  if (!allowed) {
+    const list = settings.allowedEmailDomains.join(', ')
+    throw new AppError(400, `You can only sign up with an email ending in: ${list}`)
+  }
+}
+
 export async function register({ username, displayName, email, password }) {
+  await assertRegistrationAllowed(email)
+
   const passwordHash = await bcrypt.hash(password, BCRYPT_COST)
 
   // No "does this username exist?" check first: two sign-ups at the same
@@ -59,6 +77,10 @@ export async function login({ identifier, password }) {
   // Same status and message for "no such user" and "wrong password", so the
   // login form cannot be used to discover which accounts exist.
   if (!user || !ok) throw new AppError(401, 'Invalid credentials')
+
+  // Checked AFTER the password, so this can never be used to discover
+  // whether an unknown identifier belongs to a suspended account either.
+  if (user.suspended) throw new AppError(403, 'Your account has been suspended')
 
   return user
 }
@@ -94,6 +116,12 @@ export async function userFromToken(token) {
 
   const user = await User.findById(decoded.sub)
   if (!user) return null
+
+  // A suspended account's existing sessions stop working the instant an
+  // admin suspends it, not just at its next login (see adminService and
+  // socket/emitter.js's disconnectUser, which closes any ALREADY-open socket
+  // at the same moment - this covers a fresh REST call or socket handshake).
+  if (user.suspended) return null
 
   // A token issued before the password was last changed or reset is stale -
   // this is what signs out every OTHER device the moment the password

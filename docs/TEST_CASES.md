@@ -2,14 +2,14 @@
 
 Kept up to date at the end of every phase.
 
-- **Automated** cases run with `npm test` (server: 207 tests) and
+- **Automated** cases run with `npm test` (server: 221 tests) and
   `npm run test:e2e` (Playwright: 11 browser tests).
 - **Manual** cases are the ones a person checks in the browser. Fill in the
   Actual and Result columns when you run them.
 
-Last full run: 2026-09-27 - **207/207 server tests pass, lint clean in both
-workspaces. Playwright e2e (11/11, from Phase 13) was not re-run this phase -
-see `docs/PROGRESS.md`, Known issues.**
+Last full run: 2026-09-27 - **221/221 server tests pass, lint clean in both
+workspaces, `npm run build` succeeds. Playwright e2e (11/11, from Phase 13)
+was not re-run this phase either - see `docs/PROGRESS.md`, Known issues.**
 
 ---
 
@@ -230,6 +230,25 @@ see `docs/PROGRESS.md`, Known issues.**
 | A14.12 | Forward a message already deleted for everyone | Ack `{ ok: false, error: 'This message can no longer be forwarded' }` |
 | A14.13 | Forward a message from a conversation I have no access to | Ack `{ ok: false, error: 'Conversation not found' }` |
 
+### Phase 15 - `server/tests/admin.test.js`
+
+| ID | Case | Expected |
+|---|---|---|
+| A15.1 | `GET /api/settings/public` with no session at all | 200, the default settings (`registrationOpen: true`, `allowedEmailDomains: ['gmail.com']`, `announcement` disabled) |
+| A15.2 | Any admin route with no session | 401 |
+| A15.3 | Any admin route as a logged-in, non-admin user | 403 `{ message: 'Admins only' }` |
+| A15.4 | Read then update settings as an admin | Updated fields reflected in the response; `GET /api/settings/public` immediately reflects the public subset of the change |
+| A15.5 | An invalid domain or an over-long announcement | 400 |
+| A15.6 | Register while `registrationOpen` is false | 403 `{ message: 'Registration is currently closed' }` |
+| A15.7 | Register with an email outside `allowedEmailDomains`, then again after adding that domain | First: 400 naming the allowed list; second (after the admin adds the domain): 201 |
+| A15.8 | List and search users | Total count correct; a partial, case-insensitive search on username OR email returns only the matching account(s); no `passwordHash` in the response |
+| A15.9 | An admin tries to suspend or delete their own account | 400 for both |
+| A15.10 | Suspend, then attempt login | 403 `{ message: 'Your account has been suspended' }`; unsuspending restores a normal login |
+| A15.11 | Suspend a user with an existing REST session | Their very next `GET /api/auth/me` returns 401 |
+| A15.12 | Suspend a user with an open Socket.IO connection | Their socket receives a `disconnect` event immediately (a real Socket.IO test, not just REST) |
+| A15.13 | Delete a user who has an accepted friendship | 204; the `Friendship` document is gone; the shared `Conversation` still exists |
+| A15.14 | Stats | `{ totalUsers, totalMessages, onlineNow }` match reality |
+
 ---
 
 ## Automated - end-to-end (`npm run test:e2e`)
@@ -392,6 +411,21 @@ different browsers, or one normal and one private window.
 | M14.7 | Forward a message | Hover a message → Forward → tick one or more friends → Forward | A toast confirms; the message appears in each selected friend's chat, marked "Forwarded" | Forwarded to Rahul Singh; message appeared instantly with the "Forwarded" label and arrow icon | Pass |
 | M14.8 | Forward with an attachment | Forward a message that has a photo or file attached | The attachment appears in the new chat too, without re-choosing or re-uploading the file | Not re-verified by hand this run (covered by A14.9) | |
 | M14.9 | Reply then cancel | Start a reply, then click the × on the preview bar | The preview bar disappears; sending now goes back to being a plain message | Not re-verified by hand this run (implementation mirrors M14.1's Cancel button) | |
+
+### Phase 15 - the admin panel
+
+| ID | Scenario | Steps | Expected | Actual | Result |
+|---|---|---|---|---|---|
+| M15.1 | Bootstrap the first admin | `npm run make-admin -- aman`, then log in as aman | A shield icon appears next to Log out in the sidebar | Confirmed | Pass |
+| M15.2 | A non-admin never sees the link | Log in as any other account | No shield icon; visiting `/admin` directly redirects to `/` | Not re-verified by hand this run (covered by A15.2/A15.3 and the App.jsx route logic) | |
+| M15.3 | Overview tab | Click the shield icon, stay on Overview | Total users, messages sent and online-now all match reality | Showed 8 users, 18 messages, 0 online, matching the seeded/demo data | Pass |
+| M15.4 | Search users | Users tab → type part of a username or email → Search | Only matching accounts shown, partial match, case-insensitive | Searching "riy" found only Priya Sharma | Pass |
+| M15.5 | Suspend and unsuspend | Users tab → Suspend a friend's account → try logging in as them elsewhere | Login shows "Your account has been suspended"; Unsuspend restores it, confirmed by logging in again | Confirmed: suspending priya blocked her login with the exact message; unsuspending restored it | Pass |
+| M15.6 | Delete a user | Users tab → Delete → confirm | The account and its friendships are gone; the remaining friend's Chats list updates live (no reload) | Confirmed via the automated test (A15.13); the native confirm() dialog could not be reliably driven by the browser-automation tool used this session, so the CLICK path itself should be re-checked by hand once | |
+| M15.7 | Feature toggles | Settings tab → turn off Attachments/Forwarding → try to upload a file / forward a message | Both are refused with a clear message; turning them back on restores normal behaviour | Not re-verified by hand this run (server-side gates covered directly in messageService.js/attachmentService.js, exercised indirectly by existing message/attachment test suites) | |
+| M15.8 | Allowed email domains | Settings tab → add a domain → try registering with it | The new domain is accepted; one outside the list is still refused, listing the current allowed domains in the error | Confirmed via curl: a `@yahoo.com` signup was rejected naming `gmail.com`; a `@gmail.com` one succeeded | Pass |
+| M15.9 | Announcement banner | Settings tab → enable it, write a message → Save | The banner appears immediately at the top of the Chats page (no reload) and on the login/register pages | Confirmed - banner appeared live on the Chats page the moment "Saved." showed | Pass |
+| M15.10 | Registration closed | Settings tab → turn off "New accounts can register" → visit `/register` | The form is replaced with "Registration is currently closed" | Not re-verified by hand this run (covered by A15.6 and the RegisterPage conditional render) | |
 
 ### Phase 9 - deployment
 

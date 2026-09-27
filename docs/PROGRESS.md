@@ -2,7 +2,7 @@
 
 A new session should be able to read this file and carry on from it.
 
-Last updated: 2026-09-27 (Phase 14 added same day)
+Last updated: 2026-09-27 (Phase 15 added same day)
 
 ---
 
@@ -24,8 +24,20 @@ Last updated: 2026-09-27 (Phase 14 added same day)
 | 12 | Forgot password (Brevo email) and change password (from profile), with cross-device session invalidation | **Done** |
 | 13 | Read receipts (blue double tick) and a full WhatsApp-style visual reskin (green theme, bubble layout, doodle background, pill composer, sidebar top bar) | **Done** |
 | 14 | Message actions: reply (quoted preview), delete for me / delete for everyone (1-hour window), copy, forward (multi-select) | **Done** |
+| 15 | Admin panel: database-backed settings (Gmail-only sign-up, feature toggles, announcement banner), user management (suspend/delete), live stats, `isAdmin` accounts | **Done** |
 
-**Verification (2026-09-27, after Phase 14):** `npm test` 207/207 pass, lint
+**Verification (2026-09-27, after Phase 15):** `npm test` 221/221 pass, lint
+clean in both workspaces, `npm run build` succeeds. Also checked by hand in
+the browser as a real admin account (`aman`, promoted via `npm run make-admin`):
+Overview/Users/Settings tabs all load and work; suspending `priya` showed
+"Your account has been suspended" on her very next login attempt; unsuspending
+restored it; the announcement banner appeared live on the Chats page and the
+sidebar the moment it was saved, with no reload; a registration attempt with a
+non-Gmail email was rejected by the live server with the exact configured
+domain list in the message, and a Gmail one was accepted. Playwright e2e was
+not re-run for this phase either (see Known issues).
+
+**Earlier verification (2026-09-27, after Phase 14):** `npm test` 207/207 pass, lint
 clean in both workspaces. Also checked by hand in the browser with two real
 accounts (aman, priya): reply preview renders and sends correctly; delete for
 everyone shows "This message was deleted" to both sides and the sidebar
@@ -181,6 +193,48 @@ cleanly, so one commit "Phases 1-9: complete ChatApp (later renamed PingMe)" is 
   sidebar preview recompute, forward including attachment cloning, multi-target
   forward with a per-target failure, and the two 404 permission checks).
 
+### Phase 15 additions
+- Server: new `models/Setting.js` (a singleton document - every admin-editable
+  knob in one place); `User` gained `isAdmin` and `suspended`;
+  `services/settingsService.js` (`getSettings` upserts the singleton on first
+  read, `publicSettingsView`/`adminSettingsView`, `updateSettings` which
+  broadcasts `settings:updated` to everyone); `services/adminService.js`
+  (`listUsers` - a DELIBERATE partial/case-insensitive search, unlike the
+  exact-only one everywhere else - `suspendUser`, `unsuspendUser`,
+  `deleteUser`, `getStats`); `middleware/requireAdmin.js`;
+  `routes/admin.routes.js` + `controllers/admin.controller.js` (everything
+  under `/api/admin/*`) and `routes/settings.routes.js` (the one
+  unauthenticated `GET /api/settings/public`); `socket/emitter.js` gained
+  `emitToAll` and `disconnectUser` (`io.in(room).disconnectSockets()` - forces
+  a suspended user's open tabs offline immediately); `authService.register`
+  now checks `registrationOpen` and `allowedEmailDomains` before anything
+  else, and `login`/`userFromToken` both reject a suspended account;
+  `attachmentService.assertCanUpload` and `messageService.forwardMessage`
+  check their matching feature toggle; `messageService.deleteMessage` reads
+  `deleteForEveryoneWindowMinutes` instead of a hardcoded constant; new script
+  `scripts/makeAdmin.js` (`npm run make-admin -- <username>`) bootstraps the
+  first admin, since there is no panel yet to grant it from.
+- Client: `pages/AdminPage.jsx` (a standalone route, not part of the chat
+  layout, gated on `user.isAdmin`) with `components/admin/OverviewTab.jsx`,
+  `UsersTab.jsx`, `SettingsTab.jsx`; new `api/admin.js` and `api/settings.js`;
+  `components/common/AnnouncementBanner.jsx` (rendered in both `AuthLayout`
+  and `ChatPage`, since `SocketProvider` only wraps the logged-in side - only
+  the logged-in copy gets LIVE updates, both get the initial fetch);
+  `RegisterPage.jsx` now shows "Registration is currently closed" and hints
+  the allowed email domains, from the public settings endpoint; a small
+  shield icon next to Log out in the sidebar, shown only for `user.isAdmin`.
+- Tests: `server/tests/admin.test.js` (14 cases - public settings, 401/403 for
+  non-admins, settings read/update/validation, registration blocked when
+  closed and by domain, user list/search, self-suspend/self-delete guards,
+  suspend blocking login AND an existing REST session, delete removing a
+  friendship live while keeping the conversation, stats, and a real
+  Socket.IO test proving a suspend force-disconnects an open socket
+  immediately). `helpers.js`'s default test email domain changed from
+  `@example.com` to `@gmail.com` (and every test file that hardcoded the old
+  domain literally) to match the new default Gmail-only rule -
+  `server/src/scripts/seed.js` was NOT changed, since it inserts users
+  directly and never goes through the registration check at all.
+
 ### Tests and deployment
 - `server/tests/` - `health`, `auth`, `rateLimits`, `friends`,
   `conversations`, `socket` + `setup.js`, `helpers.js`
@@ -296,6 +350,48 @@ cleanly, so one commit "Phases 1-9: complete ChatApp (later renamed PingMe)" is 
     message on my own devices, not rewriting shared conversation metadata).
     "Delete for everyone" DOES recompute the shared preview, since in that
     case the underlying message is actually gone for both people.
+29. **The admin panel (Phase 15) was requested by the team as an open-ended
+    "control everything from one place" ask**, which is not literally
+    buildable (nobody can build a UI for features that do not exist yet).
+    What was actually built: a real, extensible settings system - one
+    `Setting` singleton document, read fresh by whatever needs it, editable
+    from a panel - so that ADDING a new toggle later is a small, contained
+    change (one schema field, one zod rule, one place that reads it), not a
+    new architecture. Confirmed with the team: everything they explicitly
+    listed (feature toggles, user management, live stats, an announcement
+    banner) is in this first version.
+30. **The Gmail-only sign-up rule became a setting, not a hardcoded check**,
+    specifically because the team's SECOND request (the admin panel) was
+    about not needing a code change for exactly this kind of rule. Chosen
+    over maintaining a list of disposable-email domains: temp-mail providers
+    change constantly and such a list goes stale immediately, whereas
+    restricting to a small allowlist of real providers (starting with just
+    `gmail.com`) is simple, robust, and never needs updating.
+31. **"Delete user" is a hard, irreversible delete - not a second kind of
+    suspend.** It deletes the account and every Friendship row involving it
+    (so the person vanishes live from every remaining friend's list, reusing
+    the existing `friend:removed` / `friend:request:cancelled` events rather
+    than inventing new ones), but deliberately leaves their past Messages and
+    Conversations alone - the same "keep the other person's history" principle
+    `friendService.unfriend` already uses. Considered and rejected: a fuller
+    cascade that also scrubs or reattributes old messages - out of proportion
+    to what was asked, and this app's own history-keeping philosophy already
+    argues against it.
+32. **Suspending a user force-disconnects their OPEN sockets** (`io.in(room)
+    .disconnectSockets()`), on top of `userFromToken` rejecting their next
+    REST call or handshake. Without the force-disconnect, a suspended user
+    with an already-open tab could keep sending messages until they happened
+    to reconnect or their token expired naturally (up to 7 days) - suspension
+    needs to mean "now", not "eventually".
+33. **An admin can never suspend or delete their own account** (400) - simple
+    self-lockout protection, since there is no in-app way to un-suspend
+    yourself once your own session stops working.
+34. **The admin panel's own user search is deliberately partial and
+    case-insensitive** (username OR email), unlike the exact-only search
+    every ordinary user gets. This is not a contradiction of the "no
+    browsing the directory" rule - that rule protects against an ORDINARY
+    user listing everyone; an admin's own tool doing the opposite is the
+    entire point of it, and it is gated by `isAdmin` regardless.
 
 ---
 
@@ -335,20 +431,30 @@ cleanly, so one commit "Phases 1-9: complete ChatApp (later renamed PingMe)" is 
 12. **Sessions from before Phase 12 shipped** have no `ts` claim, so the
     "log out every other device" check is skipped for them specifically
     (never for sessions created after that point). They age out within 7 days.
-13. **Playwright e2e was not re-run for Phase 14** (message actions were
-    verified with 207 passing server tests and by hand in the browser
-    instead). A dedicated `e2e/messageActions.spec.js` covering reply,
-    delete and forward through a real browser is still worth adding later.
+13. **Playwright e2e was not re-run for Phases 14 or 15** (both were verified
+    with passing server tests and by hand in the browser instead). Its
+    registration helper (`e2e/helpers.js`) WAS updated to use `@gmail.com`
+    addresses, so it should still pass once run - just not confirmed this
+    session. Dedicated specs for message actions and the admin panel are
+    still worth adding later.
+14. **The admin panel's client-side "can I still delete for everyone" hint**
+    (in `MessageBubble.jsx`) does not read the admin-configured
+    `deleteForEveryoneWindowMinutes` - it is hardcoded to 60 minutes. If an
+    admin changes that setting, the button may hide itself too early or too
+    late compared to what the server would actually allow; the server always
+    enforces the real, current value regardless, so this can only ever hide
+    the button too early, never let through a delete the server would refuse.
 
 ---
 
 ## How to verify everything
 
 1. `npm install`
-2. `npm test` - 207 pass
+2. `npm test` - 221 pass
 3. `npm run lint` - no errors
 4. `npx playwright install chromium` (once), then `npm run test:e2e` - 11 pass
 5. `cp server/.env.example server/.env`, fill in `MONGO_URI` and `JWT_SECRET`
 6. `npm run seed`, then `npm run dev`, open <http://localhost:5173>
-7. Work through the manual tables in `docs/TEST_CASES.md`
-8. Deploy with `docs/DEPLOY.md` and run its checklist on the live URL
+7. `npm run make-admin -- aman` to try the admin panel, then log in as `aman`
+8. Work through the manual tables in `docs/TEST_CASES.md`
+9. Deploy with `docs/DEPLOY.md` and run its checklist on the live URL

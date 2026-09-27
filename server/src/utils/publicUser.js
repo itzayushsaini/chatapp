@@ -31,5 +31,8 @@ export function selfUser(user) {
     usernameChangeAllowedAt: user.usernameChangedAt
       ? new Date(user.usernameChangedAt.getTime() + USERNAME_COOLDOWN_DAYS * DAY_MS)
       : null,
+    // Whether an "Admin" link should appear for me - never sent about
+    // anyone else (see publicUser above).
+    isAdmin: user.isAdmin,
   }
 }

@@ -2,6 +2,7 @@ import { useEffect } from 'react'
 
 import ChatWindow from '../components/chat/ChatWindow.jsx'
 import EmptyChat from '../components/chat/EmptyChat.jsx'
+import AnnouncementBanner from '../components/common/AnnouncementBanner.jsx'
 import Toasts from '../components/common/Toasts.jsx'
 import Sidebar from '../components/sidebar/Sidebar.jsx'
 import { useSocketEvents } from '../hooks/useSocketEvents.js'
@@ -27,6 +28,7 @@ export default function ChatPage() {
 
   return (
     <div className="flex h-dvh flex-col">
+      <AnnouncementBanner />
       {connection === 'reconnecting' && (
         <div className="bg-amber-100 px-4 py-1.5 text-center text-sm text-amber-900" role="status">
           Reconnecting…

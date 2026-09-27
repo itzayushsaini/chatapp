@@ -9,10 +9,12 @@ import morgan from 'morgan'
 import { isProduction, isTest } from './config/env.js'
 import { errorHandler } from './middleware/errorHandler.js'
 import { notFound } from './middleware/notFound.js'
+import adminRoutes from './routes/admin.routes.js'
 import attachmentsRoutes from './routes/attachments.routes.js'
 import authRoutes from './routes/auth.routes.js'
 import conversationsRoutes from './routes/conversations.routes.js'
 import friendsRoutes from './routes/friends.routes.js'
+import settingsRoutes from './routes/settings.routes.js'
 import usersRoutes from './routes/users.routes.js'
 
 const thisDir = path.dirname(fileURLToPath(import.meta.url))
@@ -59,6 +61,8 @@ app.use('/api/users', usersRoutes)
 app.use('/api/friends', friendsRoutes)
 app.use('/api/conversations', conversationsRoutes)
 app.use('/api/attachments', attachmentsRoutes)
+app.use('/api/settings', settingsRoutes)
+app.use('/api/admin', adminRoutes)
 
 // In production one Node process serves both the API and the built React app,
 // which keeps the frontend and backend on one origin so cookies stay

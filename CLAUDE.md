@@ -51,16 +51,18 @@ pingme/
     .env.example
     src/
       config/        env.js (zod-validated env), db.js
-      models/        User.js, Friendship.js, Conversation.js, Message.js, Attachment.js
+      models/        User.js, Friendship.js, Conversation.js, Message.js, Attachment.js, Setting.js
       services/      authService.js, friendService.js, messageService.js, presenceService.js,
-                     profileService.js, attachmentService.js, storageService.js, emailService.js
-      controllers/   auth, users, friends, conversations, attachments
+                     profileService.js, attachmentService.js, storageService.js, emailService.js,
+                     settingsService.js, adminService.js
+      controllers/   auth, users, friends, conversations, attachments, admin
       routes/        auth.routes.js, users.routes.js, friends.routes.js, conversations.routes.js,
-                     attachments.routes.js
-      middleware/    requireAuth.js, validate.js, rateLimits.js, upload.js, errorHandler.js, notFound.js
+                     attachments.routes.js, settings.routes.js, admin.routes.js
+      middleware/    requireAuth.js, requireAdmin.js, validate.js, rateLimits.js, upload.js,
+                     errorHandler.js, notFound.js
       socket/        index.js, socketAuth.js, emitter.js, handlers/
       utils/         AppError.js, pairKey.js, publicUser.js, fileType.js, sendStoredFile.js
-      scripts/       seed.js
+      scripts/       seed.js, makeAdmin.js
       app.js         # builds and exports the Express app (does NOT listen) — used by tests
       server.js      # http server + Socket.IO + DB connect + listen + graceful shutdown
     tests/
@@ -68,12 +70,13 @@ pingme/
     package.json
     vite.config.js
     src/
-      api/           http.js (axios instance), auth.js, friends.js, conversations.js, profile.js
+      api/           http.js (axios instance), auth.js, friends.js, conversations.js, profile.js,
+                     settings.js, admin.js
       store/         useChatStore.js (zustand)
       context/       AuthContext.jsx, SocketContext.jsx
       hooks/         useSocketEvents.js
-      pages/         LoginPage.jsx, RegisterPage.jsx, ChatPage.jsx
-      components/    layout/, sidebar/, chat/, profile/, common/
+      pages/         LoginPage.jsx, RegisterPage.jsx, ChatPage.jsx, AdminPage.jsx
+      components/    layout/, sidebar/, chat/, profile/, admin/, common/ (incl. AnnouncementBanner.jsx)
       utils/         time.js, avatar.js, files.js, image.js
 ```
 
@@ -91,6 +94,7 @@ pingme/
 | `npm run build` | Builds the client into `client/dist` |
 | `npm start` | Production: the server serves the API, sockets and `client/dist` |
 | `npm run seed` | Creates demo users and messages (development only; refuses to run in production) |
+| `npm run make-admin -- <username>` | Grants `isAdmin` to an existing account - bootstraps the very first admin, since there is no panel yet to grant it from |
 
 All scripts must work on Windows, macOS and Linux (use cross-env where environment variables are set in scripts).
 
@@ -157,11 +161,14 @@ Validate them at startup with zod in `config/env.js`. If one is missing or inval
 | `resetPasswordTokenHash` | String, `select: false`, default null. SHA-256 hash of the one-time reset token - never the raw token. |
 | `resetPasswordExpires` | Date, `select: false`, default null |
 | `lastSeen` | Date |
+| `isAdmin` | Boolean, default false. Grants access to the admin panel. Sent to the client only in **SelfUser** (never PublicUser - other users have no reason to know it). |
+| `suspended` | Boolean, default false. Set by an admin. Blocks login (403) and invalidates any EXISTING session the instant it is set - see `userFromToken` and the Admin panel section below. |
 | timestamps | |
 
 - **PublicUser shape:** `{ id, username, displayName, bio, avatarUrl }`. These are the ONLY fields ever sent about another user. `avatarUrl` is `/api/users/:id/avatar?v=<avatarFileId>` or null.
 - **Friends-only fields:** `online` and `lastSeen` are sent only to friends.
-- **Email:** only ever sent to the user themself (via `/api/auth/me`), in the **SelfUser** shape: PublicUser + `email` + `usernameChangeAllowedAt` (Date or null).
+- **Email:** only ever sent to the user themself (via `/api/auth/me`), in the **SelfUser** shape: PublicUser + `email` + `usernameChangeAllowedAt` (Date or null) + `isAdmin`.
+- **AdminUser shape** (admin panel's own user list only): `{ id, username, displayName, email, isAdmin, suspended, online, lastSeen, createdAt }` - more detail than PublicUser/SelfUser, but still never `passwordHash` or any password/reset field.
 - **Avatars:** the uploaded profile picture, or - if there is none - initials on a coloured circle, with the colour derived from the username. Picture and bio are visible to any logged-in user who has the user's id (i.e. anyone who searched their exact username).
 
 ### Friendship (exactly one document per pair of users)
@@ -226,6 +233,21 @@ Read status is **not** stored per message - see "Read receipts" below.
 
 Index: `{ message: 1, createdAt: 1 }` (cleanup of unsent uploads).
 
+### Setting (exactly one document ever exists)
+
+| Field | Rules |
+|---|---|
+| `singletonKey` | String, unique, always `'singleton'`. Guarantees there is only ever one document - every read/write goes through the same fixed key. |
+| `allowedEmailDomains` | `[String]`, default `['gmail.com']`. Registration's email must end in one of these (case-insensitive). This is also what blocks temp-mail/disposable addresses in practice, without maintaining a list of disposable-mail providers that goes stale. |
+| `registrationOpen` | Boolean, default true |
+| `attachmentsEnabled` | Boolean, default true |
+| `forwardingEnabled` | Boolean, default true |
+| `deleteForEveryoneWindowMinutes` | Number, default 60, 1-10080. Replaces a hardcoded constant - see "Delete" under Message actions. |
+| `announcement` | `{ enabled: Boolean, text: String (max 200) }`, default both false/`''` |
+| timestamps | |
+
+`settingsService.getSettings()` upserts this document on first read (`$setOnInsert`), so a brand new database just gets the schema's defaults - there is no separate "seed the settings" step. Every feature this document controls is described in its own rules section above/below; this table is just the data shape. See "Admin panel" for who may read/change it and how.
+
 ---
 
 ## Authentication rules
@@ -233,19 +255,21 @@ Index: `{ message: 1, createdAt: 1 }` (cleanup of unsent uploads).
 - **Register** `{ username, displayName, email, password }`:
   - Validate with zod.
   - Lowercase and trim the username and email.
+  - **Before anything else:** `registrationOpen` must be true (403 "Registration is currently closed"), and the email's domain must be in `allowedEmailDomains` (400 "You can only sign up with an email ending in: <list>") - both admin-editable settings, not hardcoded, checked in `authService.assertRegistrationAllowed`.
   - Password must be 8–72 characters (bcrypt only uses the first 72 bytes).
   - Hash with bcryptjs, cost 12.
   - Rely on the unique indexes, not on "check then insert". Map Mongo error code 11000 to 409 with "Username already taken" or "Email already registered".
 - **Login** `{ identifier, password }`:
   - `identifier` can be a username or an email.
   - An unknown user and a wrong password return the **same** response: 401 "Invalid credentials".
+  - Checked AFTER the password (so this can never be used to discover whether an unknown identifier belongs to a suspended account): a suspended account gets 403 "Your account has been suspended".
 - **Session token:**
   - JWT `{ sub: userId, ts: <ms epoch when signed> }`, expires in 7 days, signed with `JWT_SECRET`.
   - `ts` is a custom millisecond-precision issued-at time, separate from the JWT's own `iat` (which is whole seconds only - too coarse to reliably tell "issued just before a password change" from "issued just after", see `userFromToken`).
   - Sent as a cookie named `token`: `httpOnly: true`, `sameSite: 'lax'`, `secure: true` in production, `maxAge` of 7 days, `path: '/'`.
   - Never put the token in localStorage or in a response body.
 - **`requireAuth` middleware:** verifies the cookie, loads the user and sets `req.user`. Every route uses it except health, register, login, logout, forgot-password and reset-password.
-- **`userFromToken`** (shared by `requireAuth` and the socket handshake): rejects a token whose `ts` is before the user's `passwordChangedAt` - a stale token from before the password changed is refused, without a server-side list of valid tokens.
+- **`userFromToken`** (shared by `requireAuth` and the socket handshake): rejects a token whose `ts` is before the user's `passwordChangedAt` - a stale token from before the password changed is refused, without a server-side list of valid tokens. Also rejects (returns null) any token belonging to a **suspended** user, so an admin's suspend takes effect on the very next request or handshake, not just at the account's next login.
 - **Logout:** clears the cookie.
 
 ### Forgot password
@@ -408,7 +432,8 @@ this never fails the send.
   preview. History (`GET .../messages`) excludes anything in my own
   `deletedFor`, entirely, not just flagged.
 - **`'everyone'`:** only the original sender may do this (403 otherwise), and
-  only within **1 hour** of sending (400 "This message is too old to delete
+  only within `deleteForEveryoneWindowMinutes` of sending (default 60 -
+  admin-editable, see Admin panel; 400 "This message is too old to delete
   for everyone" after that - not in the original spec, added because the
   team asked for a time limit). Sets `deletedForEveryone`, a soft delete: the
   row stays, but `messageView` always returns it as an empty placeholder
@@ -503,6 +528,113 @@ way it does for a mobile app with push delivery.
 
 ---
 
+## Admin panel
+
+An account with `isAdmin: true` gets full, database-backed control over the
+knobs listed in the `Setting` model, plus basic user management and stats -
+built specifically so the team never has to change code or redeploy just to
+flip something on or off, close registration for a while, or deal with an
+account. There is no partial/read-only tier: every admin route needs a real
+`isAdmin` account, checked by `requireAdmin` (403 "Admins only") which always
+runs immediately after `requireAuth`.
+
+**Bootstrapping the first admin:** `npm run make-admin -- <username>` sets
+`isAdmin` directly in the database. This has to be a script, not a panel
+action, because there is no panel to grant it from until at least one admin
+already exists. Promoting a SECOND admin later is also done this way (not a
+panel button) - rare enough that a script is fine, and it keeps the panel's
+own user-management screen focused on suspend/delete, not privilege
+escalation.
+
+### Settings
+
+- **`GET /api/admin/settings`** returns every field of the `Setting` document.
+- **`PATCH /api/admin/settings`** validates the body with zod (domains must
+  look like `word.word`; announcement text max 200; the delete window 1-10080
+  minutes) and applies only the fields actually sent - anything omitted is
+  left unchanged. After saving, it calls `emitToAll('settings:updated', ...)`
+  with the PUBLIC subset (see below), so every connected client - including
+  ones on the login/register page, if they happen to have a socket - can
+  react live, without a reload.
+- **`GET /api/settings/public`** is unauthenticated on purpose: the login and
+  register pages, and the announcement banner, all need it before anyone is
+  logged in. It returns only `{ registrationOpen, allowedEmailDomains, announcement }` -
+  never the feature toggles that have no business being public
+  (`attachmentsEnabled`, `forwardingEnabled`, `deleteForEveryoneWindowMinutes`).
+
+### User management
+
+- **`GET /api/admin/users?search=&page=&limit=`** - unlike the exact-only
+  username search everyone else uses (`friendService.searchByUsername`),
+  this is a deliberate, partial, case-insensitive match on username OR
+  email. That asymmetry is intentional: exact-only search exists specifically
+  to stop an ORDINARY user from browsing the directory; an admin's own list
+  is supposed to let them find someone, and it is only ever reachable by an
+  account that already has `isAdmin`.
+- **`PATCH /api/admin/users/:userId/suspend`** sets `suspended: true` and
+  immediately force-disconnects that user's active sockets
+  (`emitter.disconnectUser`, `io.in(room).disconnectSockets()`) - otherwise
+  they could keep chatting until whatever session they were holding expired
+  on its own. Their session then also fails on its very next REST call or
+  socket handshake (`userFromToken` rejects a suspended user - see
+  Authentication rules), so suspension is effectively immediate on both
+  channels, not just "at next login".
+- **`PATCH /api/admin/users/:userId/unsuspend`** clears the flag; login and
+  existing behaviour resume normally.
+- **`DELETE /api/admin/users/:userId`** is a genuine, hard, irreversible
+  delete of the account. It also deletes every `Friendship` row involving
+  them, so they vanish LIVE from every remaining friend's Chats/Requests
+  list - reusing the exact same events an ordinary unfriend or a cancelled
+  request already produce (`friend:removed` for an accepted friendship,
+  `friend:request:cancelled` for a pending one THEY had sent), rather than
+  inventing a new event. Their past MESSAGES and CONVERSATIONS are
+  deliberately left alone - the surviving participant's history is not
+  destroyed, the same principle `friendService.unfriend` already uses for an
+  ordinary unfriend.
+- An admin can never suspend or delete their OWN account (400) - a
+  self-lockout guard, since there is no "un-suspend yourself" path once your
+  own session stops working.
+
+### Stats
+
+**`GET /api/admin/stats`** returns `{ totalUsers, totalMessages, onlineNow }`.
+`onlineNow` is computed by checking every user against the existing
+`presenceService.isOnline` (there is no separate "list everyone online" call)
+- fine at this app's scale, and avoids a second, parallel tracking structure
+just for one number on one screen.
+
+### Rate limiting
+
+Admin mutation routes (`PATCH`/`DELETE`) share one limiter, 200 per hour per
+user - generous, since `requireAdmin` is the real gate and there is normally
+only one admin account using it; this just stops a mis-click loop or a
+runaway script.
+
+### Client
+
+- `/admin` (`AdminPage.jsx`) is a standalone page, not part of the chat
+  layout - not wrapped in `SocketProvider` (the admin screens do not need
+  live updates; refreshing is enough). Reached only via a small shield icon
+  next to Log out in the sidebar, shown only when `user.isAdmin`; the route
+  itself redirects anyone else straight back to `/`.
+- Three tabs: **Overview** (the three stats), **Users** (search, suspend/
+  unsuspend, delete - delete asks for confirmation with a native
+  `window.confirm`, the same pattern the chat header's "Remove friend" already
+  uses), **Settings** (every toggle above, plus the announcement banner).
+- **`AnnouncementBanner.jsx`** is rendered in TWO places - inside `AuthLayout`
+  (login/register/forgot/reset pages) and inside `ChatPage` - because
+  `useSocket()` only returns a real socket inside the logged-in part of the
+  app (`SocketProvider` only wraps `ChatPage`). Both copies fetch
+  `GET /api/settings/public` once on mount; only the logged-in copy also
+  listens for the live `settings:updated` broadcast.
+- **`RegisterPage`** fetches the public settings once, purely for a better
+  experience (shows "Registration is currently closed" instead of a normal
+  form, and hints which email domains are accepted) - the server enforces
+  both regardless, so a stale or failed fetch here can never let through
+  something the server would otherwise refuse.
+
+---
+
 ## Socket events contract
 
 | Event | Direction | Payload |
@@ -521,6 +653,7 @@ way it does for a mobile app with push delivery.
 | `user:updated` | server → client | `{ user }` - PublicUser to contacts, SelfUser to the user's own tabs |
 | `conversation:read` | client → server, no ack required | `{ conversationId, upToMessageId }` |
 | `message:read` | server → client | `{ conversationId, upToMessageId }` |
+| `settings:updated` | server → client (everyone, not just one room) | `{ registrationOpen, allowedEmailDomains, announcement }` - the PUBLIC subset only |
 
 ---
 
@@ -553,6 +686,14 @@ All responses are JSON (except the two file downloads). Errors use the shape `{ 
 | POST | `/api/auth/forgot-password` | no | `{ email }` → the same 200 message either way |
 | POST | `/api/auth/reset-password` | no | `{ email, token, password }` → 200 message |
 | PATCH | `/api/auth/password` | yes | `{ currentPassword, newPassword }` → 200 message, cookie reissued |
+| GET | `/api/settings/public` | no | `{ settings }` - registrationOpen, allowedEmailDomains, announcement |
+| GET | `/api/admin/settings` | admin | `{ settings }` (every field) |
+| PATCH | `/api/admin/settings` | admin | Any subset of `Setting`'s fields → `{ settings }` |
+| GET | `/api/admin/users?search=&page=&limit=` | admin | `{ users, total, page, limit }` (AdminUser shape) |
+| PATCH | `/api/admin/users/:userId/suspend` | admin | `{ user }` |
+| PATCH | `/api/admin/users/:userId/unsuspend` | admin | `{ user }` |
+| DELETE | `/api/admin/users/:userId` | admin | 204 - hard delete, see Admin panel |
+| GET | `/api/admin/stats` | admin | `{ totalUsers, totalMessages, onlineNow }` |
 
 ---
 
@@ -570,8 +711,12 @@ All responses are JSON (except the two file downloads). Errors use the shape `{ 
   - Change password: 20 per hour per user (same as profile changes).
   - Socket messages: as described above.
   - `message:delete` / `message:forward`: share one limit, 20 per 5 seconds per socket (user-initiated clicks, not automatic events, so they get `message:send`'s own budget rather than a separate counter).
+  - Admin mutation routes (settings, suspend/unsuspend, delete): 200 per hour per user - `requireAdmin` is the real gate, this just stops a runaway script.
 - **Uploads:** type checked by magic bytes against an allowlist (no SVG/HTML); size limited while streaming; never written to the server's disk; every download permission-checked; documents never rendered inline; `nosniff` (helmet).
 - `passwordHash` never appears in any response. Other users only ever receive the PublicUser shape.
+- `isAdmin` and `suspended` never appear about anyone but yourself (SelfUser) or in the admin panel's own AdminUser list - never in PublicUser.
+- Every `/api/admin/*` route requires BOTH `requireAuth` and `requireAdmin` (403 "Admins only" for a logged-in non-admin) - there is no read-only or partial admin tier.
+- Suspending a user invalidates their session immediately on every channel: `userFromToken` rejects a suspended user's token (REST and socket handshake alike), and `disconnectUser` force-closes any ALREADY-open socket at the same moment.
 - A password-reset token is never stored or logged in its raw form, only its SHA-256 hash - the same reasoning as `passwordHash`. Forgot-password never reveals whether an email has an account.
 - No `dangerouslySetInnerHTML` anywhere. Render message text as plain text with `white-space: pre-wrap`.
 - Secrets only in environment variables. Never log passwords, tokens or cookies.
@@ -584,7 +729,7 @@ All responses are JSON (except the two file downloads). Errors use the shape `{ 
 
 ### Routes and session
 
-- Routes: `/login`, `/register`, `/forgot-password`, `/reset-password`, and `/` (the protected chat app). Unknown routes redirect to `/`.
+- Routes: `/login`, `/register`, `/forgot-password`, `/reset-password`, `/` (the protected chat app) and `/admin` (only when `user.isAdmin` - anyone else visiting it is sent to `/`). Unknown routes redirect to `/`.
 - **AuthContext:** calls `GET /api/auth/me` on load and shows a full-screen spinner until it resolves. There must be no flash of the login page for users who are already logged in.
 - **axios instance:** `baseURL: '/api'`, `withCredentials: true`. On a 401 from any call except `/auth/me` and `/auth/login`, clear the user and go to `/login`. (`/auth/password`'s "wrong current password" is deliberately a 400, not a 401, so it is never mistaken for an expired session.)
 
@@ -657,9 +802,14 @@ All responses are JSON (except the two file downloads). Errors use the shape `{ 
     sent bubble.
   - **Delete** opens a small dialog: "Delete for me" is always offered;
     "Delete for everyone" is offered only when the message is mine AND still
-    within the 1-hour window (a client-side hint only - the server enforces
-    both rules regardless). A message deleted for everyone renders as an
-    italic "This message was deleted" placeholder, in the same place in the
+    within a client-side hint window (hardcoded to 60 minutes - **known gap:**
+    it does not read the admin-configured `deleteForEveryoneWindowMinutes`,
+    so if an admin changes that setting, the button may hide itself too
+    early or too late by comparison; the server enforces the REAL, current
+    setting regardless, so this can only ever hide a button early, never let
+    through a delete the server would refuse). A message deleted for
+    everyone renders as an italic "This message was deleted" placeholder, in
+    the same place in the
     timeline, so the conversation never visibly shifts.
   - **Forward** opens a dialog listing every friend with a checkbox
     (multi-select), and a Forward button.

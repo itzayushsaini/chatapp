@@ -75,3 +75,14 @@ export const uploadLimiter = limiter({
   message: 'Too many uploads, please try again later',
   perUser: true,
 })
+
+// Per user: admin actions (settings changes, suspend/unsuspend/delete).
+// requireAdmin is the real gate - this just stops a mis-click loop or a
+// runaway script from hammering the database, generous since there is
+// normally only one admin account using it.
+export const adminLimiter = limiter({
+  windowMs: 60 * 60 * 1000,
+  limit: 200,
+  message: 'Too many admin actions, please slow down',
+  perUser: true,
+})

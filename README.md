@@ -16,9 +16,12 @@ they **accept**. Privacy is enforced on the server, not just hidden in the UI.
 
 ## Features
 
-- Register / log in with username or email; session in an httpOnly cookie
+- Register (Gmail addresses only, by default - admin-editable) or log in with
+  username or email; session in an httpOnly cookie
 - Exact-username search, friend requests (accept, decline, cancel), unfriend
 - Real-time one-to-one messaging with optimistic sending, retry and no duplicates
+- Reply (with a quoted preview), copy, delete (for me / for everyone, within a
+  time limit) and forward (to several friends at once) any message
 - Read receipts: a single tick once sent, two blue ticks once they open the chat
 - Online / last-seen presence, visible to friends only
 - Profiles: photo, bio, display name, and username changes (once every 30 days)
@@ -32,6 +35,11 @@ they **accept**. Privacy is enforced on the server, not just hidden in the UI.
 - Responsive: list and chat side by side on desktop, one at a time on mobile
 - A WhatsApp-style look: green theme, pale-green message bubbles, a
   doodle-pattern chat background, and a pill-shaped composer
+- An admin panel (for an account with `isAdmin: true`): live stats, user
+  search with suspend/delete, and every feature toggle above - registration
+  open/closed, allowed sign-up email domains, attachments, forwarding, the
+  delete-for-everyone time limit, and a site-wide announcement banner - all
+  editable without a code change or a redeploy
 
 ## Tech stack
 
@@ -77,6 +85,17 @@ all with the password shown by the seed command (demo users also get bios). Aman
 a conversation with Priya and a pending request from Sneha. Open two different
 browsers (or a normal and a private window) to chat as two people.
 
+**To open the admin panel**, make one account an admin (there is no UI action
+for this - it is the one thing that has to be a script, since there is no
+panel yet to grant it from):
+
+```bash
+npm run make-admin -- aman
+```
+
+Then log in as that account; an admin-only icon appears next to Log out in
+the sidebar.
+
 ## Commands
 
 Run all of these from the repository root.
@@ -91,6 +110,7 @@ Run all of these from the repository root.
 | `npm run build` | Builds the client into `client/dist` |
 | `npm start` | Production: one Node process serves the API, the sockets and `client/dist` |
 | `npm run seed` | Creates demo data (development only; refuses in production, never deletes) |
+| `npm run make-admin -- <username>` | Grants `isAdmin` to an existing account - the one-off bootstrap for the very first admin |
 
 The first `npm test` downloads a MongoDB binary (about 600 MB) for the
 in-memory database; later runs use the cache. `npm run test:e2e` needs

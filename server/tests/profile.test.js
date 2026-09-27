@@ -23,7 +23,7 @@ describe('PATCH /api/users/me - name and bio', () => {
       username: 'aman',
       displayName: 'Aman Verma',
       bio: 'Final-year CSE student',
-      email: 'aman@example.com',
+      email: 'aman@gmail.com',
     })
     expect((await agent.get('/api/auth/me')).body.user.bio).toBe('Final-year CSE student')
   })
@@ -53,10 +53,10 @@ describe('PATCH /api/users/me - name and bio', () => {
 
     const res = await agent
       .patch('/api/users/me')
-      .send({ email: 'stolen@example.com', passwordHash: 'x', bio: 'hi' })
+      .send({ email: 'stolen@gmail.com', passwordHash: 'x', bio: 'hi' })
 
     expect(res.status).toBe(200)
-    expect(res.body.user.email).toBe('aman@example.com')
+    expect(res.body.user.email).toBe('aman@gmail.com')
   })
 
   it('requires login', async () => {

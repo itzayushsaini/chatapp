@@ -1,6 +1,7 @@
 import request from 'supertest'
 
 import app from '../src/app.js'
+import { User } from '../src/models/User.js'
 
 // A supertest "agent" keeps cookies between requests, like a browser tab.
 // Returns the agent (already logged in), the user it registered, and the raw
@@ -10,7 +11,7 @@ export async function registerUser(username, overrides = {}) {
   const res = await agent.post('/api/auth/register').send({
     username,
     displayName: overrides.displayName ?? username,
-    email: overrides.email ?? `${username}@example.com`,
+    email: overrides.email ?? `${username}@gmail.com`,
     password: overrides.password ?? 'password123',
   })
   if (res.status !== 201) throw new Error(`register ${username} failed: ${res.status}`)
@@ -21,6 +22,12 @@ export async function registerUser(username, overrides = {}) {
 export function sessionCookie(res) {
   const header = res.headers['set-cookie']?.find((c) => c.startsWith('token='))
   return header?.split(';')[0]
+}
+
+// Flips isAdmin on an already-registered user - the test equivalent of
+// `npm run make-admin`, without going through a real admin panel action.
+export async function makeAdmin(userId) {
+  await User.findByIdAndUpdate(userId, { isAdmin: true })
 }
 
 // Registers two users and makes them friends. Returns both agents, both

@@ -485,7 +485,7 @@ describe('user:updated', () => {
     expect(await toFriend).toEqual({ user: publicShape })
     expect(await toPending).toEqual({ user: publicShape })
     // My own tabs also get my private fields.
-    expect((await toMe).user).toMatchObject({ ...publicShape, email: 'aman@example.com' })
+    expect((await toMe).user).toMatchObject({ ...publicShape, email: 'aman@gmail.com' })
     expect(await strangerSilent).toBe(true)
   })
 

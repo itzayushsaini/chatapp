@@ -8,7 +8,7 @@ import { registerUser } from './helpers.js'
 const valid = {
   username: 'Aman_01',
   displayName: 'Aman',
-  email: 'Aman@Example.com',
+  email: 'Aman@Gmail.com',
   password: 'password123',
 }
 
@@ -24,8 +24,9 @@ describe('POST /api/auth/register', () => {
       displayName: 'Aman',
       bio: '',
       avatarUrl: null,
-      email: 'aman@example.com',
+      email: 'aman@gmail.com',
       usernameChangeAllowedAt: null,
+      isAdmin: false,
     })
 
     const cookie = res.headers['set-cookie'][0]
@@ -54,7 +55,7 @@ describe('POST /api/auth/register', () => {
     await request(app).post('/api/auth/register').send(valid)
     const res = await request(app)
       .post('/api/auth/register')
-      .send({ ...valid, username: 'AMAN_01', email: 'other@example.com' })
+      .send({ ...valid, username: 'AMAN_01', email: 'other@gmail.com' })
 
     expect(res.status).toBe(409)
     expect(res.body).toEqual({ message: 'Username already taken' })
@@ -113,7 +114,7 @@ describe('POST /api/auth/login', () => {
     await registerUser('priya')
     const res = await request(app)
       .post('/api/auth/login')
-      .send({ identifier: 'PRIYA@example.com', password: 'password123' })
+      .send({ identifier: 'PRIYA@gmail.com', password: 'password123' })
 
     expect(res.status).toBe(200)
   })
@@ -149,7 +150,7 @@ describe('GET /api/auth/me', () => {
     const res = await agent.get('/api/auth/me')
 
     expect(res.status).toBe(200)
-    expect(res.body.user).toMatchObject({ username: 'rahul', email: 'rahul@example.com' })
+    expect(res.body.user).toMatchObject({ username: 'rahul', email: 'rahul@gmail.com' })
   })
 
   it('returns 401 with no cookie', async () => {

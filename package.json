@@ -18,7 +18,8 @@
     "lint": "npm run lint --workspaces --if-present",
     "build": "npm run build --workspace client",
     "start": "cross-env NODE_ENV=production node server/src/server.js",
-    "seed": "npm run seed --workspace server"
+    "seed": "npm run seed --workspace server",
+    "make-admin": "npm run make-admin --workspace server --"
   },
   "devDependencies": {
     "@playwright/test": "^1.63.0",

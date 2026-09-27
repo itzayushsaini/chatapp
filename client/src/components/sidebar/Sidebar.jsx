@@ -1,9 +1,10 @@
 import { useState } from 'react'
+import { Link } from 'react-router'
 
 import { useAuth } from '../../context/AuthContext.jsx'
 import { useChatStore } from '../../store/useChatStore.js'
 import Avatar from '../common/Avatar.jsx'
-import { LogoutIcon } from '../common/Icons.jsx'
+import { LogoutIcon, ShieldIcon } from '../common/Icons.jsx'
 import ProfileDialog from '../profile/ProfileDialog.jsx'
 import AddFriendTab from './AddFriendTab.jsx'
 import ChatsTab from './ChatsTab.jsx'
@@ -52,15 +53,27 @@ export default function Sidebar({ className = '' }) {
             <span className="block truncate text-xs text-slate-500">@{user.username}</span>
           </span>
         </button>
-        <button
-          type="button"
-          onClick={logout}
-          className="rounded-full p-2 text-slate-600 hover:bg-black/5 hover:text-red-600 focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:outline-none"
-          aria-label="Log out"
-          title="Log out"
-        >
-          <LogoutIcon className="h-5 w-5" />
-        </button>
+        <div className="flex items-center gap-1">
+          {user.isAdmin && (
+            <Link
+              to="/admin"
+              className="rounded-full p-2 text-slate-600 hover:bg-black/5 hover:text-brand-700 focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:outline-none"
+              aria-label="Admin panel"
+              title="Admin panel"
+            >
+              <ShieldIcon className="h-5 w-5" />
+            </Link>
+          )}
+          <button
+            type="button"
+            onClick={logout}
+            className="rounded-full p-2 text-slate-600 hover:bg-black/5 hover:text-red-600 focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:outline-none"
+            aria-label="Log out"
+            title="Log out"
+          >
+            <LogoutIcon className="h-5 w-5" />
+          </button>
+        </div>
       </div>
 
       <div role="tablist" aria-label="Sidebar" className="flex gap-1 px-3 pt-2 pb-1.5" onKeyDown={handleTabKey}>

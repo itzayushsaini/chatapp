@@ -2,6 +2,7 @@ import { Attachment } from '../models/Attachment.js'
 import { AppError } from '../utils/AppError.js'
 import { detectFileType } from '../utils/fileType.js'
 import { assertFriends, assertParticipant } from './friendService.js'
+import { getSettings } from './settingsService.js'
 import { deleteFile, saveFile } from './storageService.js'
 
 const MB = 1024 * 1024
@@ -32,6 +33,9 @@ export function attachmentView(attachment) {
 // still friends with the other person. Called BEFORE the file is read, so a
 // stranger cannot make the server receive a 25 MB upload at all.
 export async function assertCanUpload(meId, conversationId) {
+  const settings = await getSettings()
+  if (!settings.attachmentsEnabled) throw new AppError(403, 'Attachments are currently disabled')
+
   const conversation = await assertParticipant(conversationId, meId)
   const otherId = conversation.participants.find((p) => String(p) !== String(meId))
   await assertFriends(meId, otherId)

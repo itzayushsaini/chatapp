@@ -16,7 +16,7 @@ export async function register(page, username, displayName) {
   await page.goto('/register')
   await page.getByLabel('Username').fill(username)
   await page.getByLabel('Display name').fill(displayName)
-  await page.getByLabel('Email').fill(`${username}@example.test`)
+  await page.getByLabel('Email').fill(`${username}@gmail.com`)
   await page.getByLabel('Password', { exact: true }).fill(PASSWORD)
   await page.getByRole('button', { name: 'Sign up' }).click()
   await expect(page.getByText(`@${username}`).first()).toBeVisible()
