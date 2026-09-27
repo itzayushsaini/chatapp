@@ -1000,3 +1000,176 @@ moment can never end up pointing at a deleted file.
 - multer keeps the file in **memory** while checking it (max 25 MB per
   upload, 20 uploads per hour per user). Fine for one small server; a large
   deployment would stream straight to storage instead.
+
+---
+
+# Phase 12 - forgot password and change password
+
+**Goal:** two things people expect from any real account system, added after
+Phase 11, with the team's approval (this changes nothing already built - it
+is purely new).
+
+## 1. Sending real email: Brevo, and why no library
+
+Forgot-password only makes sense if a real email reaches the user. We use
+**Brevo** (a free transactional-email API, 300 emails/day). Brevo's API is a
+single `POST` request with an API key header - Node's built-in `fetch` is
+enough, so no SDK was added, matching the project's "avoid unnecessary
+libraries" rule.
+
+`services/emailService.js` is the *only* file that knows how email is sent.
+Swapping providers later would only change this one file - the same pattern
+as `storageService.js` for files.
+
+**In tests, nothing is sent over the network.** `isTest` (from
+`config/env.js`) makes `emailService` push every email into an exported
+array, `sentEmails`, instead of calling Brevo. A test can then read the exact
+subject, recipient and reset link that would have gone out - deterministic,
+offline, and fast.
+
+**A missing or wrong Brevo key never breaks a request.** If `BREVO_API_KEY`
+or `EMAIL_FROM_ADDRESS` is not set - or Brevo itself errors - `emailService`
+logs it and simply returns, rather than throwing. Forgot-password's response
+to the *user* must be identical whether or not sending actually worked
+(see below), so failures are only ever visible in the server's own logs.
+
+## 2. Never revealing who has an account
+
+`POST /api/auth/forgot-password` always answers:
+
+```json
+{ "message": "If an account exists for that email, we've sent a password reset link." }
+```
+
+whether or not that email belongs to anyone. This is the same idea as
+login's identical 401 for "wrong password" and "no such user" (Phase 2): if
+the response differed, someone could try a list of emails and learn exactly
+which ones are registered.
+
+## 3. The reset token: generated, hashed, single-use, time-limited
+
+```js
+const token = crypto.randomBytes(32).toString('hex')       // sent in the email
+user.resetPasswordTokenHash = sha256(token)                 // stored instead
+user.resetPasswordExpires = now + 1 hour
+```
+
+Exactly the same reasoning as `passwordHash`: the **raw** token is never
+stored anywhere. If the database were ever stolen, the thief could not reset
+anyone's password with it - they would need the original 64 random hex
+characters, which only ever existed in the one email that was sent.
+
+`resetPasswordTokenHash` and `resetPasswordExpires` both have `select:
+false` (like `passwordHash`), so an ordinary `User.findOne(...)` never loads
+them by accident.
+
+**Resetting the password:**
+
+1. Look up the user by email, re-hash the *given* token, and compare.
+2. Any mismatch, or an expired `resetPasswordExpires`, gives the identical
+   400 "That reset link is invalid or has expired" - never a more specific
+   reason (a specific "wrong token" vs "expired" message would leak whether
+   a given link was ever valid).
+3. On success: hash the new password, set `passwordChangedAt`, and **clear**
+   `resetPasswordTokenHash` / `resetPasswordExpires` - not just mark them
+   expired. Clearing is what makes a link strictly single-use: reusing it
+   finds `null` where a hash should be, and fails the same way an unknown
+   token would.
+
+The client does **not** log the user in after a reset - it sends them to
+`/login` with a green banner. A fresh, explicit login is a clearer signal
+that the new password is the one now in effect.
+
+## 4. Signing out every OTHER device - without a token blacklist
+
+This is the part with the most interesting bugs, found and fixed while
+building it.
+
+**The idea:** add `passwordChangedAt` to the user. Reject any session token
+issued *before* that moment. No database of "valid tokens" is needed - each
+token already proves when it was made.
+
+**Bug 1 - JWT's `iat` is only whole seconds.** The first version compared the
+token's built-in `iat` (issued-at, seconds since epoch, added automatically by
+`jwt.sign`) against `passwordChangedAt` (millisecond precision). Reissuing the
+cookie *immediately after* setting `passwordChangedAt` (to keep the current
+tab logged in - see below) could produce a token whose `iat` rounds *down* to
+just **before** `passwordChangedAt`, in the same second - so the very cookie
+just issued rejected itself. Flooring both sides to the same second fixed
+that, but broke the other direction: two requests landing in the *same*
+wall-clock second (routine in a fast automated test, and not impossible for a
+human either) became indistinguishable, so a genuinely stale token from
+*just* before the change could still pass.
+
+**The real fix: our own millisecond timestamp.** `signToken` now signs
+`{ sub, ts: Date.now() }` - `ts` is ours, not JWT's `iat`, and has full
+millisecond precision:
+
+```js
+if (user.passwordChangedAt && decoded.ts < user.passwordChangedAt.getTime()) {
+  return null // stale - this device must log in again
+}
+```
+
+Now: a token signed a moment *before* the password changed always has a
+smaller `ts` and is correctly rejected; a cookie reissued a moment *after*
+always has a larger `ts` and is correctly accepted - regardless of which
+second either happens to fall in.
+
+This one check lives in `userFromToken`, shared by `requireAuth` (REST) and
+the socket handshake - exactly like the rest of the session logic - so both
+paths are protected by writing it once.
+
+> **Known limitation:** a session cookie issued *before* this feature shipped
+> has no `ts` claim. For those, the check is simply skipped (`undefined <
+> number` is `false` in JavaScript), so a handful of very old sessions are not
+> retroactively covered. They age out naturally within 7 days, or the moment
+> that device logs in again and gets a `ts`-bearing token.
+
+## 5. Change password: keeping the current tab logged in on purpose
+
+`PATCH /api/auth/password` (logged in) checks `currentPassword` with bcrypt,
+then behaves like a reset: hash the new password, set `passwordChangedAt`.
+
+The difference from reset: it **reissues the cookie** in the same response.
+Since the fresh cookie's `ts` (signed a moment after `passwordChangedAt`) is
+always later, it survives its own `userFromToken` check - so the tab that
+changed the password stays logged in, while every *other* browser or device
+gets signed out the next time it makes a request. That is the whole point of
+the feature: if a session was left open somewhere, changing the password from
+anywhere else ends it immediately.
+
+**Bug 2 - the wrong status code.** The first version answered a wrong
+`currentPassword` with **401**. But `api/http.js`'s axios interceptor treats
+*any* 401 (other than on `/auth/me` and `/auth/login`) as "the session
+expired" and force-logs the user out. So typing the wrong current password
+was silently logging people out instead of showing "Current password is
+incorrect" in the dialog - found by an end-to-end test that expected the
+message and instead landed back on the login page. The fix: this is **400**,
+not 401 - the request already passed `requireAuth`, so the *session* is
+valid; only the *value* was rejected, which is exactly what 400 means.
+
+## 6. Testing an email flow without a real inbox
+
+Server tests read the reset link straight out of `emailService.sentEmails`
+(captured instead of sent, see above), so the *whole* round trip - request a
+reset, follow the link, set a new password, confirm the old one now fails and
+the new one works, confirm every other device is logged out - is tested with
+no real network call.
+
+The end-to-end suite runs the real production server, which cannot use that
+test-only capture (there is no real Brevo key configured for it). So it
+covers only what does not depend on email actually arriving: the request
+form always shows the same message, and a malformed reset link shows a clear
+error instead of a broken form. **Change password** needs no email at all, so
+it gets full end-to-end coverage, including two separate browser "devices"
+proving one is logged out while the other stays in.
+
+> **A third bug caught by these end-to-end tests:** `getByLabel('Email')`
+> and `getByLabel('Password')` (without `{ exact: true }`) can substring-match
+> the *wrong* field - "Email" also matches inside "Username or **email**",
+> "Password" also matches the "Show **password**" toggle button's label. This
+> only showed up as a flaky, hard-to-reproduce failure during the brief
+> moment a page is still transitioning between routes, because the *old*
+> page's fields can briefly still be in the DOM. Every ambiguous label in the
+> test suite now uses `exact: true`.

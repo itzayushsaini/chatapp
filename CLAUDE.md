@@ -18,6 +18,7 @@ Do not add features that are not listed here. If something seems missing, or a r
 ## Tech stack (fixed — do not change without asking)
 
 - **Server:** Node.js (current LTS), Express 5, Mongoose, Socket.IO 4, zod, bcryptjs, jsonwebtoken, cookie-parser, cookie, helmet, express-rate-limit, morgan, multer (file uploads).
+- **Password-reset email:** sent via the Brevo API using Node's built-in `fetch` - no extra library.
 - **File storage:** MongoDB GridFS (built into the MongoDB driver - no extra service or account).
 - **Client:** React + Vite (JavaScript, not TypeScript), React Router, Tailwind CSS, axios, socket.io-client, zustand.
 - **Tests:** Vitest + Supertest + mongodb-memory-server on the server; Playwright for end-to-end tests.
@@ -52,7 +53,7 @@ pingme/
       config/        env.js (zod-validated env), db.js
       models/        User.js, Friendship.js, Conversation.js, Message.js, Attachment.js
       services/      authService.js, friendService.js, messageService.js, presenceService.js,
-                     profileService.js, attachmentService.js, storageService.js
+                     profileService.js, attachmentService.js, storageService.js, emailService.js
       controllers/   auth, users, friends, conversations, attachments
       routes/        auth.routes.js, users.routes.js, friends.routes.js, conversations.routes.js,
                      attachments.routes.js
@@ -105,6 +106,13 @@ NODE_ENV=development
 MONGO_URI=
 JWT_SECRET=          # at least 32 random characters
 SENTRY_DSN=          # optional
+
+# Password-reset email (Brevo). Optional - without it, forgot-password
+# still answers normally but silently does not send anything (logged).
+BREVO_API_KEY=
+EMAIL_FROM_ADDRESS=  # must be a sender verified in Brevo
+EMAIL_FROM_NAME=PingMe
+APP_URL=http://localhost:5173  # set to the deployed URL in production
 ```
 
 Validate them at startup with zod in `config/env.js`. If one is missing or invalid, exit with a clear message.
@@ -145,6 +153,9 @@ Validate them at startup with zod in `config/env.js`. If one is missing or inval
 | `avatarFileId` | ObjectId of the profile picture in GridFS, or null |
 | `email` | String, required, unique, lowercase, trimmed |
 | `passwordHash` | String, `select: false` |
+| `passwordChangedAt` | Date or null. Set on every password change or reset. Any session token issued before this moment is rejected (see Session token rules) - this is what signs every OTHER device out. |
+| `resetPasswordTokenHash` | String, `select: false`, default null. SHA-256 hash of the one-time reset token - never the raw token. |
+| `resetPasswordExpires` | Date, `select: false`, default null |
 | `lastSeen` | Date |
 | timestamps | |
 
@@ -222,11 +233,32 @@ Index: `{ message: 1, createdAt: 1 }` (cleanup of unsent uploads).
   - `identifier` can be a username or an email.
   - An unknown user and a wrong password return the **same** response: 401 "Invalid credentials".
 - **Session token:**
-  - JWT `{ sub: userId }`, expires in 7 days, signed with `JWT_SECRET`.
+  - JWT `{ sub: userId, ts: <ms epoch when signed> }`, expires in 7 days, signed with `JWT_SECRET`.
+  - `ts` is a custom millisecond-precision issued-at time, separate from the JWT's own `iat` (which is whole seconds only - too coarse to reliably tell "issued just before a password change" from "issued just after", see `userFromToken`).
   - Sent as a cookie named `token`: `httpOnly: true`, `sameSite: 'lax'`, `secure: true` in production, `maxAge` of 7 days, `path: '/'`.
   - Never put the token in localStorage or in a response body.
-- **`requireAuth` middleware:** verifies the cookie, loads the user and sets `req.user`. Every route uses it except health, register, login and logout.
+- **`requireAuth` middleware:** verifies the cookie, loads the user and sets `req.user`. Every route uses it except health, register, login, logout, forgot-password and reset-password.
+- **`userFromToken`** (shared by `requireAuth` and the socket handshake): rejects a token whose `ts` is before the user's `passwordChangedAt` - a stale token from before the password changed is refused, without a server-side list of valid tokens.
 - **Logout:** clears the cookie.
+
+### Forgot password
+
+- **`POST /api/auth/forgot-password` `{ email }`** - always the same 200 response, whether or not the email belongs to an account (never reveals who has one):
+  `{ message: "If an account exists for that email, we've sent a password reset link." }`
+  - If the email matches a user: generate 32 random bytes (`crypto.randomBytes`), hex-encode as the token, store only its SHA-256 hash (`resetPasswordTokenHash`) with `resetPasswordExpires` = now + 1 hour, and email a link `${APP_URL}/reset-password?token=<token>&email=<email>` via `emailService`.
+  - Rate limited the same as register/login (per IP), since it is another way an anonymous visitor can act on an account.
+- **`POST /api/auth/reset-password` `{ email, token, password }`**:
+  - Looks up the user by email, hashes the given token the same way, and compares. Any mismatch, missing token, or an expired `resetPasswordExpires` all give the identical 400 "That reset link is invalid or has expired" - never a more specific reason.
+  - On success: hash the new password, set `passwordChangedAt`, and clear `resetPasswordTokenHash` / `resetPasswordExpires` so the link cannot be used twice.
+  - Does **not** log the user in - the client sends them back to `/login`.
+
+### Change password (while logged in)
+
+- **`PATCH /api/auth/password` `{ currentPassword, newPassword }`**, `requireAuth`:
+  - Verifies `currentPassword` with bcrypt. Wrong password → **400** (not 401) "Current password is incorrect" - the request already passed `requireAuth`, so this is a rejected value, not an authentication failure; a 401 here would trigger the client's "session expired, log out" handling instead of showing the message inline.
+  - `newPassword` must differ from `currentPassword`.
+  - On success: hash the new password, set `passwordChangedAt`, and reissue the session cookie for the current response - so the tab that changed it stays logged in while every other device is signed out on its next request (via `userFromToken`'s `ts` check).
+  - Rate limited per user (like profile edits), not per IP - it is an authenticated action, and an IP limit would unfairly cap several logged-in users on one network.
 
 ---
 
@@ -417,6 +449,9 @@ All responses are JSON (except the two file downloads). Errors use the shape `{ 
 | GET | `/api/users/:id/avatar` | yes | The picture (image bytes) |
 | POST | `/api/conversations/:id/attachments` | yes | multipart `file` → 201 `{ attachment }` |
 | GET | `/api/attachments/:id` | yes | The file (bytes, Range supported) |
+| POST | `/api/auth/forgot-password` | no | `{ email }` → the same 200 message either way |
+| POST | `/api/auth/reset-password` | no | `{ email, token, password }` → 200 message |
+| PATCH | `/api/auth/password` | yes | `{ currentPassword, newPassword }` → 200 message, cookie reissued |
 
 ---
 
@@ -430,9 +465,12 @@ All responses are JSON (except the two file downloads). Errors use the shape `{ 
   - Friend requests: 20 per hour per user.
   - Profile changes and picture uploads: 20 per hour per user.
   - Attachment uploads: 20 per hour per user.
+  - Forgot/reset password: same budget as register/login (10 per 15 minutes per IP).
+  - Change password: 20 per hour per user (same as profile changes).
   - Socket messages: as described above.
 - **Uploads:** type checked by magic bytes against an allowlist (no SVG/HTML); size limited while streaming; never written to the server's disk; every download permission-checked; documents never rendered inline; `nosniff` (helmet).
 - `passwordHash` never appears in any response. Other users only ever receive the PublicUser shape.
+- A password-reset token is never stored or logged in its raw form, only its SHA-256 hash - the same reasoning as `passwordHash`. Forgot-password never reveals whether an email has an account.
 - No `dangerouslySetInnerHTML` anywhere. Render message text as plain text with `white-space: pre-wrap`.
 - Secrets only in environment variables. Never log passwords, tokens or cookies.
 - In production: `trust proxy` is set and cookies are `secure`.
@@ -444,9 +482,9 @@ All responses are JSON (except the two file downloads). Errors use the shape `{ 
 
 ### Routes and session
 
-- Routes: `/login`, `/register`, and `/` (the protected chat app). Unknown routes redirect to `/`.
+- Routes: `/login`, `/register`, `/forgot-password`, `/reset-password`, and `/` (the protected chat app). Unknown routes redirect to `/`.
 - **AuthContext:** calls `GET /api/auth/me` on load and shows a full-screen spinner until it resolves. There must be no flash of the login page for users who are already logged in.
-- **axios instance:** `baseURL: '/api'`, `withCredentials: true`. On a 401 from any call except `/auth/me`, clear the user and go to `/login`.
+- **axios instance:** `baseURL: '/api'`, `withCredentials: true`. On a 401 from any call except `/auth/me` and `/auth/login`, clear the user and go to `/login`. (`/auth/password`'s "wrong current password" is deliberately a 400, not a 401, so it is never mistaken for an expired session.)
 
 ### Sockets and state
 
@@ -502,6 +540,12 @@ All responses are JSON (except the two file downloads). Errors use the shape `{ 
 - **Reconnection:** show a "Reconnecting…" banner while disconnected. On a reconnect (not the first connect), refetch friends, requests and the open conversation's latest page.
 - **Toasts:** a new friend request, a request accepted, and errors.
 
+### Login, forgot password, reset password
+
+- **Login page:** a "Forgot password?" link next to the password field, going to `/forgot-password`.
+- **Forgot password page:** one email field. Always shows the same "we've sent a link" message on submit, whether or not the account exists.
+- **Reset password page:** reached from the emailed link (`?token=...&email=...`). A missing token or email shows "Invalid reset link" instead of a broken form. New password + confirm (checked client-side too). On success, redirects to `/login?reset=success`, which shows a green "Password reset" banner - not an automatic login.
+
 ### Profile
 
 - The sidebar footer (my avatar and name) opens a **Your profile** dialog: photo (Add/Change/Remove - saved immediately, cropped to 256×256 in the browser), display name, username, bio (160 max, with a counter), email (read-only). Save sends only the changed fields.
@@ -509,6 +553,7 @@ All responses are JSON (except the two file downloads). Errors use the shape `{ 
 - Clicking a friend's picture or name in the chat header opens their profile (picture, name, @username, bio). The Add Friend result card shows the bio.
 - `user:updated` updates that person everywhere they appear (Chats, Requests, chat header), or my own profile if it is me.
 - Dialogs use the native `<dialog>` element (`showModal`): focus trap, Escape and backdrop click close it.
+- **Change password** is its own form inside the same dialog, below the profile fields, with its own Save button: current password, new password, confirm. On success, the current tab stays logged in and a message says other devices were signed out.
 
 ### Attachments
 

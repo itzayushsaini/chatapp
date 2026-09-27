@@ -2,7 +2,7 @@
 
 A new session should be able to read this file and carry on from it.
 
-Last updated: 2026-09-27
+Last updated: 2026-09-27 (Phase 12 added same day)
 
 ---
 
@@ -18,11 +18,17 @@ Last updated: 2026-09-27
 | 6 | Client: auth pages, `AuthContext`, protected routing | **Done** |
 | 7 | Client: sidebar tabs (Chats, Requests, Add Friend) | **Done** |
 | 8 | Client: chat window, optimistic sending, socket events, reconnection | **Done** |
-| 9 | Polish: Playwright end-to-end tests, seed script, deployment, diagrams, final docs | **Done** - live deployment still to be performed by the team (needs your own Atlas + Render accounts, see `docs/DEPLOY.md`) |
+| 9 | Polish: Playwright end-to-end tests, seed script, deployment, diagrams, final docs | **Done** - deployed live on Render + Atlas |
 | 10 | Profiles: picture (GridFS), bio, display name, username change (once per 30 days), live `user:updated` | **Done** |
 | 11 | Attachments: photos, videos, documents - upload, magic-byte type check, permission-checked download with Range, cleanup, chat UI | **Done** |
+| 12 | Forgot password (Brevo email) and change password (from profile), with cross-device session invalidation | **Done** |
 
-**Verification (2026-09-27, after Phases 10-11):** `npm test` 175/175 pass,
+**Verification (2026-09-27, after Phase 12):** `npm test` 189/189 pass,
+`npm run test:e2e` 9/9 pass (run three times, no flakes), lint clean in both
+workspaces, `npm run build` succeeds, `npm audit --omit=dev` 0
+vulnerabilities.
+
+**Earlier verification (2026-09-27, after Phases 10-11):** `npm test` 175/175 pass,
 `npm run test:e2e` 5/5 pass (run twice), lint clean in both workspaces,
 `npm run build` succeeds, `npm audit --omit=dev` 0 vulnerabilities. Also
 checked by hand against the real Atlas database: bio saved, a picture cropped
@@ -90,6 +96,28 @@ cleanly, so one commit "Phases 1-9: complete ChatApp (later renamed PingMe)" is 
   cases in `socket.test.js`; `e2e/profile-attachments.spec.js`,
   `e2e/helpers.js`.
 
+### Phase 12 additions
+- Server: `services/emailService.js` (the only file that knows how email is
+  sent - a single `fetch` call to Brevo's API, no SDK); three new
+  `authService` functions (`requestPasswordReset`, `resetPassword`,
+  `changePassword`); `User` gained `passwordChangedAt`,
+  `resetPasswordTokenHash`, `resetPasswordExpires`; `signToken` now signs a
+  custom millisecond `ts` claim (JWT's own `iat` is only whole seconds - too
+  coarse to reliably invalidate other sessions the instant a password
+  changes, see `docs/EXPLAINED.md` Phase 12); new routes
+  `POST /api/auth/forgot-password`, `POST /api/auth/reset-password`,
+  `PATCH /api/auth/password`; new env vars `BREVO_API_KEY`,
+  `EMAIL_FROM_ADDRESS`, `EMAIL_FROM_NAME`, `APP_URL` (all optional with safe
+  defaults, so the app still boots without them).
+- Client: `pages/ForgotPasswordPage.jsx`, `pages/ResetPasswordPage.jsx`; a
+  "Forgot password?" link and a post-reset banner on `LoginPage`; a "Change
+  password" section inside `ProfileDialog`.
+- Tests: `server/tests/password.test.js` (14 cases, using
+  `emailService.sentEmails` to read the reset link without any real
+  network call); `e2e/password.spec.js` (4 cases - the email-dependent half
+  of forgot/reset is covered at the server level instead, since e2e has no
+  real Brevo key configured).
+
 ### Tests and deployment
 - `server/tests/` - `health`, `auth`, `rateLimits`, `friends`,
   `conversations`, `socket` + `setup.js`, `helpers.js`
@@ -131,9 +159,10 @@ cleanly, so one commit "Phases 1-9: complete ChatApp (later renamed PingMe)" is 
     and allows `useAuth` / `useSocket` to be exported beside their providers.
 12. **Seed** never deletes; it stops if the demo users already exist.
 13. **UI.png** was used for the look only (blue `#2563EB`, Inter, light
-    surfaces, bubbles). Its extra screens - Google login, forgot password,
-    calls, settings page, dark mode, landing page - are not in the spec and
-    were not built. (Profiles and media were added later, in Phases 10-11.)
+    surfaces, bubbles). Its extra screens - Google login, calls, settings
+    page, dark mode, landing page - are not in the spec and were not built.
+    (Profiles and attachments were added later in Phases 10-11, forgot/change
+    password in Phase 12 - all three requested by the team after Phase 9.)
 14. **Phases 10-11 were requested by the team after Phase 9** and change
     three original rules (username immutable, no image uploads, text-only
     messages). `CLAUDE.md` was updated to match; decisions taken with the
@@ -147,7 +176,17 @@ cleanly, so one commit "Phases 1-9: complete ChatApp (later renamed PingMe)" is 
     are never deleted - the spec has no message deletion.
 18. **`tests/setup.js` now wipes every collection**, including GridFS's
     `uploads.files` / `uploads.chunks`, which have no mongoose model.
-19. **Root cause of a login "Network error" in development:** `node --watch`
+19. **Password reset was requested as its own feature after Phase 9**, adding
+    one dependency-free integration (Brevo, via `fetch`) and one new email
+    service account for the team to hold. Decisions taken with the team:
+    Brevo over Gmail SMTP (keeps a personal inbox out of it); a wrong current
+    password is **400**, not 401, specifically so the client's "401 means
+    your session expired, log out" rule (Phase 6) never fires for it;
+    changing or resetting a password signs out every OTHER device, using a
+    custom millisecond `ts` claim rather than JWT's own `iat` (see
+    `docs/EXPLAINED.md` Phase 12 for the two real timing bugs this caught,
+    and a third bug in the e2e tests themselves - ambiguous label matching).
+20. **Root cause of a login "Network error" in development:** `node --watch`
     watched `node_modules` too, and something (likely OneDrive) touching files
     there restarted the server mid-request. `npm run dev` now uses
     `--watch-path=src`.
@@ -181,15 +220,24 @@ cleanly, so one commit "Phases 1-9: complete ChatApp (later renamed PingMe)" is 
    hour per user). Fine for one small instance.
 9. **An old username becomes available** to others once changed (by design;
    the user is warned).
+10. **`APP_URL` must be set correctly on Render** (or forgot-password emails
+    link to `localhost`). It defaults to `http://localhost:5173`, which is
+    right for local development but wrong in production - see `docs/DEPLOY.md`.
+11. **Brevo free tier is 300 emails/day**, and `EMAIL_FROM_ADDRESS` must be a
+    sender verified in Brevo's dashboard, or sending silently does nothing
+    (logged server-side, never breaks the request - see Phase 12).
+12. **Sessions from before Phase 12 shipped** have no `ts` claim, so the
+    "log out every other device" check is skipped for them specifically
+    (never for sessions created after that point). They age out within 7 days.
 
 ---
 
 ## How to verify everything
 
 1. `npm install`
-2. `npm test` - 175 pass
+2. `npm test` - 189 pass
 3. `npm run lint` - no errors
-4. `npx playwright install chromium` (once), then `npm run test:e2e` - 5 pass
+4. `npx playwright install chromium` (once), then `npm run test:e2e` - 9 pass
 5. `cp server/.env.example server/.env`, fill in `MONGO_URI` and `JWT_SECRET`
 6. `npm run seed`, then `npm run dev`, open <http://localhost:5173>
 7. Work through the manual tables in `docs/TEST_CASES.md`

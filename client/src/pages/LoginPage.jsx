@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Link } from 'react-router'
+import { Link, useSearchParams } from 'react-router'
 
 import { errorMessage } from '../api/http.js'
 import Button from '../components/common/Button.jsx'
@@ -10,10 +10,13 @@ import { useAuth } from '../context/AuthContext.jsx'
 
 export default function LoginPage() {
   const { login } = useAuth()
+  const [params] = useSearchParams()
   const [identifier, setIdentifier] = useState('')
   const [password, setPassword] = useState('')
   const [error, setError] = useState('')
   const [submitting, setSubmitting] = useState(false)
+  // Set by ResetPasswordPage after a successful reset (?reset=success).
+  const justReset = params.get('reset') === 'success'
 
   async function handleSubmit(event) {
     event.preventDefault()
@@ -41,6 +44,12 @@ export default function LoginPage() {
         </>
       }
     >
+      {justReset && (
+        <p className="mb-4 rounded-lg bg-emerald-50 px-3 py-2 text-sm text-emerald-700" role="status">
+          Password reset. Please log in with your new password.
+        </p>
+      )}
+
       <form onSubmit={handleSubmit} className="space-y-4" noValidate>
         <TextField
           label="Username or email"
@@ -50,14 +59,22 @@ export default function LoginPage() {
           autoCapitalize="none"
           required
         />
-        <TextField
-          label="Password"
-          type="password"
-          value={password}
-          onChange={(e) => setPassword(e.target.value)}
-          autoComplete="current-password"
-          required
-        />
+        <div>
+          <TextField
+            label="Password"
+            type="password"
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            autoComplete="current-password"
+            required
+          />
+          <Link
+            to="/forgot-password"
+            className="mt-1.5 inline-block rounded text-sm font-medium text-blue-600 hover:underline focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:outline-none"
+          >
+            Forgot password?
+          </Link>
+        </div>
 
         {error && (
           <p className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700" role="alert">

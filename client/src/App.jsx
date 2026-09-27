@@ -4,13 +4,16 @@ import { FullScreenLoader } from './components/common/Spinner.jsx'
 import { useAuth } from './context/AuthContext.jsx'
 import { SocketProvider } from './context/SocketContext.jsx'
 import ChatPage from './pages/ChatPage.jsx'
+import ForgotPasswordPage from './pages/ForgotPasswordPage.jsx'
 import LoginPage from './pages/LoginPage.jsx'
 import RegisterPage from './pages/RegisterPage.jsx'
+import ResetPasswordPage from './pages/ResetPasswordPage.jsx'
 
-// Three routes. Which one you may see depends only on whether you are logged
-// in, so the redirects all live here in one place:
+// Five routes. Which ones you may see depends only on whether you are
+// logged in, so the redirects all live here in one place:
 //   logged out -> "/" sends you to /login
-//   logged in  -> /login and /register send you to "/"
+//   logged in  -> /login, /register, /forgot-password and /reset-password
+//                 all send you to "/"
 //   anything else -> "/"
 export default function App() {
   const { user, loading } = useAuth()
@@ -23,6 +26,14 @@ export default function App() {
     <Routes>
       <Route path="/login" element={user ? <Navigate to="/" replace /> : <LoginPage />} />
       <Route path="/register" element={user ? <Navigate to="/" replace /> : <RegisterPage />} />
+      <Route
+        path="/forgot-password"
+        element={user ? <Navigate to="/" replace /> : <ForgotPasswordPage />}
+      />
+      <Route
+        path="/reset-password"
+        element={user ? <Navigate to="/" replace /> : <ResetPasswordPage />}
+      />
       <Route
         path="/"
         element={

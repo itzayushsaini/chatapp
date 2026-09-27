@@ -1,9 +1,12 @@
+import crypto from 'node:crypto'
+
 import bcrypt from 'bcryptjs'
 import jwt from 'jsonwebtoken'
 
 import { env, isProduction } from '../config/env.js'
 import { User } from '../models/User.js'
 import { AppError } from '../utils/AppError.js'
+import { sendPasswordResetEmail } from './emailService.js'
 
 const BCRYPT_COST = 12
 const SESSION_DAYS = 7
@@ -61,15 +64,23 @@ export async function login({ identifier, password }) {
 }
 
 export function signToken(userId) {
-  return jwt.sign({ sub: String(userId) }, env.JWT_SECRET, { expiresIn: `${SESSION_DAYS}d` })
+  // `ts` is our own millisecond-precision issued-at time. JWT's own `iat` is
+  // only ever whole seconds, which is not fine enough here: a cookie
+  // reissued moments after a password change (to keep the current tab
+  // logged in) could round down to the very second `passwordChangedAt`
+  // falls in, making the two indistinguishable. `ts` never has that problem.
+  return jwt.sign({ sub: String(userId), ts: Date.now() }, env.JWT_SECRET, {
+    expiresIn: `${SESSION_DAYS}d`,
+  })
 }
 
-// Returns the user id from a valid token, or null for a missing, expired or
-// forged one. Pinning the algorithm stops a token claiming a weaker one.
+// Returns the decoded payload { sub, ts, ... } for a valid token, or null
+// for a missing, expired or forged one. Pinning the algorithm stops a token
+// claiming a weaker one.
 export function verifyToken(token) {
   if (!token) return null
   try {
-    return jwt.verify(token, env.JWT_SECRET, { algorithms: ['HS256'] }).sub
+    return jwt.verify(token, env.JWT_SECRET, { algorithms: ['HS256'] })
   } catch {
     return null
   }
@@ -78,7 +89,84 @@ export function verifyToken(token) {
 // Shared by requireAuth (REST) and socketAuth (Socket.IO), so both check a
 // session in exactly the same way. A deleted user's old token stops working.
 export async function userFromToken(token) {
-  const userId = verifyToken(token)
-  if (!userId) return null
-  return User.findById(userId)
+  const decoded = verifyToken(token)
+  if (!decoded) return null
+
+  const user = await User.findById(decoded.sub)
+  if (!user) return null
+
+  // A token issued before the password was last changed or reset is stale -
+  // this is what signs out every OTHER device the moment the password
+  // changes, without needing a server-side list of valid tokens. Both sides
+  // are compared to the millisecond (see signToken's `ts`), so a cookie
+  // reissued immediately after the change is never mistaken for an old one.
+  if (user.passwordChangedAt && decoded.ts < user.passwordChangedAt.getTime()) {
+    return null
+  }
+  return user
+}
+
+// ---------------------------------------------------------------------------
+// Password reset ("forgot password")
+// ---------------------------------------------------------------------------
+
+const RESET_TOKEN_TTL_MS = 60 * 60 * 1000 // 1 hour
+
+// Never store the raw token - only its hash, the same reasoning as
+// passwordHash. A stolen database still can't be used to reset accounts.
+const hashResetToken = (token) => crypto.createHash('sha256').update(token).digest('hex')
+
+// Always resolves, whether or not the email belongs to an account - the
+// controller sends the same response either way, so this can never be used
+// to check who has an account (the same reasoning as login's identical 401
+// for "wrong password" and "no such user").
+export async function requestPasswordReset(email) {
+  const user = await User.findOne({ email })
+  if (!user) return
+
+  const token = crypto.randomBytes(32).toString('hex')
+  user.resetPasswordTokenHash = hashResetToken(token)
+  user.resetPasswordExpires = new Date(Date.now() + RESET_TOKEN_TTL_MS)
+  await user.save()
+
+  const resetUrl = `${env.APP_URL}/reset-password?token=${token}&email=${encodeURIComponent(email)}`
+  await sendPasswordResetEmail(user, resetUrl)
+}
+
+export async function resetPassword({ email, token, password }) {
+  const user = await User.findOne({ email }).select('+resetPasswordTokenHash +resetPasswordExpires')
+  const invalid = () => {
+    throw new AppError(400, 'That reset link is invalid or has expired')
+  }
+
+  if (!user || !user.resetPasswordTokenHash || !user.resetPasswordExpires) invalid()
+  if (user.resetPasswordExpires < new Date()) invalid()
+  if (user.resetPasswordTokenHash !== hashResetToken(token)) invalid()
+
+  user.passwordHash = await bcrypt.hash(password, BCRYPT_COST)
+  user.passwordChangedAt = new Date()
+  // Cleared, not just expired-in-place: a link can only ever be used once.
+  user.resetPasswordTokenHash = null
+  user.resetPasswordExpires = null
+  await user.save()
+}
+
+// ---------------------------------------------------------------------------
+// Change password (while logged in, from the profile)
+// ---------------------------------------------------------------------------
+
+export async function changePassword(meId, { currentPassword, newPassword }) {
+  const user = await User.findById(meId).select('+passwordHash')
+
+  // 400, not 401: the request already passed requireAuth, so the SESSION is
+  // valid - this is a rejected form value, not an authentication failure.
+  // The client treats any other 401 as "your session expired, log out",
+  // which would otherwise sign the user out instead of showing this inline.
+  const ok = await bcrypt.compare(currentPassword, user.passwordHash)
+  if (!ok) throw new AppError(400, 'Current password is incorrect')
+
+  user.passwordHash = await bcrypt.hash(newPassword, BCRYPT_COST)
+  user.passwordChangedAt = new Date()
+  await user.save()
+  return user
 }

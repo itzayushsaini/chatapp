@@ -19,6 +19,15 @@ const envSchema = z.object({
   MONGO_URI: z.string().min(1, 'is required (a MongoDB connection string)'),
   JWT_SECRET: z.string().min(32, 'must be at least 32 characters'),
   SENTRY_DSN: z.string().optional(),
+  // Password-reset email (Brevo). Left optional so the app still starts
+  // without it - emailService then logs a warning and skips sending instead
+  // of breaking the request, so a missing key never causes a 500 for users.
+  BREVO_API_KEY: z.string().optional(),
+  EMAIL_FROM_ADDRESS: z.string().email().optional(),
+  EMAIL_FROM_NAME: z.string().default('PingMe'),
+  // Used to build the link inside password-reset emails. Vite's address in
+  // development; set this to the deployed URL in production.
+  APP_URL: z.string().url().default('http://localhost:5173'),
 })
 
 const result = envSchema.safeParse(process.env)

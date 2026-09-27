@@ -21,6 +21,8 @@ they **accept**. Privacy is enforced on the server, not just hidden in the UI.
 - Real-time one-to-one messaging with optimistic sending, retry and no duplicates
 - Online / last-seen presence, visible to friends only
 - Profiles: photo, bio, display name, and username changes (once every 30 days)
+- Forgot password (emailed reset link, via Brevo) and change password from
+  the profile - both sign out every other logged-in device
 - Attachments: photos, videos and documents, previewed before sending, with
   upload progress; every file checked by its real contents and every download
   permission-checked

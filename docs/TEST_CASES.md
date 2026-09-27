@@ -2,13 +2,13 @@
 
 Kept up to date at the end of every phase.
 
-- **Automated** cases run with `npm test` (server: 175 tests) and
-  `npm run test:e2e` (Playwright: 5 browser tests).
+- **Automated** cases run with `npm test` (server: 189 tests) and
+  `npm run test:e2e` (Playwright: 9 browser tests).
 - **Manual** cases are the ones a person checks in the browser. Fill in the
   Actual and Result columns when you run them.
 
-Last full run: 2026-09-27 - **175/175 server tests pass, 5/5 end-to-end tests
-pass, lint clean.**
+Last full run: 2026-09-27 - **189/189 server tests pass, 9/9 end-to-end tests
+pass (run three times), lint clean.**
 
 ---
 
@@ -182,12 +182,34 @@ pass, lint clean.**
 | A10.24 | `user:updated` after a profile edit | Friend and pending requester get PublicUser; my other tab gets SelfUser (with email); stranger gets nothing |
 | A10.25 | `user:updated` after a picture change | Contains the new `avatarUrl` |
 
+### Phase 12 - `server/tests/password.test.js`
+
+| ID | Case | Expected |
+|---|---|---|
+| A12.1 | Forgot-password for a real account | 200 generic message; one email captured (`emailService.sentEmails`) with a `/reset-password?token=...` link |
+| A12.2 | Forgot-password for an unknown email | 200, the identical message; nothing sent |
+| A12.3 | Forgot-password with an invalid email | 400 |
+| A12.4 | Reset with the emailed link | 200; old password then fails to log in, new one works |
+| A12.5 | Reusing the same reset link | First use 200, second use 400 `That reset link is invalid or has expired` |
+| A12.6 | Wrong token / expired token / unknown email on reset | 400 for each |
+| A12.7 | Malformed token / short new password on reset | 400 for each |
+| A12.8 | Reset completes | The device that requested it is signed out too (its old cookie now gets 401) |
+| A12.9 | Change password with the right current password | 200; cookie reissued (this agent stays logged in); old password then fails to log in |
+| A12.10 | Change password | Every OTHER device's cookie is rejected (401) on its next request; this one still works |
+| A12.11 | Wrong current password | **400** (not 401 - must never trigger the client's auto-logout), message `Current password is incorrect`, nothing changed |
+| A12.12 | New password same as current | 400 |
+| A12.13 | New password too short | 400 |
+| A12.14 | Change password without login | 401 |
+
 ---
 
 ## Automated - end-to-end (`npm run test:e2e`)
 
-File: `e2e/chat.spec.js`. Runs against the production build and server with an
-in-memory database.
+Files: `e2e/chat.spec.js`, `e2e/profile-attachments.spec.js`, `e2e/password.spec.js`.
+Run against the production build and server with an in-memory database.
+Forgot/reset password's email-dependent half (does the link actually work) is
+covered at the server level instead - see A12.1-A12.8 - since e2e has no real
+email provider configured.
 
 | ID | Case | Expected |
 |---|---|---|
@@ -196,6 +218,10 @@ in-memory database.
 | E3 | Logout | Back to `/login`; `/` redirects to `/login`; logging in again works |
 | E4 | Edit my profile (`e2e/profile-attachments.spec.js`) | Choosing a photo saves it (footer shows it, decoded); name, bio and username saved after confirming; survives a reload; username field then locked with the date |
 | E5 | Files and live profile updates, two browser contexts | Chosen photo previews from a blob: URL under the production CSP; photo with caption arrives decoded from `/api/attachments/:id`; sidebar shows "📷 Our poster"; click opens full size, Escape closes; PDF card downloads as `application/pdf` attachment; a bio edit is visible in the other person's profile view without reload |
+| E6 | Forgot password request (`e2e/password.spec.js`) | "Forgot password?" link works; submitting shows the same message whatever the email; "Back to log in" returns to `/login` |
+| E7 | A reset link missing its token | Shows "Invalid reset link", not a broken form |
+| E8 | Change password, two browser contexts (two "devices") | Wrong current password shown inline, session NOT ended; correct current password: success message, this device stays logged in after reload, the OTHER device is redirected to `/login` on its next request, old password then fails there and the new one works |
+| E9 | Change password with the wrong current password | Shown inline in the dialog: "Current password is incorrect" |
 
 ---
 
@@ -294,6 +320,21 @@ different browsers, or one normal and one private window.
 | M11.8 | Privacy | Copy the photo's link, open it logged in as a third user | 404 | | |
 | M11.9 | Upload failure + retry | Stop the server mid-upload, then restart and click Retry | Bubble shows "Not sent · Retry"; Retry sends it once | | |
 | M11.10 | Mobile | 375 px wide | Photo fits the bubble; picker works | | |
+
+### Phase 12 - forgot password and change password
+
+| ID | Scenario | Steps | Expected | Actual | Result |
+|---|---|---|---|---|---|
+| M12.1 | Request a reset | Login page → "Forgot password?" → enter my email → Send | "If an account exists... we've sent a link"; a real email arrives (check Brevo is configured) | | |
+| M12.2 | Unknown email | Same, with an email nobody registered | The identical message; no email arrives | | |
+| M12.3 | Follow the link | Click the link in the email | "Choose a new password" page, shows the right email | | |
+| M12.4 | Reset it | Enter a new password twice → Reset password | Redirected to `/login` with a green "Password reset" banner | | |
+| M12.5 | Old password fails, new one works | Try logging in with each | Old: "Invalid credentials". New: works | | |
+| M12.6 | Reuse the link | Click the same email link again, try to reset again | "That reset link is invalid or has expired" | | |
+| M12.7 | Broken link | Visit `/reset-password` with no `?token=` | "Invalid reset link", with a button to request a new one | | |
+| M12.8 | Change password | Profile → Change password → correct current password, matching new ones → Update password | "Password changed. Your other devices have been logged out."; still logged in | | |
+| M12.9 | Wrong current password | Same, with the wrong current password | "Current password is incorrect" shown in the dialog - **not** logged out | | |
+| M12.10 | Other devices signed out | Log in as the same account in a second browser first, then change the password in the first | The second browser gets sent to `/login` on its next action | | |
 
 ### Phase 9 - deployment
 

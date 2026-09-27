@@ -34,6 +34,16 @@ const userSchema = new mongoose.Schema(
     // select: false means a normal query never loads the hash. Only login asks
     // for it explicitly with .select('+passwordHash').
     passwordHash: { type: String, required: true, select: false },
+    // Set whenever the password is changed (from the profile) or reset
+    // (forgot password). Any session token issued BEFORE this moment is
+    // rejected - see authService.userFromToken - which is what logs out
+    // every other device the instant the password changes.
+    passwordChangedAt: { type: Date, default: null },
+    // A SHA-256 hash of the one-time reset token emailed to the user (never
+    // the raw token itself - the same reasoning as passwordHash). Cleared
+    // once used, so a link can never be replayed.
+    resetPasswordTokenHash: { type: String, select: false, default: null },
+    resetPasswordExpires: { type: Date, select: false, default: null },
     lastSeen: { type: Date },
   },
   { timestamps: true },

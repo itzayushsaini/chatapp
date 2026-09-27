@@ -8,7 +8,16 @@ import { AppError } from '../utils/AppError.js'
 // therefore off under NODE_ENV=test, except in tests/rateLimits.test.js,
 // which switches them back on to prove they work. This can never be switched
 // off in development or production.
-const skip = () => isTest && process.env.ENABLE_RATE_LIMITS !== 'true'
+//
+// The end-to-end suite is a separate case: it deliberately runs the real
+// production server (NODE_ENV=production, to test the exact deployed
+// behaviour), but every spec file shares that one process and one IP for
+// the whole run, so their combined, entirely legitimate register/login
+// calls would trip a limit meant to catch abuse from a single caller.
+// e2e/start-server.js is the only place that sets this flag - a real
+// deployment never does.
+const skip = () =>
+  (isTest && process.env.ENABLE_RATE_LIMITS !== 'true') || process.env.E2E_DISABLE_RATE_LIMITS === 'true'
 
 function limiter({ windowMs, limit, message, perUser = false }) {
   return rateLimit({

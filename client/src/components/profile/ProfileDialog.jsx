@@ -1,5 +1,6 @@
 import { useId, useRef, useState } from 'react'
 
+import * as authApi from '../../api/auth.js'
 import { errorMessage } from '../../api/http.js'
 import { removeAvatar, updateProfile, uploadAvatar } from '../../api/profile.js'
 import { useAuth } from '../../context/AuthContext.jsx'
@@ -71,7 +72,7 @@ function ProfileForm({ onDone }) {
   }
 
   return (
-    <div className="space-y-5">
+    <div className="space-y-6">
       <PictureEditor />
 
       <form onSubmit={handleSubmit} className="space-y-4">
@@ -125,7 +126,93 @@ function ProfileForm({ onDone }) {
           </Button>
         </div>
       </form>
+
+      <hr className="border-slate-200" />
+      <ChangePasswordSection />
     </div>
+  )
+}
+
+// Its own form with its own Save button: unrelated fields and validation to
+// the profile form above, so a mistake in one never blocks the other.
+function ChangePasswordSection() {
+  const addToast = useChatStore((s) => s.addToast)
+  const [currentPassword, setCurrentPassword] = useState('')
+  const [newPassword, setNewPassword] = useState('')
+  const [confirm, setConfirm] = useState('')
+  const [error, setError] = useState('')
+  const [saving, setSaving] = useState(false)
+
+  function clear() {
+    setCurrentPassword('')
+    setNewPassword('')
+    setConfirm('')
+  }
+
+  async function handleSubmit(event) {
+    event.preventDefault()
+    setError('')
+    if (newPassword !== confirm) {
+      setError('New passwords do not match')
+      return
+    }
+
+    setSaving(true)
+    try {
+      const message = await authApi.changePassword(currentPassword, newPassword)
+      addToast(message)
+      clear()
+    } catch (err) {
+      setError(errorMessage(err))
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  return (
+    <form onSubmit={handleSubmit} className="space-y-4">
+      <h3 className="text-sm font-semibold text-slate-900">Change password</h3>
+      <TextField
+        label="Current password"
+        type="password"
+        value={currentPassword}
+        onChange={(e) => setCurrentPassword(e.target.value)}
+        autoComplete="current-password"
+        required
+      />
+      <TextField
+        label="New password"
+        type="password"
+        hint="8-72 characters"
+        value={newPassword}
+        onChange={(e) => setNewPassword(e.target.value)}
+        autoComplete="new-password"
+        minLength={8}
+        maxLength={72}
+        required
+      />
+      <TextField
+        label="Confirm new password"
+        type="password"
+        value={confirm}
+        onChange={(e) => setConfirm(e.target.value)}
+        autoComplete="new-password"
+        required
+      />
+
+      {error && (
+        <p className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700" role="alert">
+          {error}
+        </p>
+      )}
+
+      <div className="flex justify-end pt-1">
+        <Button type="submit" disabled={saving || !currentPassword || !newPassword}>
+          {saving && <Spinner light className="h-4 w-4" />}
+          Update password
+        </Button>
+      </div>
+    </form>
   )
 }
 

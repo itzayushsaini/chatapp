@@ -26,4 +26,19 @@ services:
       # ~600 MB binary during every build. Production never needs it.
       - key: MONGOMS_DISABLE_POSTINSTALL
         value: "1"
+      # Password-reset email (Brevo). Paste your API key and a sender email
+      # verified in Brevo's dashboard. Leave blank and forgot-password still
+      # answers normally, it just silently does not send anything.
+      - key: BREVO_API_KEY
+        sync: false
+      - key: EMAIL_FROM_ADDRESS
+        sync: false
+      - key: EMAIL_FROM_NAME
+        value: PingMe
+      # MUST be this service's real public URL, or reset links point at
+      # localhost. Render only knows the URL after the first deploy, so set
+      # this once you see it (Render's dashboard shows it at the top of the
+      # service page) - see docs/DEPLOY.md.
+      - key: APP_URL
+        sync: false
       # PORT is set by Render automatically; config/env.js reads it.

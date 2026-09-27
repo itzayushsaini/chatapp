@@ -30,3 +30,22 @@ export function logout(req, res) {
 export function me(req, res) {
   res.json({ user: selfUser(req.user) })
 }
+
+export async function forgotPassword(req, res) {
+  await authService.requestPasswordReset(req.valid.body.email)
+  // The exact same response whether or not the email exists.
+  res.json({ message: "If an account exists for that email, we've sent a password reset link." })
+}
+
+export async function resetPassword(req, res) {
+  await authService.resetPassword(req.valid.body)
+  res.json({ message: 'Password updated. Please log in.' })
+}
+
+export async function changePassword(req, res) {
+  const user = await authService.changePassword(req.user._id, req.valid.body)
+  // Reissue the cookie so THIS tab stays logged in - every other device
+  // is signed out on its next request (see authService.userFromToken).
+  startSession(res, user)
+  res.json({ message: 'Password changed. Your other devices have been logged out.' })
+}
