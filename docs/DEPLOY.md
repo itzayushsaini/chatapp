@@ -1,4 +1,4 @@
-# Deploying ChatApp
+# Deploying PingMe
 
 The whole app runs as **one Node.js service**: it serves the API, the
 Socket.IO connections and the built React files from the same address. This
@@ -41,7 +41,7 @@ Total cost: free. Time: about 20 minutes the first time.
    the Render region you will use (e.g. Singapore or Frankfurt) → Create.
 3. **Database Access** → *Add New Database User*
    - Authentication: password
-   - Username: e.g. `chatapp`
+   - Username: e.g. `pingme`
    - Password: click *Autogenerate* and **copy it somewhere safe**
    - Role: *Read and write to any database*
 4. **Network Access** → *Add IP Address* → *Allow access from anywhere*
@@ -53,14 +53,14 @@ Total cost: free. Time: about 20 minutes the first time.
    like:
 
    ```
-   mongodb+srv://chatapp:<password>@cluster0.abcde.mongodb.net/?retryWrites=true&w=majority
+   mongodb+srv://pingme:<password>@cluster0.abcde.mongodb.net/?retryWrites=true&w=majority
    ```
 
    - Replace `<password>` with the password from step 3.
-   - Add the database name **`chatapp`** after the `/`:
+   - Add the database name **`pingme`** after the `/`:
 
    ```
-   mongodb+srv://chatapp:YOUR_PASSWORD@cluster0.abcde.mongodb.net/chatapp?retryWrites=true&w=majority
+   mongodb+srv://pingme:YOUR_PASSWORD@cluster0.abcde.mongodb.net/pingme?retryWrites=true&w=majority
    ```
 
    This full string is your `MONGO_URI`. Treat it like a password.
@@ -73,14 +73,14 @@ The repository contains a `render.yaml` Blueprint, so Render configures itself.
 
 1. Sign up at <https://render.com> with your GitHub account.
 2. **New** → **Blueprint** → choose this repository → *Connect*.
-3. Render reads `render.yaml` and shows one service, `chatapp`. It asks for the
+3. Render reads `render.yaml` and shows one service, `pingme`. It asks for the
    one value it cannot know: **`MONGO_URI`**. Paste the string from step 1.5.
 4. Click **Apply**. The first build takes a few minutes:
    - `npm ci --include=dev` installs everything
    - `npm run build` builds the React app into `client/dist`
    - `npm start` starts the server with `NODE_ENV=production`
 5. When the log shows `MongoDB connected` and `Server listening`, open the URL
-   Render gives you (e.g. `https://chatapp-xxxx.onrender.com`).
+   Render gives you (e.g. `https://pingme-xxxx.onrender.com`).
 
 What `render.yaml` sets for you:
 

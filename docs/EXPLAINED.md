@@ -1,4 +1,4 @@
-# ChatApp, explained
+# PingMe, explained
 
 Plain-English notes on how each phase works and why each decision was made.
 Written so that any member of the team can answer questions about any file.

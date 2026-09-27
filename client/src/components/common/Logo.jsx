@@ -10,7 +10,7 @@ export default function Logo({ small = false }) {
       >
         <ChatIcon className={small ? 'h-5 w-5' : 'h-6 w-6'} />
       </span>
-      <span className={`font-bold text-slate-900 ${small ? 'text-lg' : 'text-2xl'}`}>ChatApp</span>
+      <span className={`font-bold text-slate-900 ${small ? 'text-lg' : 'text-2xl'}`}>PingMe</span>
     </span>
   )
 }

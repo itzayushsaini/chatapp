@@ -3,7 +3,7 @@
 # See docs/DEPLOY.md for the step-by-step guide.
 services:
   - type: web
-    name: chatapp
+    name: pingme
     runtime: node
     plan: free
     # Dev dependencies are needed to BUILD the client (Vite, Tailwind), so

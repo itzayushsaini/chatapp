@@ -1,4 +1,4 @@
-# ChatApp
+# PingMe
 
 A web-based, one-to-one, real-time text chat application.
 

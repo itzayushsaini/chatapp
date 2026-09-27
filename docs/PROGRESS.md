@@ -39,7 +39,7 @@ button.
 
 **Not yet committed.** Per the working agreement, commit only after the team
 confirms it works. Suggested: one commit per phase is no longer possible
-cleanly, so one commit "Phases 1-9: complete ChatApp" is fine.
+cleanly, so one commit "Phases 1-9: complete ChatApp (later renamed PingMe)" is fine.
 
 ---
 

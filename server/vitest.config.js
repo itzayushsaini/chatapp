@@ -11,7 +11,7 @@ export default defineConfig({
       NODE_ENV: 'test',
       // app.js never opens a database connection - tests/setup.js does that
       // against an in-memory MongoDB - so this only has to satisfy validation.
-      MONGO_URI: 'mongodb://127.0.0.1:27017/chatapp-test',
+      MONGO_URI: 'mongodb://127.0.0.1:27017/pingme-test',
       JWT_SECRET: 'test-secret-that-is-at-least-32-characters-long',
     },
   },

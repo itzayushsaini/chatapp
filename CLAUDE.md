@@ -1,4 +1,4 @@
-# CLAUDE.md — ChatApp (Real-time chat, MERN + Socket.IO)
+# CLAUDE.md — PingMe (Real-time chat, MERN + Socket.IO)
 
 ## What this project is
 
@@ -35,7 +35,7 @@ Notes:
 ## Folder structure
 
 ```
-chat-app/
+pingme/
   CLAUDE.md
   README.md
   package.json              # npm workspaces + root scripts
