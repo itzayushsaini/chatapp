@@ -2,7 +2,8 @@ import { Fragment, useLayoutEffect, useRef, useState } from 'react'
 
 import { useChatStore } from '../../store/useChatStore.js'
 import { dayLabel, isSameDay } from '../../utils/time.js'
-import { ArrowDownIcon } from '../common/Icons.jsx'
+import Dialog from '../common/Dialog.jsx'
+import { ArrowDownIcon, DownloadIcon } from '../common/Icons.jsx'
 import Spinner from '../common/Spinner.jsx'
 import MessageBubble from './MessageBubble.jsx'
 
@@ -19,6 +20,7 @@ export default function MessageList({ conversationId, messages, hasMore, myId, o
   const restoreFrom = useRef(null)
   const [loadingOlder, setLoadingOlder] = useState(false)
   const [showNewPill, setShowNewPill] = useState(false)
+  const [viewing, setViewing] = useState(null) // the photo open full size
 
   // Runs after React updates the DOM but BEFORE the browser paints, so any
   // scroll adjustment is invisible - no jump.
@@ -68,6 +70,14 @@ export default function MessageList({ conversationId, messages, hasMore, myId, o
     }
   }
 
+  // Photos and videos only get their real height once they load, AFTER the
+  // scroll-to-bottom above has run. If the user was at the bottom, keep them
+  // there.
+  function handleMediaLoad() {
+    const el = listRef.current
+    if (el && nearBottom.current) el.scrollTop = el.scrollHeight
+  }
+
   function scrollToBottom() {
     const el = listRef.current
     el.scrollTo({ top: el.scrollHeight, behavior: 'smooth' })
@@ -112,7 +122,13 @@ export default function MessageList({ conversationId, messages, hasMore, myId, o
                     </span>
                   </li>
                 )}
-                <MessageBubble message={m} mine={m.senderId === myId} onRetry={onRetry} />
+                <MessageBubble
+                  message={m}
+                  mine={m.senderId === myId}
+                  onRetry={onRetry}
+                  onOpenImage={setViewing}
+                  onMediaLoad={handleMediaLoad}
+                />
               </Fragment>
             )
           })}
@@ -129,6 +145,24 @@ export default function MessageList({ conversationId, messages, hasMore, myId, o
           <ArrowDownIcon className="h-4 w-4" />
         </button>
       )}
+
+      <Dialog open={Boolean(viewing)} onClose={() => setViewing(null)} title={viewing?.name ?? ''} wide>
+        {viewing && (
+          <div className="flex flex-col items-center gap-3">
+            <img src={viewing.url} alt={viewing.name} className="max-h-[70vh] max-w-full rounded-lg object-contain" />
+            {!viewing.local && (
+              <a
+                href={viewing.url}
+                download={viewing.name}
+                className="inline-flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium text-blue-700 hover:bg-blue-50 focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:outline-none"
+              >
+                <DownloadIcon className="h-4 w-4" />
+                Download
+              </a>
+            )}
+          </div>
+        )}
+      </Dialog>
     </div>
   )
 }

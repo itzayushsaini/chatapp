@@ -51,6 +51,9 @@ erDiagram
     USER ||--o{ FRIENDSHIP : "requester / recipient"
     USER ||--o{ MESSAGE : sends
     CONVERSATION ||--o{ MESSAGE : contains
+    USER ||--o{ ATTACHMENT : uploads
+    CONVERSATION ||--o{ ATTACHMENT : "belongs to"
+    MESSAGE |o--o| ATTACHMENT : "has at most one"
     USER }o--o{ CONVERSATION : "participants (exactly 2)"
 
     USER {
@@ -60,6 +63,9 @@ erDiagram
         string email UK
         string passwordHash "select: false"
         date lastSeen
+        string bio "0-160 chars"
+        ObjectId avatarFileId "GridFS, or null"
+        date usernameChangedAt
     }
     FRIENDSHIP {
         ObjectId _id
@@ -79,14 +85,27 @@ erDiagram
         ObjectId _id
         ObjectId conversation
         ObjectId sender
-        string text "1-2000 chars"
+        string text "0-2000 chars"
+        ObjectId attachment "or null"
         string clientId "UUID from browser"
+    }
+    ATTACHMENT {
+        ObjectId _id
+        ObjectId uploader
+        ObjectId conversation
+        ObjectId fileId "bytes in GridFS"
+        string name
+        string mimeType "detected from bytes"
+        number size
+        string kind "image | video | file"
+        ObjectId message "null until sent"
     }
 ```
 
 Unique indexes that enforce rules at database level:
 `User.username`, `User.email`, `Friendship.pairKey`, `Conversation.pairKey`,
-`Message.(sender, clientId)`.
+`Message.(sender, clientId)`. File bytes live in GridFS (`uploads.files` +
+`uploads.chunks`), referenced by `User.avatarFileId` and `Attachment.fileId`.
 
 ---
 
@@ -135,6 +154,38 @@ sequenceDiagram
 If any step before the save fails, nothing is emitted and the ack is
 `{ ok: false, error }`, so a message never appears on screen without being
 stored.
+
+---
+
+## 4b. Sending a file
+
+```mermaid
+sequenceDiagram
+    autonumber
+    participant A as Aman's tab
+    participant E as Express
+    participant S as Socket handler
+    participant G as MongoDB + GridFS
+    participant B as Priya's tabs
+
+    A->>A: bubble "uploading" (blob: preview), clientId = randomUUID()
+    A->>E: POST /api/conversations/:id/attachments
+    E->>G: assertParticipant + assertFriends (BEFORE reading the file)
+    E->>E: multer (memory, 25 MB cap) + magic-byte type check + size per kind
+    E->>G: save bytes (GridFS) + Attachment {message: null}
+    E-->>A: 201 {attachment} - progress bar reached 100%
+    A->>S: message:send {conversationId, text, clientId, attachmentId}
+    S->>G: assertParticipant, assertFriends
+    S->>G: claim: findOneAndUpdate({_id, uploader: me, conversation, message: null})
+    S->>G: save Message + lastMessage {attachment: {kind, name}}
+    S-->>B: message:new (with attachment url)
+    S->>A: ack {ok: true, message}
+    B->>E: GET /api/attachments/:id (Range for video)
+    E->>G: participant check, then stream
+```
+
+A stranger is refused at step 3, before a single byte of their file is read.
+Unsent uploads are deleted after an hour.
 
 ---
 

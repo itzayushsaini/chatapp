@@ -1,15 +1,18 @@
-import { useEffect } from 'react'
+import { useEffect, useState } from 'react'
 
+import { uploadAttachment } from '../../api/conversations.js'
 import { unfriend } from '../../api/friends.js'
 import { errorMessage } from '../../api/http.js'
 import { useAuth } from '../../context/AuthContext.jsx'
 import { useSocket } from '../../context/SocketContext.jsx'
 import { useChatStore } from '../../store/useChatStore.js'
+import { kindOf } from '../../utils/files.js'
 import { lastSeenLabel } from '../../utils/time.js'
 import Avatar from '../common/Avatar.jsx'
 import Button from '../common/Button.jsx'
 import { AlertIcon, BackIcon, UserMinusIcon } from '../common/Icons.jsx'
 import Spinner from '../common/Spinner.jsx'
+import UserProfileDialog from '../profile/UserProfileDialog.jsx'
 import MessageInput from './MessageInput.jsx'
 import MessageList from './MessageList.jsx'
 
@@ -35,11 +38,14 @@ export default function ChatWindow({ conversationId }) {
   // callback fire with an error if no ack arrives in time - for example if
   // the connection dropped. The message then shows "Failed - Retry".
   function emit(message) {
+    const payload = { conversationId, text: message.text, clientId: message.clientId }
+    if (message.attachmentId) payload.attachmentId = message.attachmentId
+
     socket
       .timeout(ACK_TIMEOUT_MS)
       .emit(
         'message:send',
-        { conversationId, text: message.text, clientId: message.clientId },
+        payload,
         (err, ack) => {
           if (!err && ack?.ok) {
             store().confirmMessage(ack.message)
@@ -51,25 +57,68 @@ export default function ChatWindow({ conversationId }) {
       )
   }
 
+  // A message with a file goes in two steps: upload the file (REST, with a
+  // progress bar), then send the message pointing at it (socket). If the
+  // upload already worked, a Retry skips straight to step 2.
+  async function deliver(message) {
+    const { clientId } = message
+    if (message.file && !message.attachmentId) {
+      try {
+        const attachment = await uploadAttachment(conversationId, message.file, (progress) =>
+          store().updatePendingMessage(conversationId, clientId, { progress }),
+        )
+        message = { ...message, attachmentId: attachment.id }
+        store().updatePendingMessage(conversationId, clientId, {
+          attachmentId: attachment.id,
+          status: 'sending',
+        })
+      } catch (err) {
+        store().setMessageStatus(conversationId, clientId, 'failed')
+        store().addToast(errorMessage(err), 'error')
+        return
+      }
+    }
+    emit(message)
+  }
+
   // Optimistic sending: show the bubble immediately, then send. The clientId
   // is made here, in the browser, so a Retry can reuse it and the server
   // recognises the retry instead of saving the message twice.
-  function send(text) {
+  function send(text, file) {
     const message = {
       clientId: crypto.randomUUID(),
       conversationId,
       senderId: user.id,
       text,
       createdAt: new Date().toISOString(),
-      status: 'sending',
+      status: file ? 'uploading' : 'sending',
+    }
+    if (file) {
+      message.file = file
+      message.progress = 0
+      // What the bubble shows until the server has the file: the file itself,
+      // from a temporary blob: URL. `local` marks it for clean-up later.
+      message.attachment = {
+        name: file.name,
+        size: file.size,
+        kind: kindOf(file),
+        url: URL.createObjectURL(file),
+        local: true,
+      }
     }
     store().addPendingMessage(message)
-    emit(message)
+    deliver(message)
   }
 
   function retry(message) {
-    store().setMessageStatus(conversationId, message.clientId, 'sending')
-    emit(message)
+    // Read the latest copy: the upload may have finished since this render.
+    const current =
+      store().messagesByConversation[conversationId]?.messages.find(
+        (m) => m.clientId === message.clientId && !m.id,
+      ) ?? message
+    const status = current.file && !current.attachmentId ? 'uploading' : 'sending'
+    store().updatePendingMessage(conversationId, current.clientId, { status, progress: 0 })
+    deliver(current)
   }
 
   async function handleUnfriend() {
@@ -116,6 +165,7 @@ export default function ChatWindow({ conversationId }) {
 
 function ChatHeader({ friend, onBack, onUnfriend }) {
   const presence = useChatStore((s) => s.presence[friend.id])
+  const [profileOpen, setProfileOpen] = useState(false)
 
   const status = presence?.online
     ? 'Online'
@@ -134,9 +184,28 @@ function ChatHeader({ friend, onBack, onUnfriend }) {
       >
         <BackIcon />
       </button>
-      <Avatar user={friend} online={presence?.online ?? false} />
+      {/* The picture and the name both open their profile. The picture is
+          skipped by Tab (tabIndex -1) so keyboard users have one stop. */}
+      <button
+        type="button"
+        tabIndex={-1}
+        onClick={() => setProfileOpen(true)}
+        className="shrink-0 rounded-full"
+        aria-hidden="true"
+      >
+        <Avatar user={friend} online={presence?.online ?? false} />
+      </button>
       <div className="min-w-0 flex-1">
-        <h2 className="truncate font-semibold text-slate-900">{friend.displayName}</h2>
+        <h2 className="truncate font-semibold text-slate-900">
+          <button
+            type="button"
+            onClick={() => setProfileOpen(true)}
+            className="max-w-full truncate rounded text-left hover:underline focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:outline-none"
+            title="View profile"
+          >
+            {friend.displayName}
+          </button>
+        </h2>
         <p className={`truncate text-xs ${presence?.online ? 'text-emerald-600' : 'text-slate-500'}`}>
           {status}
         </p>
@@ -150,6 +219,12 @@ function ChatHeader({ friend, onBack, onUnfriend }) {
       >
         <UserMinusIcon />
       </button>
+      <UserProfileDialog
+        user={friend}
+        status={status}
+        open={profileOpen}
+        onClose={() => setProfileOpen(false)}
+      />
     </header>
   )
 }

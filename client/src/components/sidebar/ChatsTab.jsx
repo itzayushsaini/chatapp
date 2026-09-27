@@ -2,6 +2,7 @@ import { useState } from 'react'
 
 import { useAuth } from '../../context/AuthContext.jsx'
 import { useChatStore } from '../../store/useChatStore.js'
+import { attachmentLabel } from '../../utils/files.js'
 import { previewTime } from '../../utils/time.js'
 import Avatar from '../common/Avatar.jsx'
 import Button from '../common/Button.jsx'
@@ -55,7 +56,11 @@ function FriendRow({ item }) {
   const open = useChatStore((s) => s.setActiveConversation)
 
   const preview = lastMessage
-    ? `${lastMessage.senderId === user.id ? 'You: ' : ''}${lastMessage.text}`
+    ? `${lastMessage.senderId === user.id ? 'You: ' : ''}${
+        lastMessage.attachment
+          ? attachmentLabel(lastMessage.attachment, lastMessage.text)
+          : lastMessage.text
+      }`
     : 'Say hello!'
 
   return (

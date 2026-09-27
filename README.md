@@ -16,6 +16,10 @@ they **accept**. Privacy is enforced on the server, not just hidden in the UI.
 - Exact-username search, friend requests (accept, decline, cancel), unfriend
 - Real-time one-to-one messaging with optimistic sending, retry and no duplicates
 - Online / last-seen presence, visible to friends only
+- Profiles: photo, bio, display name, and username changes (once every 30 days)
+- Attachments: photos, videos and documents, previewed before sending, with
+  upload progress; every file checked by its real contents and every download
+  permission-checked
 - Unread badges, date separators, infinite scroll back through history
 - Automatic reconnection with a "Reconnecting…" banner and state refetch
 - Responsive: list and chat side by side on desktop, one at a time on mobile
@@ -24,8 +28,8 @@ they **accept**. Privacy is enforced on the server, not just hidden in the UI.
 
 | Layer | Choice |
 |---|---|
-| Server | Node.js, Express 5, Mongoose, Socket.IO 4, zod |
-| Database | MongoDB |
+| Server | Node.js, Express 5, Mongoose, Socket.IO 4, zod, multer |
+| Database | MongoDB (files in GridFS) |
 | Client | React 19, Vite, Tailwind CSS 4, React Router, zustand, axios |
 | Auth | JWT in an httpOnly cookie, bcryptjs password hashing |
 | Security | helmet, express-rate-limit, zod validation on every input |
@@ -60,7 +64,7 @@ node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
 cookie stays first-party - exactly as it behaves in production.
 
 **Demo accounts** (after `npm run seed`): `aman`, `priya`, `rahul`, `sneha`,
-all with the password shown by the seed command. Aman already has two friends,
+all with the password shown by the seed command (demo users also get bios). Aman already has two friends,
 a conversation with Priya and a pending request from Sneha. Open two different
 browsers (or a normal and a private window) to chat as two people.
 

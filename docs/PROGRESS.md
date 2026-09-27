@@ -2,7 +2,7 @@
 
 A new session should be able to read this file and carry on from it.
 
-Last updated: 2026-09-26
+Last updated: 2026-09-27
 
 ---
 
@@ -19,8 +19,17 @@ Last updated: 2026-09-26
 | 7 | Client: sidebar tabs (Chats, Requests, Add Friend) | **Done** |
 | 8 | Client: chat window, optimistic sending, socket events, reconnection | **Done** |
 | 9 | Polish: Playwright end-to-end tests, seed script, deployment, diagrams, final docs | **Done** - live deployment still to be performed by the team (needs your own Atlas + Render accounts, see `docs/DEPLOY.md`) |
+| 10 | Profiles: picture (GridFS), bio, display name, username change (once per 30 days), live `user:updated` | **Done** |
+| 11 | Attachments: photos, videos, documents - upload, magic-byte type check, permission-checked download with Range, cleanup, chat UI | **Done** |
 
-**Verification (2026-09-26):** `npm test` 88/88 pass (run twice, no flakes),
+**Verification (2026-09-27, after Phases 10-11):** `npm test` 175/175 pass,
+`npm run test:e2e` 5/5 pass (run twice), lint clean in both workspaces,
+`npm run build` succeeds, `npm audit --omit=dev` 0 vulnerabilities. Also
+checked by hand against the real Atlas database: bio saved, a picture cropped
+to 256×256 and served from GridFS, a photo with caption and a PDF sent and
+downloaded with the right headers, sidebar previews.
+
+**Earlier verification (2026-09-26):** `npm test` 88/88 pass (run twice, no flakes),
 `npm run test:e2e` 3/3 pass (run twice), `npm run lint` clean in both
 workspaces, `npm run build` succeeds, `npm audit --omit=dev` 0
 vulnerabilities. Also checked by hand in a browser against the production
@@ -64,6 +73,23 @@ cleanly, so one commit "Phases 1-9: complete ChatApp" is fine.
   MessageInput, EmptyChat)
 - `utils/` - `time.js`, `avatar.js`
 
+### Phases 10-11 additions
+- Server: `models/Attachment.js`; `services/profileService.js`,
+  `attachmentService.js`, `storageService.js` (GridFS - the only file that
+  knows where bytes live); `middleware/upload.js` (multer, memory);
+  `utils/fileType.js` (magic bytes), `utils/sendStoredFile.js` (streaming +
+  Range); `controllers/attachments.controller.js`,
+  `routes/attachments.routes.js`; new routes in `users.routes.js` and
+  `conversations.routes.js`; hourly cleanup in `server.js`; CSP `blob:` in
+  `app.js`.
+- Client: `api/profile.js`, `utils/files.js`, `utils/image.js`,
+  `components/common/Dialog.jsx`, `components/profile/ProfileDialog.jsx` and
+  `UserProfileDialog.jsx`; attachments in `MessageInput`, `MessageBubble`,
+  `MessageList` (photo viewer), `ChatWindow` (two-step send, retry).
+- Tests: `profile.test.js`, `attachments.test.js`, `fileType.test.js`, new
+  cases in `socket.test.js`; `e2e/profile-attachments.spec.js`,
+  `e2e/helpers.js`.
+
 ### Tests and deployment
 - `server/tests/` - `health`, `auth`, `rateLimits`, `friends`,
   `conversations`, `socket` + `setup.js`, `helpers.js`
@@ -86,8 +112,8 @@ cleanly, so one commit "Phases 1-9: complete ChatApp" is fine.
 4. **Request `createdAt` = the Friendship's `updatedAt`.** A declined request
    that is sent again reuses the same document, and its last update is when it
    became pending.
-5. **`lastMessage` is sent to clients as `{ text, senderId, createdAt }`** (the
-   database field is `sender`), matching the message payload's `senderId`.
+5. **`lastMessage` is sent to clients as `{ text, senderId, createdAt, attachment }`**
+   (the database field is `sender`), matching the message payload's `senderId`.
 6. **Unread counts are client-only** and reset on reload - the spec has no
    server "read" state. No read receipts were added.
 7. **History needs `assertParticipant` only**, not `assertFriends`, so an
@@ -106,8 +132,25 @@ cleanly, so one commit "Phases 1-9: complete ChatApp" is fine.
 12. **Seed** never deletes; it stops if the demo users already exist.
 13. **UI.png** was used for the look only (blue `#2563EB`, Inter, light
     surfaces, bubbles). Its extra screens - Google login, forgot password,
-    calls, media, profile/settings pages, dark mode, landing page - are not in
-    the spec and were not built.
+    calls, settings page, dark mode, landing page - are not in the spec and
+    were not built. (Profiles and media were added later, in Phases 10-11.)
+14. **Phases 10-11 were requested by the team after Phase 9** and change
+    three original rules (username immutable, no image uploads, text-only
+    messages). `CLAUDE.md` was updated to match; decisions taken with the
+    team: GridFS storage, username change once per 30 days, picture and bio
+    visible to anyone who searches the exact username.
+15. **Display name editing** is part of the profile dialog (it is part of the
+    profile, though not named in the request).
+16. **Profile pictures are cropped to 256×256 WebP in the browser**, so the
+    server needs no image library. An animated GIF becomes a still picture.
+17. **Unsent uploads are deleted after 1 hour.** Messages (and so sent files)
+    are never deleted - the spec has no message deletion.
+18. **`tests/setup.js` now wipes every collection**, including GridFS's
+    `uploads.files` / `uploads.chunks`, which have no mongoose model.
+19. **Root cause of a login "Network error" in development:** `node --watch`
+    watched `node_modules` too, and something (likely OneDrive) touching files
+    there restarted the server mid-request. `npm run dev` now uses
+    `--watch-path=src`.
 
 ---
 
@@ -127,18 +170,26 @@ cleanly, so one commit "Phases 1-9: complete ChatApp" is fine.
 4. **Single instance only** - presence is in memory (see README, Scaling note).
 5. **Render free tier sleeps** after ~15 minutes idle; first request takes up
    to a minute.
-6. **No MongoDB installed locally yet.** Install MongoDB Community Server, or
-   use an Atlas string in `server/.env`, to run `npm run dev` and
-   `npm run seed`. (Tests and e2e do not need it.)
+6. **Development database.** `server/.env` points at the team's Atlas cluster
+   (set up 2026-09-26), so `npm run dev` and `npm run seed` work without a
+   local MongoDB. Tests and e2e use an in-memory MongoDB. Rotate the Atlas
+   user's password before deploying - it was shared in a chat once.
+7. **Storage size.** The free Atlas cluster holds 512 MB in total, shared by
+   all data and files. Fine for a demo or viva; heavy video use needs a paid
+   tier or object storage (only `storageService.js` would change).
+8. **Uploads are held in memory** while being checked (max 25 MB each, 20 per
+   hour per user). Fine for one small instance.
+9. **An old username becomes available** to others once changed (by design;
+   the user is warned).
 
 ---
 
 ## How to verify everything
 
 1. `npm install`
-2. `npm test` - 88 pass
+2. `npm test` - 175 pass
 3. `npm run lint` - no errors
-4. `npx playwright install chromium` (once), then `npm run test:e2e` - 3 pass
+4. `npx playwright install chromium` (once), then `npm run test:e2e` - 5 pass
 5. `cp server/.env.example server/.env`, fill in `MONGO_URI` and `JWT_SECRET`
 6. `npm run seed`, then `npm run dev`, open <http://localhost:5173>
 7. Work through the manual tables in `docs/TEST_CASES.md`

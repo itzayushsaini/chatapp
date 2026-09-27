@@ -2,12 +2,12 @@
 
 Kept up to date at the end of every phase.
 
-- **Automated** cases run with `npm test` (server: 88 tests) and
-  `npm run test:e2e` (Playwright: 3 browser tests).
+- **Automated** cases run with `npm test` (server: 175 tests) and
+  `npm run test:e2e` (Playwright: 5 browser tests).
 - **Manual** cases are the ones a person checks in the browser. Fill in the
   Actual and Result columns when you run them.
 
-Last full run: 2026-09-26 - **88/88 server tests pass, 3/3 end-to-end tests
+Last full run: 2026-09-27 - **175/175 server tests pass, 5/5 end-to-end tests
 pass, lint clean.**
 
 ---
@@ -116,6 +116,72 @@ pass, lint clean.**
 | A5.22 | Cancel | Recipient gets `friend:request:cancelled { requestId }` |
 | A5.23 | Unfriend | Both get `friend:removed` with the other's id |
 
+### Phase 10 - `server/tests/profile.test.js`
+
+| ID | Case | Expected |
+|---|---|---|
+| A10.1 | Update display name and bio | 200 SelfUser with trimmed values; `/auth/me` shows them |
+| A10.2 | Clear the bio | `bio: ''` |
+| A10.3-7 | Bio > 160; empty or > 40 char display name; invalid username; operator object | 400 each |
+| A10.8 | Body includes `email` / `passwordHash` | 200, email unchanged (fields stripped) |
+| A10.9 | Not logged in | 401 |
+| A10.10 | Change username | 200; `usernameChangeAllowedAt` ~30 days ahead; login with new name works; search finds new name, old name 404 |
+| A10.11 | Username taken (any case) | 409 `Username already taken` |
+| A10.12 | Second change within 30 days / after 31 days | 429 with the date / 200 |
+| A10.13 | Sending my current username | Not a change; cooldown not started |
+| A10.14 | Two changes at the same moment | One 200, one 429 |
+| A10.15 | Upload a picture | 200, `avatarUrl` = `/api/users/:id/avatar?v=<id>`; another user loads the exact bytes, `image/png`, cached `immutable` |
+| A10.16 | Search by a stranger | Shows bio and avatarUrl, never email |
+| A10.17 | Replace the picture | New URL; only one file left in GridFS |
+| A10.18 | Remove the picture | `avatarUrl: null`; GET 404; no files left |
+| A10.19-20 | HTML named .png; a PDF | 400; nothing stored |
+| A10.21 | Picture over 2 MB | 413 `File is too large` |
+| A10.22 | No file attached | 400 |
+| A10.23 | Load a picture without login | 401 |
+
+### Phase 11 - `server/tests/attachments.test.js`, `server/tests/fileType.test.js`
+
+| ID | Case | Expected |
+|---|---|---|
+| A11.1 | Upload a photo | 201 `{ attachment: { id, name, mimeType, size, kind, url } }` |
+| A11.2-5 | PDF, DOCX, TXT, MP4 | 201 with the right `mimeType` and `kind` |
+| A11.6 | Name `रिपोर्ट.pdf` | Stored and returned unchanged |
+| A11.7-9 | HTML named .jpg; SVG; ZIP named .exe | 400 `This file type is not supported`; nothing stored |
+| A11.10 | Photo over 10 MB | 413; nothing stored |
+| A11.11 | 12 MB video / video over 25 MB | 201 / 413 |
+| A11.12 | Outsider uploads into the chat | 404; nothing stored (checked before the body is read) |
+| A11.13 | After unfriending | 403 |
+| A11.14 | No file | 400 |
+| A11.15 | No login | 401 |
+| A11.16 | Both participants download a sent file | 200, identical bytes |
+| A11.17 | Photo / PDF download headers | `inline` / `attachment; filename="notes.pdf"` |
+| A11.18 | PDF named `evil.html` | `Content-Type: application/pdf`, downloaded (not `text/html`) |
+| A11.19 | Outsider downloads a sent file | 404 `File not found` |
+| A11.20 | Unsent upload | Uploader 200, the other participant 404 |
+| A11.21 | `Range: bytes=4-11` | 206, `Content-Range: bytes 4-11/<size>`, exactly those bytes |
+| A11.22 | Range past the end | 416, `Content-Range: bytes */<size>` |
+| A11.23 | Malformed / unknown id | 400 / 404 |
+| A11.24 | Cleanup of unsent uploads | Deletes the unsent one (document and bytes), keeps the sent one |
+| A11.25 | Cleanup with default age | A fresh unsent upload is kept |
+| A11.26-37 | `detectFileType` recognises JPEG, PNG, GIF, WebP, MP4, MOV, WebM, PDF, DOCX, ZIP, XLS, UTF-8 TXT | Correct `{ mime, kind }` |
+| A11.38-44 | `detectFileType` refuses HTML (as .jpg or .html), SVG, ZIP as .exe, binary as .txt, HEIC, empty file | `null` |
+| A11.45 | PDF bytes named .html | Labelled `application/pdf` |
+| A11.46-55 | `parseRange` for full, open-ended, suffix, clipped, past-the-end, reversed, empty, wrong unit and multi-range headers | Correct range or `'invalid'` |
+
+### Phase 10 / 11 - `server/tests/socket.test.js`
+
+| ID | Case | Expected |
+|---|---|---|
+| A11.56 | Send a photo with caption | Ack includes the attachment; recipient's `message:new` identical; recipient can download; history includes it |
+| A11.57 | File with no text | Ack ok, `text: ''`; friends list preview `attachment: { kind: 'file', name }` |
+| A11.58 | Empty text and no attachment | `Message is empty` |
+| A11.59 | Same attachment for two messages | Second: `Attachment not found`; one message stored |
+| A11.60 | Someone else's upload | `Attachment not found` |
+| A11.61 | Upload moved to another conversation | `Attachment not found`; the other friend cannot download it |
+| A11.62 | Retry with same clientId | Identical ack, one message |
+| A10.24 | `user:updated` after a profile edit | Friend and pending requester get PublicUser; my other tab gets SelfUser (with email); stranger gets nothing |
+| A10.25 | `user:updated` after a picture change | Contains the new `avatarUrl` |
+
 ---
 
 ## Automated - end-to-end (`npm run test:e2e`)
@@ -128,6 +194,8 @@ in-memory database.
 | E1 | Logged-out visit to `/` and to an unknown route | Both land on `/login` |
 | E2 | Full flow with two browser contexts | Register both; partial search "No user found"; exact search (any case) finds; request arrives live with toast and badge; accept; requester gets "accepted" toast; open chat shows Online; message with `<b>` renders as text and is marked Sent; unread badge on the other side; reply arrives live; after refresh still logged in with history; closing one side shows "Last seen today" |
 | E3 | Logout | Back to `/login`; `/` redirects to `/login`; logging in again works |
+| E4 | Edit my profile (`e2e/profile-attachments.spec.js`) | Choosing a photo saves it (footer shows it, decoded); name, bio and username saved after confirming; survives a reload; username field then locked with the date |
+| E5 | Files and live profile updates, two browser contexts | Chosen photo previews from a blob: URL under the production CSP; photo with caption arrives decoded from `/api/attachments/:id`; sidebar shows "📷 Our poster"; click opens full size, Escape closes; PDF card downloads as `application/pdf` attachment; a bio edit is visible in the other person's profile view without reload |
 
 ---
 
@@ -197,6 +265,35 @@ different browsers, or one normal and one private window.
 | M5.12 | Reconnect refetch | Stop the server for ~10 s, then start it again | "Reconnecting..." banner appears, then disappears; friends, requests and the open chat reload | | |
 | M5.13 | Mobile layout | DevTools device mode, 375 px wide | List only; opening a chat shows chat with back button | | |
 | M5.14 | Keyboard only | Tab through the app | Visible focus ring everywhere; arrow keys switch sidebar tabs | | |
+
+### Phase 10 - profiles
+
+| ID | Scenario | Steps | Expected | Actual | Result |
+|---|---|---|---|---|---|
+| M10.1 | Open my profile | Click my name in the sidebar footer | "Your profile" dialog; Escape and clicking outside close it | | |
+| M10.2 | Add a photo | Add photo → pick a large phone photo | Saved at once; shows as a square everywhere I appear | | |
+| M10.3 | Friend sees it live | Friend has the chat open | My photo appears in their sidebar and chat header without refreshing | | |
+| M10.4 | Remove photo | Remove photo | Back to initials, everywhere | | |
+| M10.5 | Bio | Type 160+ characters | Stops at 160; counter shows 160 / 160; Save | | |
+| M10.6 | Friend's profile | Click a friend's name in the chat header | Their photo, name, @username and bio | | |
+| M10.7 | Change username | Change it, confirm the warning | Saved; login works with the new name; searching the old name gives "No user found" | | |
+| M10.8 | Cooldown | Open the profile again | Username field disabled, "You can change your username again on ..." | | |
+| M10.9 | Taken username | Try another account's username | "Username already taken" | | |
+
+### Phase 11 - attachments
+
+| ID | Scenario | Steps | Expected | Actual | Result |
+|---|---|---|---|---|---|
+| M11.1 | Photo with caption | 📎 → pick a photo → type a caption → Enter | Preview above input; bubble shows progress, then the photo and caption; tick | | |
+| M11.2 | Full size | Click the photo | Opens large in a dialog with Download | | |
+| M11.3 | Video | Send an MP4 under 25 MB | Plays inline; seeking works (Range) | | |
+| M11.4 | Document | Send a PDF / DOCX | Card with name and size; click downloads with the right name | | |
+| M11.5 | Too large | Pick a 30 MB video | "Videos can be at most 25 MB", nothing uploaded | | |
+| M11.6 | Wrong type | Rename a .html file to .jpg and pick it | Server refuses: "This file type is not supported" | | |
+| M11.7 | Sidebar preview | After sending | "You: 📷 caption", "You: 📄 notes.pdf" | | |
+| M11.8 | Privacy | Copy the photo's link, open it logged in as a third user | 404 | | |
+| M11.9 | Upload failure + retry | Stop the server mid-upload, then restart and click Retry | Bubble shows "Not sent · Retry"; Retry sends it once | | |
+| M11.10 | Mobile | 375 px wide | Photo fits the bubble; picker works | | |
 
 ### Phase 9 - deployment
 

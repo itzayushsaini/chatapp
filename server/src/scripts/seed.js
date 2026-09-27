@@ -18,10 +18,10 @@ import { pairKey } from '../utils/pairKey.js'
 const DEMO_PASSWORD = 'password123'
 
 const DEMO_USERS = [
-  { username: 'aman', displayName: 'Aman Verma' },
-  { username: 'priya', displayName: 'Priya Sharma' },
-  { username: 'rahul', displayName: 'Rahul Singh' },
-  { username: 'sneha', displayName: 'Sneha Gupta' },
+  { username: 'aman', displayName: 'Aman Verma', bio: 'Final-year CSE. Building ChatApp.' },
+  { username: 'priya', displayName: 'Priya Sharma', bio: 'Frontend and UI design 🎨' },
+  { username: 'rahul', displayName: 'Rahul Singh', bio: '' },
+  { username: 'sneha', displayName: 'Sneha Gupta', bio: 'Coffee, code, repeat.' },
 ]
 
 async function befriend(a, b) {

@@ -70,7 +70,14 @@ function withLastMessage(friends, message) {
     if (current && new Date(current) > new Date(message.createdAt)) return f
     return {
       ...f,
-      lastMessage: { text: message.text, senderId: message.senderId, createdAt: message.createdAt },
+      lastMessage: {
+        text: message.text,
+        senderId: message.senderId,
+        createdAt: message.createdAt,
+        attachment: message.attachment
+          ? { kind: message.attachment.kind, name: message.attachment.name }
+          : null,
+      },
     }
   })
   return sortFriends(updated)
@@ -160,6 +167,20 @@ export const useChatStore = create((set, get) => ({
       return {
         friends: s.friends.filter((f) => f.friend.id !== userId),
         activeConversationId: wasOpen ? null : s.activeConversationId,
+      }
+    }),
+
+  // A friend (or someone with a pending request) changed their name, bio or
+  // picture - update every place their public profile appears.
+  updateUser: (user) =>
+    set((s) => {
+      const patch = (u) => (u.id === user.id ? { ...u, ...user } : u)
+      return {
+        friends: s.friends.map((f) => (f.friend.id === user.id ? { ...f, friend: patch(f.friend) } : f)),
+        requests: {
+          incoming: s.requests.incoming.map((r) => ({ ...r, user: patch(r.user) })),
+          outgoing: s.requests.outgoing.map((r) => ({ ...r, user: patch(r.user) })),
+        },
       }
     }),
 
@@ -289,20 +310,34 @@ export const useChatStore = create((set, get) => ({
   // Step 2a: the server saved it. The saved copy (same clientId, now with an
   // id and no status) replaces the pending bubble.
   confirmMessage: (message) =>
-    set((s) => ({
-      ...patchConversation(s, message.conversationId, (e) => ({
-        messages: mergeMessages(e.messages, [message]),
+    set((s) => {
+      // The pending bubble showed the chosen file from a temporary blob: URL.
+      // The saved copy points at the server, so free that memory.
+      const pending = s.messagesByConversation[message.conversationId]?.messages.find(
+        (m) => m.clientId === message.clientId && !m.id,
+      )
+      if (pending?.attachment?.local) URL.revokeObjectURL(pending.attachment.url)
+      return {
+        ...patchConversation(s, message.conversationId, (e) => ({
+          messages: mergeMessages(e.messages, [message]),
+        })),
+        friends: withLastMessage(s.friends, message),
+      }
+    }),
+
+  // Changes a message that is still on its way: its status ('uploading',
+  // 'sending', 'failed'), upload progress, or the attachmentId once the file
+  // has been uploaded.
+  updatePendingMessage: (conversationId, clientId, changes) =>
+    set((s) =>
+      patchConversation(s, conversationId, (e) => ({
+        messages: e.messages.map((m) => (m.clientId === clientId && !m.id ? { ...m, ...changes } : m)),
       })),
-      friends: withLastMessage(s.friends, message),
-    })),
+    ),
 
   // Step 2b: it failed or timed out. The bubble stays, with a Retry button.
   setMessageStatus: (conversationId, clientId, status) =>
-    set((s) =>
-      patchConversation(s, conversationId, (e) => ({
-        messages: e.messages.map((m) => (m.clientId === clientId && !m.id ? { ...m, status } : m)),
-      })),
-    ),
+    get().updatePendingMessage(conversationId, clientId, { status }),
 
   // A message:new event - from the friend, or from one of MY other tabs.
   receiveMessage: (message, myId) =>

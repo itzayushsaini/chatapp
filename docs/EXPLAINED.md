@@ -758,3 +758,245 @@ anything - if the demo users already exist, it stops.
 One Node service (Render) plus MongoDB Atlas; `render.yaml` describes the
 service so Render configures itself. See `docs/DEPLOY.md`. `npm audit` reports
 no vulnerabilities in production dependencies.
+
+---
+
+# Phase 10 - profiles (picture, bio, display name, username)
+
+**Goal:** people can make their profile their own, without weakening the
+privacy rules from Phase 3.
+
+## 1. What changed in the rules
+
+Three original rules were changed on purpose, with the team's approval:
+
+| Before | Now | Why |
+|---|---|---|
+| Username can never change | Once every 30 days | People outgrow usernames; the cooldown stops abuse |
+| No image uploads | Profile pictures (and, in Phase 11, attachments) | Requested feature |
+| PublicUser = id, username, displayName | + `bio`, `avatarUrl` | So friends (and people who search your exact username) can see them |
+
+Email is still only ever sent to its owner.
+
+## 2. Where files live: GridFS (`services/storageService.js`)
+
+A MongoDB document can be at most 16 MB, and putting photos inside normal
+documents would make every query that loads a user slow. **GridFS** is
+MongoDB's built-in answer: it splits a file into 255 kB chunks and stores
+them in two collections, `uploads.files` (name, size, type) and
+`uploads.chunks` (the bytes).
+
+> **Likely question: why not save files to the server's disk?**
+> On hosts like Render the disk is wiped on every deploy, so every picture
+> would vanish. And with only one database there is only one thing to back
+> up, secure and explain.
+>
+> **Why not a cloud service like Cloudinary?** It would need another account,
+> more secrets, and its files sit on public web addresses - so privacy would
+> depend on nobody guessing a URL. With GridFS every download goes through our
+> own permission checks.
+
+`storageService.js` is the **only** file that knows where the bytes live
+(`saveFile`, `getFileInfo`, `openFile`, `deleteFile`). Moving to S3 later would
+mean rewriting that one file.
+
+## 3. Checking what a file really is (`utils/fileType.js`)
+
+A file's name and the Content-Type the browser sends are both chosen by the
+uploader, so we trust neither. Almost every file format starts with a fixed
+**signature** ("magic number"):
+
+| Starts with | It is |
+|---|---|
+| `FF D8 FF` | JPEG |
+| `89 50 4E 47 0D 0A 1A 0A` | PNG |
+| `GIF87a` / `GIF89a` | GIF |
+| `RIFF....WEBP` | WebP |
+| `%PDF-` | PDF |
+
+`detectFileType` reads the first bytes and returns `{ mime, kind }` from an
+**allowlist**, or `null`. An HTML page renamed `photo.jpg` starts with
+`<html>`, so it is refused.
+
+> **Likely question: why are SVG and HTML never allowed?**
+> Both can contain `<script>`. If our server ever served one inline from our
+> domain, the script would run with the user's session - a stored XSS attack.
+> The safest rule is never to accept them at all.
+
+## 4. The profile picture
+
+1. The user picks a picture. **In the browser**, `utils/image.js` draws the
+   largest centred square onto a 256×256 canvas and exports it as WebP. A
+   4 MB phone photo becomes about 20 kB - quicker to upload, and the server
+   needs no image library.
+2. `PUT /api/users/me/avatar` - multer (`middleware/upload.js`) reads the file
+   into memory with a 2 MB limit enforced *while streaming*; the magic bytes
+   must say JPEG/PNG/WebP/GIF; it is saved to GridFS.
+3. `findOneAndUpdate(..., { new: false })` swaps in the new file id and hands
+   back the *old* document, so we know exactly which old file to delete.
+
+`avatarUrl` is `/api/users/:id/avatar?v=<file id>`. A new picture gets a new
+file id, so the URL changes and every browser fetches it again; an unchanged
+picture keeps its URL, so it can be cached for a year (`immutable`).
+
+## 5. Changing the username - the same atomic pattern as Phase 3
+
+```js
+User.findOneAndUpdate(
+  { _id: me, $or: [{ usernameChangedAt: null }, { usernameChangedAt: { $lte: thirtyDaysAgo } }] },
+  { $set: { username, usernameChangedAt: now } },
+)
+```
+
+The cooldown is **in the filter**, so it is checked and applied in one step.
+Two changes sent at the same moment cannot both pass - one gets the document,
+the other gets `null` → 429. There is a test that sends two at once.
+
+A taken username still relies on the **unique index** (error 11000 → 409),
+exactly like registration. JWTs and friendships use the user's **id**, never
+the username, so changing it logs nobody out and breaks no friendship.
+
+> **Likely question: is there a downside to allowing username changes?**
+> Yes - the old username becomes free, and someone else could take it. People
+> who only knew the old name might then add the wrong person. That is why
+> changes are limited to once in 30 days and the app warns before saving.
+
+## 6. Everyone sees the change live - `user:updated`
+
+After any profile change, `announce()` emits `user:updated`:
+
+- to everyone who has me in a list (friends, and pending requests either way):
+  the **PublicUser** shape;
+- to my own room (my other tabs): the **SelfUser** shape, which includes my
+  email.
+
+The client's `useSocketEvents` either updates that person everywhere in the
+store, or - if it is me - merges it into `AuthContext`. The hook now depends
+on my *id* rather than the whole user object, so editing my profile does not
+tear down and re-add every socket listener.
+
+## 7. The profile dialog
+
+Built on the browser's own `<dialog>` element with `showModal()`, which gives
+for free: focus moves into the dialog and stays there, Escape closes it,
+clicking the dark backdrop closes it, and screen readers announce it. Save
+sends **only the fields that changed**.
+
+---
+
+# Phase 11 - attachments (photos, videos, documents)
+
+**Goal:** send files in a chat, with the same privacy guarantees as text.
+
+## 1. Two steps, so the Phase 5 rule still holds
+
+Phase 5 says a message is sent **only** through `message:send`, in a fixed
+order. A 25 MB video cannot sensibly travel inside a socket event, so sending
+a file is split:
+
+1. **Upload** (REST, `POST /api/conversations/:id/attachments`) - the file is
+   stored and an `Attachment` document is created with `message: null`.
+2. **Send** (`message:send` with `attachmentId`) - the normal 7-step order;
+   step 4 now "claims" the attachment for the new message.
+
+## 2. The upload route - order matters
+
+```
+uploadLimiter -> validate :id -> checkCanUpload -> singleFile('file', 25 MB) -> upload
+```
+
+`checkCanUpload` (`assertParticipant` + `assertFriends`) runs **before** multer
+reads the body. A stranger - or an ex-friend - is turned away without the
+server receiving a single byte of their file.
+
+Then: magic-byte type check, a per-kind size limit (photos and documents
+10 MB, videos 25 MB), GridFS, and the Attachment document. The file name is
+reduced to its base name with control characters removed, because it is shown
+to the other person and sent back in a download header.
+
+## 3. Claiming - one atomic step again
+
+```js
+Attachment.findOneAndUpdate(
+  { _id: attachmentId, uploader: me, conversation: conversationId, message: null },
+  { message: newMessageId },
+)
+```
+
+Each part of the filter blocks one attack:
+
+| Filter | Stops |
+|---|---|
+| `uploader: me` | sending someone else's upload |
+| `conversation: conversationId` | moving a file into a different chat |
+| `message: null` | attaching one file to two messages |
+
+The message id is created *before* the claim (`new ObjectId()`), so the
+attachment can point at the message and the message at the attachment. If
+saving the message then fails, the claim is released.
+
+## 4. Downloading - `GET /api/attachments/:id`
+
+`getForDownload` answers **404** unless you are in that conversation - and,
+until it has been sent, unless you uploaded it. As with conversations, 404
+(not 403) tells an outsider nothing about whether the file exists.
+
+`utils/sendStoredFile.js` streams it from GridFS with these headers:
+
+| Header | Why |
+|---|---|
+| `Content-Type` = the type detected at upload | never guessed from the name |
+| `Content-Disposition: inline` for photos/videos | shown inside the chat |
+| `Content-Disposition: attachment` for documents | always downloaded, never opened on our domain |
+| `X-Content-Type-Options: nosniff` (helmet) | the browser may not second-guess the type |
+| `Cache-Control: private, max-age=86400` | only the user's browser may cache it |
+
+> **A bug caught while building this:** Express's `res.attachment(name)` also
+> sets `Content-Type` from the file's *extension*. A PDF named `evil.html`
+> would have been sent as `text/html`. The fix is to set our own
+> `Content-Type` *after* calling it; a test uploads exactly that file.
+
+## 5. Video seeking - HTTP Range requests
+
+A `<video>` does not download the whole file before playing. It asks for
+parts: `Range: bytes=1000000-`. The server answers **206 Partial Content**
+with `Content-Range: bytes 1000000-1999999/2000000` and just those bytes
+(GridFS can start and stop a stream anywhere). A range past the end gets
+**416**. This is what makes the seek bar work, especially on Safari and
+iPhones, which refuse to play video from servers without Range support.
+
+## 6. Cleaning up abandoned uploads
+
+If someone picks a file and then closes the tab, the upload is never used.
+Every hour (`server.js`, and once at startup) `deleteUnsentUploads` removes
+uploads that are still unsent after an hour. It deletes the **document first,
+only if still unsent**, then the bytes - so a message sent at that exact
+moment can never end up pointing at a deleted file.
+
+## 7. The client
+
+- **Picking:** the paperclip opens the file picker. `utils/files.js`
+  pre-checks the extension and size for quick feedback - only a convenience,
+  the server checks the real bytes.
+- **Preview before sending:** the browser makes a temporary `blob:` URL for
+  the chosen file. helmet's Content-Security-Policy normally forbids `blob:`
+  images, so `app.js` allows `blob:` for `img-src` and `media-src` only. The
+  blob URL is released (`URL.revokeObjectURL`) when no longer shown, or its
+  memory would stay allocated.
+- **Sending:** the bubble appears at once with status `uploading` and a
+  progress bar (axios `onUploadProgress`), then `sending`, then saved. If it
+  fails, **Retry** skips the upload when that part already worked, and resends
+  with the same `clientId` - so it is still never stored twice.
+- **Showing:** photos as thumbnails that open full size, videos with native
+  controls, documents as a card with name, size and a download link.
+- **Scrolling:** a photo only gets its real height once it loads, *after* the
+  auto-scroll ran. `onLoad` re-scrolls to the bottom if the user was there.
+
+## 8. Limits of this design
+
+- The free Atlas cluster holds **512 MB in total**. That is plenty for a demo
+  and a viva, not for heavy video use. Moving to S3/R2 would only change
+  `storageService.js`.
+- multer keeps the file in **memory** while checking it (max 25 MB per
+  upload, 20 uploads per hour per user). Fine for one small server; a large
+  deployment would stream straight to storage instead.

@@ -106,3 +106,29 @@ export const ArrowDownIcon = (p) => (
     <path d="m19 12-7 7-7-7" />
   </Icon>
 )
+export const PaperclipIcon = (p) => (
+  <Icon {...p}>
+    <path d="m21 11-8.6 8.6a5.5 5.5 0 0 1-7.8-7.8l8.6-8.6a3.7 3.7 0 0 1 5.2 5.2L9.8 17a1.8 1.8 0 0 1-2.6-2.6l7.9-7.9" />
+  </Icon>
+)
+export const FileIcon = (p) => (
+  <Icon {...p}>
+    <path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8Z" />
+    <path d="M14 3v5h5" />
+    <path d="M9 13h6" />
+    <path d="M9 17h4" />
+  </Icon>
+)
+export const DownloadIcon = (p) => (
+  <Icon {...p}>
+    <path d="M12 3v12" />
+    <path d="m7 10 5 5 5-5" />
+    <path d="M5 21h14" />
+  </Icon>
+)
+export const VideoIcon = (p) => (
+  <Icon {...p}>
+    <rect x="2" y="6" width="14" height="12" rx="2" />
+    <path d="m16 10 6-3v10l-6-3" />
+  </Icon>
+)

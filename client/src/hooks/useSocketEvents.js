@@ -13,10 +13,13 @@ import { useChatStore } from '../store/useChatStore.js'
 // the latest state without having to re-register on every change.
 export function useSocketEvents() {
   const socket = useSocket()
-  const { user } = useAuth()
+  const { user, updateUser } = useAuth()
+  // Only my id, not the whole user object: editing my profile changes the
+  // object, and that must not tear down and re-add every listener.
+  const myId = user?.id
 
   useEffect(() => {
-    if (!socket || !user) return
+    if (!socket || !myId) return
     const store = useChatStore.getState
 
     let hasConnectedBefore = false
@@ -39,7 +42,7 @@ export function useSocketEvents() {
     }
 
     function onMessage(message) {
-      store().receiveMessage(message, user.id)
+      store().receiveMessage(message, myId)
     }
 
     function onPresenceSnapshot({ online }) {
@@ -71,6 +74,13 @@ export function useSocketEvents() {
       store().removeFriend(userId)
     }
 
+    // Someone changed their name, bio or picture. If it is me (from another
+    // tab), update my own profile; otherwise update them in every list.
+    function onUserUpdated({ user: changed }) {
+      if (changed.id === myId) updateUser(changed)
+      else store().updateUser(changed)
+    }
+
     socket.on('connect', onConnect)
     socket.on('disconnect', onDisconnect)
     socket.on('message:new', onMessage)
@@ -80,6 +90,7 @@ export function useSocketEvents() {
     socket.on('friend:request:accepted', onRequestAccepted)
     socket.on('friend:request:cancelled', onRequestCancelled)
     socket.on('friend:removed', onFriendRemoved)
+    socket.on('user:updated', onUserUpdated)
 
     // The socket may have connected before this effect ran.
     if (socket.connected) onConnect()
@@ -94,6 +105,7 @@ export function useSocketEvents() {
       socket.off('friend:request:accepted', onRequestAccepted)
       socket.off('friend:request:cancelled', onRequestCancelled)
       socket.off('friend:removed', onFriendRemoved)
+      socket.off('user:updated', onUserUpdated)
     }
-  }, [socket, user])
+  }, [socket, myId, updateUser])
 }

@@ -1,8 +1,11 @@
+import { useState } from 'react'
+
 import { useAuth } from '../../context/AuthContext.jsx'
 import { useChatStore } from '../../store/useChatStore.js'
 import Avatar from '../common/Avatar.jsx'
 import { LogoutIcon } from '../common/Icons.jsx'
 import Logo from '../common/Logo.jsx'
+import ProfileDialog from '../profile/ProfileDialog.jsx'
 import AddFriendTab from './AddFriendTab.jsx'
 import ChatsTab from './ChatsTab.jsx'
 import RequestsTab from './RequestsTab.jsx'
@@ -18,6 +21,7 @@ export default function Sidebar({ className = '' }) {
   const tab = useChatStore((s) => s.sidebarTab)
   const setTab = useChatStore((s) => s.setSidebarTab)
   const incomingCount = useChatStore((s) => s.requests.incoming.length)
+  const [profileOpen, setProfileOpen] = useState(false)
 
   // Arrow keys move between tabs - the standard keyboard pattern for tabs.
   function handleTabKey(event) {
@@ -77,13 +81,21 @@ export default function Sidebar({ className = '' }) {
         {tab === 'add' && <AddFriendTab />}
       </div>
 
-      {/* Me, and logout */}
-      <div className="flex items-center gap-3 border-t border-slate-200 px-4 py-3">
-        <Avatar user={user} size="sm" />
-        <div className="min-w-0 flex-1">
-          <p className="truncate text-sm font-medium text-slate-900">{user.displayName}</p>
-          <p className="truncate text-xs text-slate-500">@{user.username}</p>
-        </div>
+      {/* Me (click to edit my profile), and logout */}
+      <div className="flex items-center gap-2 border-t border-slate-200 px-2 py-2">
+        <button
+          type="button"
+          onClick={() => setProfileOpen(true)}
+          className="flex min-w-0 flex-1 items-center gap-3 rounded-lg px-2 py-1.5 text-left hover:bg-slate-50 focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:outline-none"
+          aria-label="Edit your profile"
+          title="Edit your profile"
+        >
+          <Avatar user={user} size="sm" />
+          <span className="min-w-0 flex-1">
+            <span className="block truncate text-sm font-medium text-slate-900">{user.displayName}</span>
+            <span className="block truncate text-xs text-slate-500">@{user.username}</span>
+          </span>
+        </button>
         <button
           type="button"
           onClick={logout}
@@ -94,6 +106,7 @@ export default function Sidebar({ className = '' }) {
           <LogoutIcon />
         </button>
       </div>
+      <ProfileDialog open={profileOpen} onClose={() => setProfileOpen(false)} />
     </aside>
   )
 }

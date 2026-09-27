@@ -30,6 +30,12 @@ export function AuthProvider({ children }) {
       .finally(() => setLoading(false))
   }, [])
 
+  // Merges changes into my profile: after I edit it, or when my other tab
+  // edits it (the user:updated socket event).
+  const updateUser = useCallback((changes) => {
+    setUser((current) => (current ? { ...current, ...changes } : current))
+  }, [])
+
   // Any 401 from the API (expired session) logs us out on this side too.
   useEffect(() => setUnauthorizedHandler(clearSession), [clearSession])
 
@@ -37,6 +43,7 @@ export function AuthProvider({ children }) {
     () => ({
       user,
       loading,
+      updateUser,
       login: async (identifier, password) => setUser(await authApi.login(identifier, password)),
       register: async (fields) => setUser(await authApi.register(fields)),
       logout: async () => {
@@ -47,7 +54,7 @@ export function AuthProvider({ children }) {
         }
       },
     }),
-    [user, loading, clearSession],
+    [user, loading, clearSession, updateUser],
   )
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>

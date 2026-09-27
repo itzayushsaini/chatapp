@@ -17,7 +17,8 @@ Do not add features that are not listed here. If something seems missing, or a r
 
 ## Tech stack (fixed — do not change without asking)
 
-- **Server:** Node.js (current LTS), Express 5, Mongoose, Socket.IO 4, zod, bcryptjs, jsonwebtoken, cookie-parser, cookie, helmet, express-rate-limit, morgan.
+- **Server:** Node.js (current LTS), Express 5, Mongoose, Socket.IO 4, zod, bcryptjs, jsonwebtoken, cookie-parser, cookie, helmet, express-rate-limit, morgan, multer (file uploads).
+- **File storage:** MongoDB GridFS (built into the MongoDB driver - no extra service or account).
 - **Client:** React + Vite (JavaScript, not TypeScript), React Router, Tailwind CSS, axios, socket.io-client, zustand.
 - **Tests:** Vitest + Supertest + mongodb-memory-server on the server; Playwright for end-to-end tests.
 - **Modules:** JavaScript with ES modules (`"type": "module"`) everywhere.
@@ -49,13 +50,15 @@ chat-app/
     .env.example
     src/
       config/        env.js (zod-validated env), db.js
-      models/        User.js, Friendship.js, Conversation.js, Message.js
-      services/      authService.js, friendService.js, messageService.js, presenceService.js
-      controllers/   auth, users, friends, conversations
-      routes/        auth.routes.js, users.routes.js, friends.routes.js, conversations.routes.js
-      middleware/    requireAuth.js, validate.js, rateLimits.js, errorHandler.js, notFound.js
+      models/        User.js, Friendship.js, Conversation.js, Message.js, Attachment.js
+      services/      authService.js, friendService.js, messageService.js, presenceService.js,
+                     profileService.js, attachmentService.js, storageService.js
+      controllers/   auth, users, friends, conversations, attachments
+      routes/        auth.routes.js, users.routes.js, friends.routes.js, conversations.routes.js,
+                     attachments.routes.js
+      middleware/    requireAuth.js, validate.js, rateLimits.js, upload.js, errorHandler.js, notFound.js
       socket/        index.js, socketAuth.js, emitter.js, handlers/
-      utils/         AppError.js, pairKey.js, publicUser.js
+      utils/         AppError.js, pairKey.js, publicUser.js, fileType.js, sendStoredFile.js
       scripts/       seed.js
       app.js         # builds and exports the Express app (does NOT listen) — used by tests
       server.js      # http server + Socket.IO + DB connect + listen + graceful shutdown
@@ -64,13 +67,13 @@ chat-app/
     package.json
     vite.config.js
     src/
-      api/           http.js (axios instance), auth.js, friends.js, conversations.js
+      api/           http.js (axios instance), auth.js, friends.js, conversations.js, profile.js
       store/         useChatStore.js (zustand)
       context/       AuthContext.jsx, SocketContext.jsx
       hooks/         useSocketEvents.js
       pages/         LoginPage.jsx, RegisterPage.jsx, ChatPage.jsx
-      components/    layout/, sidebar/, chat/, common/
-      utils/         time.js, avatar.js
+      components/    layout/, sidebar/, chat/, profile/, common/
+      utils/         time.js, avatar.js, files.js, image.js
 ```
 
 ---
@@ -135,17 +138,20 @@ Validate them at startup with zod in `config/env.js`. If one is missing or inval
 
 | Field | Rules |
 |---|---|
-| `username` | String, required, unique, lowercase, trimmed, must match `/^[a-z0-9_.]{3,20}$/`. This is the public ID people search for. It cannot be changed. |
+| `username` | String, required, unique, lowercase, trimmed, must match `/^[a-z0-9_.]{3,20}$/`. This is the public ID people search for. It can be changed at most once every 30 days (see Profile rules). |
+| `usernameChangedAt` | Date or null. When the username was last changed (registration does not count). |
 | `displayName` | String, 1–40 characters |
+| `bio` | String, trimmed, 0–160 characters, default `''` |
+| `avatarFileId` | ObjectId of the profile picture in GridFS, or null |
 | `email` | String, required, unique, lowercase, trimmed |
 | `passwordHash` | String, `select: false` |
 | `lastSeen` | Date |
 | timestamps | |
 
-- **PublicUser shape:** `{ id, username, displayName }`. These are the ONLY fields ever sent about another user.
+- **PublicUser shape:** `{ id, username, displayName, bio, avatarUrl }`. These are the ONLY fields ever sent about another user. `avatarUrl` is `/api/users/:id/avatar?v=<avatarFileId>` or null.
 - **Friends-only fields:** `online` and `lastSeen` are sent only to friends.
-- **Email:** only ever sent to the user themself (via `/api/auth/me`).
-- **Avatars:** initials on a coloured circle, with the colour derived from the username. No image uploads.
+- **Email:** only ever sent to the user themself (via `/api/auth/me`), in the **SelfUser** shape: PublicUser + `email` + `usernameChangeAllowedAt` (Date or null).
+- **Avatars:** the uploaded profile picture, or - if there is none - initials on a coloured circle, with the colour derived from the username. Picture and bio are visible to any logged-in user who has the user's id (i.e. anyone who searched their exact username).
 
 ### Friendship (exactly one document per pair of users)
 
@@ -166,7 +172,7 @@ Indexes: `{ recipient: 1, status: 1 }`, `{ requester: 1, status: 1 }`.
 |---|---|
 | `participants` | `[ObjectId, ObjectId]`, sorted |
 | `pairKey` | String, unique |
-| `lastMessage` | `{ text, sender, createdAt }` for the sidebar preview |
+| `lastMessage` | `{ text, sender, createdAt, attachment: { kind, name } \| null }` for the sidebar preview |
 | timestamps | |
 
 The conversation is created when a request is accepted, by upserting on `pairKey` with `$setOnInsert`. If the pair becomes friends again later, the old conversation and history are reused.
@@ -177,13 +183,30 @@ The conversation is created when a request is accepted, by upserting on `pairKey
 |---|---|
 | `conversation` | ObjectId → Conversation |
 | `sender` | ObjectId → User |
-| `text` | String, trimmed, 1–2000 characters |
+| `text` | String, trimmed, 0–2000 characters. May be empty only if there is an attachment. |
+| `attachment` | ObjectId → Attachment, or null |
 | `clientId` | String (a UUID generated by the browser) |
 | timestamps | |
 
 Indexes: `{ conversation: 1, _id: -1 }`, and a unique index on `{ sender: 1, clientId: 1 }` (this makes retries idempotent).
 
-Message payload sent to clients: `{ id, conversationId, senderId, text, clientId, createdAt }`.
+Message payload sent to clients: `{ id, conversationId, senderId, text, clientId, attachment, createdAt }`, where `attachment` is null or `{ id, name, mimeType, size, kind, url }`.
+
+### Attachment
+
+| Field | Rules |
+|---|---|
+| `uploader` | ObjectId → User |
+| `conversation` | ObjectId → Conversation |
+| `fileId` | ObjectId of the bytes in GridFS (bucket `uploads`) |
+| `name` | String, the original file name (base name only, control characters removed), max 200 |
+| `mimeType` | String, **detected from the file's bytes**, never from the name or the browser |
+| `size` | Number (bytes) |
+| `kind` | `'image' \| 'video' \| 'file'` |
+| `message` | ObjectId → Message, or null until a message uses it. One attachment belongs to at most one message. |
+| timestamps | |
+
+Index: `{ message: 1, createdAt: 1 }` (cleanup of unsent uploads).
 
 ---
 
@@ -267,6 +290,36 @@ Every REST route and socket handler that reads or writes messages MUST call thes
 
 ---
 
+## Profile rules
+
+- **`PATCH /api/users/me`** `{ displayName?, bio?, username? }` - validated with zod; unknown fields are stripped (email and password can never be changed here).
+- **Username change:**
+  - Same regex and normalisation as registration. The unique index guards duplicates: error 11000 → 409 "Username already taken".
+  - At most once every 30 days. The cooldown is part of the SAME atomic `findOneAndUpdate` filter (`usernameChangedAt` null or older than 30 days), so two simultaneous changes cannot both pass. Blocked → 429 "You can change your username again on YYYY-MM-DD".
+  - Sending the current username is not a change and does not start the cooldown.
+  - The old username becomes free for anyone to take. The client warns about this before saving.
+- **Profile picture:** `PUT /api/users/me/avatar` (multipart field `avatar`, max 2 MB, JPEG/PNG/WebP/GIF by magic bytes). The browser crops it to 256×256 before upload. Replacing or removing it deletes the old GridFS file.
+- **`GET /api/users/:id/avatar`** - any logged-in user. Cached for a year when `?v=` matches the current file id, otherwise `no-cache`.
+- After any profile change, emit `user:updated { user: PublicUser }` to everyone with a friendship or pending request with this user, and `user:updated { user: SelfUser }` to the user's own room.
+
+---
+
+## Attachment rules
+
+Sending a file is **two steps**, so the rule "sending happens only through `message:send`" still holds:
+
+1. **Upload:** `POST /api/conversations/:id/attachments` (multipart field `file`). Order: rate limit → valid id → `assertParticipant` + `assertFriends` (**before** the body is read, so strangers cannot make the server receive a file) → multer (memory, max 25 MB) → detect the type by magic bytes → per-kind size limit → store in GridFS → create the Attachment with `message: null` → 201 `{ attachment }`.
+2. **Send:** `message:send { conversationId, text?, clientId, attachmentId }`. The claim is ONE atomic `findOneAndUpdate({ _id, uploader: me, conversation, message: null }, { message: newMessageId })` - so nobody can send someone else's upload, move it to another chat, or use one upload twice. Failure → ack `{ ok: false, error: 'Attachment not found' }`.
+
+- **Allowed types (by magic bytes):** images JPEG, PNG, GIF, WebP; videos MP4, WebM, MOV; documents PDF, DOC/DOCX, XLS/XLSX, PPT/PPTX, ZIP (ZIP and OLE files are labelled by extension), TXT (must be valid UTF-8 with no NUL bytes). **Never SVG or HTML** (they can run scripts).
+- **Size limits:** images and documents 10 MB, videos 25 MB. Too large → 413 "File is too large". Wrong type → 400 "This file type is not supported".
+- **Download:** `GET /api/attachments/:id` → requireAuth → the requester must be a participant (404 otherwise, never 403); an unsent upload is visible only to its uploader. Supports HTTP `Range` (206 / 416) for video seeking. `Content-Type` is always the detected type, set after `res.attachment()`. Images and videos are served `inline`; documents always `Content-Disposition: attachment`. `Cache-Control: private, max-age=86400`.
+- After an unfriend, both people can still download files already in the chat (history stays readable), but cannot upload new ones.
+- **Cleanup:** uploads never used by a message are deleted after 1 hour (on startup, then hourly). Delete the document first (only if still unsent), then the GridFS file.
+- **CSP:** helmet's default policy plus `blob:` in `img-src` and `media-src`, so the chosen file can be previewed before upload.
+
+---
+
 ## Messaging rules
 
 ### History
@@ -283,10 +336,10 @@ Every REST route and socket handler that reads or writes messages MUST call thes
 
 Sending happens **only** through the socket event `message:send`, with an acknowledgement. The order below is mandatory:
 
-1. Validate with zod.
+1. Validate with zod (text may be empty only when `attachmentId` is given).
 2. `assertParticipant`.
 3. `assertFriends`.
-4. Save the Message.
+4. Claim the attachment (if any) and save the Message.
 5. Update `Conversation.lastMessage`.
 6. Emit.
 7. Acknowledge.
@@ -326,7 +379,7 @@ If anything fails before the save, nothing is emitted and the handler calls `ack
 
 | Event | Direction | Payload |
 |---|---|---|
-| `message:send` | client → server, with ack | `{ conversationId, text, clientId }` → ack `{ ok: true, message }` or `{ ok: false, error }` |
+| `message:send` | client → server, with ack | `{ conversationId, text?, clientId, attachmentId? }` → ack `{ ok: true, message }` or `{ ok: false, error }` |
 | `message:new` | server → client | Message payload |
 | `presence:snapshot` | server → client | `{ online: [userId] }` |
 | `presence:update` | server → client | `{ userId, online, lastSeen? }` |
@@ -334,12 +387,13 @@ If anything fails before the save, nothing is emitted and the handler calls `ack
 | `friend:request:accepted` | server → client | `{ friend: FriendListItem }` |
 | `friend:request:cancelled` | server → client | `{ requestId }` |
 | `friend:removed` | server → client | `{ userId }` |
+| `user:updated` | server → client | `{ user }` - PublicUser to contacts, SelfUser to the user's own tabs |
 
 ---
 
 ## REST API contract
 
-All responses are JSON. Errors use the shape `{ message }` with the right status code: 400 validation, 401, 403, 404, 409, 429, 500.
+All responses are JSON (except the two file downloads). Errors use the shape `{ message }` with the right status code: 400 validation, 401, 403, 404, 409, 413, 416, 429, 500.
 
 | Method | Path | Auth | Purpose |
 |---|---|---|---|
@@ -357,6 +411,12 @@ All responses are JSON. Errors use the shape `{ message }` with the right status
 | POST | `/api/friends/requests/:id/decline` | yes | 204 |
 | DELETE | `/api/friends/requests/:id` | yes | Cancel, returns 204 |
 | GET | `/api/conversations/:id/messages` | yes | `{ messages, hasMore }` |
+| PATCH | `/api/users/me` | yes | `{ displayName?, bio?, username? }` → `{ user }` (SelfUser) |
+| PUT | `/api/users/me/avatar` | yes | multipart `avatar` → `{ user }` |
+| DELETE | `/api/users/me/avatar` | yes | `{ user }` |
+| GET | `/api/users/:id/avatar` | yes | The picture (image bytes) |
+| POST | `/api/conversations/:id/attachments` | yes | multipart `file` → 201 `{ attachment }` |
+| GET | `/api/attachments/:id` | yes | The file (bytes, Range supported) |
 
 ---
 
@@ -368,7 +428,10 @@ All responses are JSON. Errors use the shape `{ message }` with the right status
   - Register and login: 10 per 15 minutes per IP.
   - Search: 30 per minute per user.
   - Friend requests: 20 per hour per user.
+  - Profile changes and picture uploads: 20 per hour per user.
+  - Attachment uploads: 20 per hour per user.
   - Socket messages: as described above.
+- **Uploads:** type checked by magic bytes against an allowlist (no SVG/HTML); size limited while streaming; never written to the server's disk; every download permission-checked; documents never rendered inline; `nosniff` (helmet).
 - `passwordHash` never appears in any response. Other users only ever receive the PublicUser shape.
 - No `dangerouslySetInnerHTML` anywhere. Render message text as plain text with `white-space: pre-wrap`.
 - Secrets only in environment variables. Never log passwords, tokens or cookies.
@@ -438,6 +501,22 @@ All responses are JSON. Errors use the shape `{ message }` with the right status
   - Scrolling to the top loads older messages while keeping the scroll position steady.
 - **Reconnection:** show a "Reconnecting…" banner while disconnected. On a reconnect (not the first connect), refetch friends, requests and the open conversation's latest page.
 - **Toasts:** a new friend request, a request accepted, and errors.
+
+### Profile
+
+- The sidebar footer (my avatar and name) opens a **Your profile** dialog: photo (Add/Change/Remove - saved immediately, cropped to 256×256 in the browser), display name, username, bio (160 max, with a counter), email (read-only). Save sends only the changed fields.
+- Changing the username asks for confirmation (30-day lock, old name becomes available). While locked, the field is disabled and says until when.
+- Clicking a friend's picture or name in the chat header opens their profile (picture, name, @username, bio). The Add Friend result card shows the bio.
+- `user:updated` updates that person everywhere they appear (Chats, Requests, chat header), or my own profile if it is me.
+- Dialogs use the native `<dialog>` element (`showModal`): focus trap, Escape and backdrop click close it.
+
+### Attachments
+
+- A paperclip button opens the file picker (`accept` = the allowlist). The client pre-checks type and size for quick feedback; the server is the real check.
+- The chosen file shows above the input (thumbnail or icon, name, size, Remove); the text becomes an optional caption.
+- Sending: the bubble appears at once (status `uploading` with a progress bar, previewed from a `blob:` URL), then `sending` after the upload, then saved. An upload or ack failure → `failed` with Retry; Retry skips the upload if it already succeeded. Blob URLs are revoked when no longer needed.
+- Photos show as thumbnails that open full size in a dialog; videos play inline with controls; documents are a card with name, size and a download link.
+- Sidebar preview: "📷 caption or Photo", "🎥 caption or Video", "📄 file name".
 
 ### Style
 

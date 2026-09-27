@@ -1,19 +1,9 @@
 import { expect, test } from '@playwright/test'
 
+import { PASSWORD, register } from './helpers.js'
+
 // Each browser "context" is a separate, isolated browser profile with its own
 // cookies - so two contexts are two different people on two computers.
-
-const PASSWORD = 'e2e-password-123'
-
-async function register(page, username, displayName) {
-  await page.goto('/register')
-  await page.getByLabel('Username').fill(username)
-  await page.getByLabel('Display name').fill(displayName)
-  await page.getByLabel('Email').fill(`${username}@example.test`)
-  await page.getByLabel('Password', { exact: true }).fill(PASSWORD)
-  await page.getByRole('button', { name: 'Sign up' }).click()
-  await expect(page.getByText(`@${username}`).first()).toBeVisible()
-}
 
 test('a logged-out visitor is sent to /login, and unknown routes go home', async ({ page }) => {
   await page.goto('/')

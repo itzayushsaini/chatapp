@@ -120,6 +120,9 @@ Run through this list on the live URL:
 | 6 | Close one browser | The other shows "Last seen …" |
 | 7 | Refresh the page on `/login` or `/` | The page loads (no 404) and you stay logged in |
 | 8 | Browser dev tools → Application → Cookies | `token` is **HttpOnly**, **Secure**, **SameSite=Lax** |
+| 9 | Profile → add a photo, edit the bio | Saved; the other browser sees it without refreshing |
+| 10 | Send a photo and a PDF | Photo shows in the chat (including the preview before sending); PDF downloads |
+| 11 | Open a photo's link while logged in as a third account | 404 |
 
 ---
 
@@ -135,6 +138,13 @@ Run through this list on the live URL:
 - **Updates.** Every push to the connected branch redeploys automatically.
   Render waits for `/api/health` to answer before switching traffic, so a
   broken build never replaces a working one.
+- **Files are stored in the database (GridFS)**, not on Render's disk - which
+  is wiped on every deploy. Nothing extra to set up. The free Atlas M0
+  cluster holds **512 MB in total** for data *and* files; check *Atlas →
+  Database → Collections → uploads.chunks* to see how much files use. Unsent
+  uploads are removed automatically after an hour.
+- **Upload size.** Render's free instance has 512 MB of RAM; uploads (max
+  25 MB each) are held in memory only while they are checked.
 - **Seed data.** `npm run seed` refuses to run in production, on purpose. Demo
   users on the live site must be registered normally.
 - **Logs.** Render → your service → *Logs*. Passwords, tokens and cookies are

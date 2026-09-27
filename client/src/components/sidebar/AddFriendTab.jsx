@@ -184,6 +184,9 @@ function ResultCard({ result, refresh }) {
       <Avatar user={user} size="lg" />
       <p className="mt-3 font-semibold text-slate-900">{user.displayName}</p>
       <p className="text-sm text-slate-500">@{user.username}</p>
+      {user.bio && (
+        <p className="mt-2 text-sm break-words whitespace-pre-wrap text-slate-600">{user.bio}</p>
+      )}
 
       <div className="mt-4 flex flex-wrap justify-center gap-2">
         {relationship === 'none' && (
