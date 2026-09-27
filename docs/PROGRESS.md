@@ -2,7 +2,7 @@
 
 A new session should be able to read this file and carry on from it.
 
-Last updated: 2026-09-27 (Phases 16a and 16b added same day - both awaiting the team's OK to commit)
+Last updated: 2026-09-27 (Phases 16a and 16b committed and pushed; one post-16b bugfix below)
 
 ---
 
@@ -586,6 +586,52 @@ cleanly, so one commit "Phases 1-9: complete ChatApp (later renamed PingMe)" is 
 17. **Dark mode's red text is the same red as light mode** (`red-600`) - it
     passes contrast on the dark background but is not as soft as WhatsApp's
     own; changing it would also change the danger button, so it was left.
+
+---
+
+## Post-16b bugfix (2026-09-27): switching chats could show the wrong one
+
+**Reported by the team:** clicking a different chat sometimes showed the
+*previous* chat's messages under the new chat's header, and scrolling
+produced blank space - the whole page was scrolling, not just the message
+list.
+
+**Root cause, two compounding bugs**, both introduced while building the
+Contact info panel (16b), which needed `ChatWindow`'s content to sit
+side-by-side with the panel on wide screens:
+1. The column wrapping the header/message-list/composer lost its `min-h-0`.
+   Without it, that column grows to fit ALL its content instead of being
+   clipped to the available height, so the BROWSER scrolls the whole page
+   instead of the message list scrolling internally - which is what made
+   switching chats look like it kept the old scroll position.
+2. `MessageList` was keyed by `conversationId` on its own, but an old
+   instance was not always being cleanly torn down when only ITS key
+   changed - proven by adding a temporary mount/unmount log: mounts kept
+   happening (with fresh `useId()`s, confirming genuinely separate React
+   instances) but zero matching unmounts ever fired, so an old instance
+   with the previous chat's messages could remain visible.
+
+**Fix:** added `min-h-0` back to that column, and moved the `key` up to the
+whole pane (header + list + composer together) instead of leaving it only
+on `MessageList`, so the entire pane is guaranteed to be torn down and
+rebuilt together on every switch, regardless of the reconciliation detail
+above.
+
+**Also fixed while verifying:** `server/tests/setup.js` and
+`e2e/start-server.js` now explicitly clear `GOOGLE_CLIENT_ID` /
+`GOOGLE_CLIENT_SECRET` before running, so the test suites no longer depend
+on whatever happens to be in the developer's own `server/.env` - this
+surfaced only because Google sign-in was just configured for the first time
+locally, immediately breaking two `googleSignIn: false` assertions.
+
+**Verification:** a Playwright regression test
+(`e2e/chat.spec.js`, "switching between two chats...") sends messages in two
+different chats and asserts switching between them always shows the right
+one and never the other, plus that `document.body.scrollHeight` never
+exceeds the viewport. Confirmed it fails on the pre-fix code (finds two
+`role="log"` regions) and passes after the fix, run cleanly three times.
+Full suite after the fix: `npm test` 261/261, `npm run test:e2e` 17/17
+(16 + this new one), lint clean, build succeeds.
 
 ---
 

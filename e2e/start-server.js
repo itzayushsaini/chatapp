@@ -15,6 +15,13 @@ process.env.JWT_SECRET ??= 'e2e-only-secret-that-is-at-least-32-characters'
 // so together they would trip the per-IP rate limit meant for a single
 // abusive caller. See middleware/rateLimits.js - never set in real deploys.
 process.env.E2E_DISABLE_RATE_LIMITS = 'true'
+// e2e must behave the same regardless of whatever happens to be in the
+// developer's own server/.env - a real GOOGLE_CLIENT_ID there (once Google
+// sign-in is configured for local development) would otherwise leak in here
+// via dotenv (which only fills variables not already set) and silently turn
+// on the Google button, breaking specs that assume it is off.
+process.env.GOOGLE_CLIENT_ID = ''
+process.env.GOOGLE_CLIENT_SECRET = ''
 
 // Imported only now, because config/env.js validates process.env on load.
 await import('../server/src/server.js')

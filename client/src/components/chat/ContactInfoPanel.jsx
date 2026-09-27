@@ -92,7 +92,7 @@ export default function ContactInfoPanel({ item, onClose }) {
   return (
     <aside
       aria-label="Contact info"
-      className="absolute inset-0 z-20 flex flex-col bg-slate-50 md:left-auto md:w-96 md:border-l md:border-slate-200 md:shadow-xl xl:static xl:shadow-none"
+      className="absolute inset-0 z-20 flex min-h-0 flex-col bg-slate-50 md:left-auto md:w-96 md:border-l md:border-slate-200 md:shadow-xl xl:static xl:shadow-none"
     >
       <div className="flex items-center gap-3 bg-surface px-4 py-3.5">
         <button

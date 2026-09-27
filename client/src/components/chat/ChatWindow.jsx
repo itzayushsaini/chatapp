@@ -167,7 +167,12 @@ export default function ChatWindow({ conversationId }) {
 
   return (
     <section className="relative flex min-h-0 flex-1" aria-label={`Chat with ${friend.displayName}`}>
-      <div className="flex min-w-0 flex-1 flex-col bg-slate-50">
+      {/* Keyed by conversationId so the WHOLE pane (header, list, input) is
+          torn down and rebuilt on every switch - not just the list inside it.
+          Without this, an old MessageList could end up not being cleanly
+          replaced, leaving a stale instance showing the previous chat's
+          messages under the new chat's header. */}
+      <div key={conversationId} className="flex min-h-0 min-w-0 flex-1 flex-col bg-slate-50">
         <ChatHeader
           friend={friend}
           muted={Boolean(item.muted)}

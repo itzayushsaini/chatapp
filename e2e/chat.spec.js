@@ -93,6 +93,62 @@ test('two people find each other, become friends and chat in real time', async (
   await amanContext.close()
 })
 
+test('switching between two chats never shows the other chat\'s messages, and only the message list scrolls', async ({ page }) => {
+  const aman = page
+  const rahul = await (await page.context().browser().newContext()).newPage()
+  const priya = await (await page.context().browser().newContext()).newPage()
+  await register(aman, 'aman_switch', 'Aman Kumar')
+  await register(rahul, 'rahul_switch', 'Rahul Singh')
+  await register(priya, 'priya_switch', 'Priya Sharma')
+
+  for (const [friend, username] of [[rahul, 'rahul_switch'], [priya, 'priya_switch']]) {
+    await aman.getByRole('tab', { name: 'Add Friend' }).click()
+    await aman.getByLabel('Find a friend by their exact username').fill(username)
+    await aman.getByRole('button', { name: 'Search' }).click()
+    await aman.getByRole('button', { name: 'Add friend' }).click()
+    await friend.getByRole('tab', { name: /Requests/ }).click()
+    await friend.getByRole('button', { name: 'Accept' }).click()
+    await aman.getByRole('tab', { name: 'Chats' }).click()
+  }
+
+  // Chat A has enough messages to be taller than the viewport. The composer
+  // is disabled until history has loaded, so wait for it to be usable first -
+  // typing into it earlier would silently do nothing.
+  await aman.getByRole('button', { name: /Rahul Singh/ }).click()
+  const amanLog = aman.getByRole('log', { name: 'Messages' })
+  const amanInput2 = aman.getByLabel('Type a message')
+  await expect(amanInput2).toBeEnabled()
+  for (let i = 1; i <= 8; i++) {
+    await amanInput2.fill(`Rahul message ${i}`)
+    await amanInput2.press('Enter')
+    await amanLog.getByText(`Rahul message ${i}`, { exact: true }).waitFor()
+  }
+
+  // Chat B - open it and send its own, distinct message.
+  await aman.getByRole('button', { name: /Priya Sharma/ }).click()
+  await expect(amanInput2).toBeEnabled()
+  await amanInput2.fill('Priya message')
+  await amanInput2.press('Enter')
+  await amanLog.getByText('Priya message').waitFor()
+
+  // Switching back and forth must always show the RIGHT chat's content -
+  // never the previous one's - and the page itself must never scroll (only
+  // the message list, inside its own fixed-height panel, does).
+  await aman.getByRole('button', { name: /Rahul Singh/ }).click()
+  await expect(amanLog.getByText('Rahul message 1')).toBeVisible()
+  await expect(amanLog.getByText('Priya message')).toHaveCount(0)
+
+  await aman.getByRole('button', { name: /Priya Sharma/ }).click()
+  await expect(amanLog.getByText('Priya message')).toBeVisible()
+  await expect(amanLog.getByText('Rahul message 1')).toHaveCount(0)
+
+  const overflow = await aman.evaluate(() => ({
+    bodyScrollHeight: document.body.scrollHeight,
+    innerHeight: window.innerHeight,
+  }))
+  expect(overflow.bodyScrollHeight).toBeLessThanOrEqual(overflow.innerHeight)
+})
+
 test('logging out ends the session', async ({ page }) => {
   await register(page, 'rahul_e2e', 'Rahul')
 

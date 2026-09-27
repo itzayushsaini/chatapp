@@ -2,6 +2,17 @@ import mongoose from 'mongoose'
 import { MongoMemoryServer } from 'mongodb-memory-server'
 import { afterAll, afterEach, beforeAll } from 'vitest'
 
+import { env } from '../src/config/env.js'
+
+// Tests must behave the same regardless of whatever happens to be in the
+// developer's own server/.env - a real GOOGLE_CLIENT_ID there (once Google
+// sign-in is actually configured for local development) would otherwise
+// silently flip `googleSignIn` to true and break tests that assume it is
+// off. tests/google.test.js sets these itself, per test, for the cases that
+// actually need them.
+delete env.GOOGLE_CLIENT_ID
+delete env.GOOGLE_CLIENT_SECRET
+
 // Every test run gets a real MongoDB, started in memory and thrown away
 // afterwards. Nothing touches the development database.
 //

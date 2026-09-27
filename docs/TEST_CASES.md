@@ -7,8 +7,8 @@ Kept up to date at the end of every phase.
 - **Manual** cases are the ones a person checks in the browser. Fill in the
   Actual and Result columns when you run them.
 
-Last full run: 2026-09-27 (after Phase 16b) - **261/261 server tests pass,
-16/16 end-to-end tests pass, lint clean in both workspaces, `npm run build`
+Last full run: 2026-09-27 (after the post-16b chat-switching bugfix) - **261/261
+server tests pass, 17/17 end-to-end tests pass, lint clean in both workspaces, `npm run build`
 succeeds.**
 
 ---
@@ -330,6 +330,7 @@ email provider configured.
 | E14 | Contact info, two browser contexts | Panel shows @username and "No photos or videos yet"; mute shows "Muted" on the Chats row; Clear chat empties my chat, not theirs; Block removes the friend on both sides live and the blocked person's search says "No user found"; Unblock in Settings → searchable again |
 | E15 | Messages while Settings is open | The friend's message makes the tab title "(1) PingMe" and shows "Delivered" to them - the socket stayed connected |
 | E16 | Failed Google sign-in | `/login?error=google_failed` shows the fixed message; no Google button when not configured |
+| E17 | Switching chats never bleeds content (`e2e/chat.spec.js`) | Messages sent in chat A, then chat B; switching between them always shows the right one, never the other; the page itself never scrolls (only the message list does) - regression test for the post-16b bugfix below |
 ---
 
 ## Manual
