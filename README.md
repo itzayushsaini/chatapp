@@ -2,7 +2,7 @@
 
 A web-based, one-to-one, real-time text chat application.
 
-B.Tech CSE final-year project, COER University.
+B.Tech CSE 2nd Year project, COER University.
 
 **Live demo:** <https://chatapp-xu38.onrender.com/>
 > The free hosting tier sleeps after ~15 minutes of no traffic, so the first
