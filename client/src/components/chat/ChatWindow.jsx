@@ -26,6 +26,13 @@ export default function ChatWindow({ conversationId }) {
   const entry = useChatStore((s) => s.messagesByConversation[conversationId])
   const readUpTo = useChatStore((s) => s.readUpTo[conversationId] ?? null)
   const store = useChatStore.getState
+  const [replyTarget, setReplyTarget] = useState(null)
+
+  // A different chat, or the one message being replied to going away
+  // (deleted from another tab), both clear the reply-in-progress state.
+  useEffect(() => {
+    setReplyTarget(null)
+  }, [conversationId])
 
   // Load the latest page the first time this chat is opened.
   useEffect(() => {
@@ -54,6 +61,7 @@ export default function ChatWindow({ conversationId }) {
   function emit(message) {
     const payload = { conversationId, text: message.text, clientId: message.clientId }
     if (message.attachmentId) payload.attachmentId = message.attachmentId
+    if (message.replyToId) payload.replyToId = message.replyToId
 
     socket
       .timeout(ACK_TIMEOUT_MS)
@@ -98,7 +106,7 @@ export default function ChatWindow({ conversationId }) {
   // Optimistic sending: show the bubble immediately, then send. The clientId
   // is made here, in the browser, so a Retry can reuse it and the server
   // recognises the retry instead of saving the message twice.
-  function send(text, file) {
+  function send(text, file, replyToId) {
     const message = {
       clientId: crypto.randomUUID(),
       conversationId,
@@ -106,6 +114,17 @@ export default function ChatWindow({ conversationId }) {
       text,
       createdAt: new Date().toISOString(),
       status: file ? 'uploading' : 'sending',
+    }
+    if (replyToId) {
+      message.replyToId = replyToId
+      // Shown at once, from what's already on screen - replaced by the
+      // server's own snapshot once the ack/message:new arrives.
+      message.replyTo = {
+        messageId: replyTarget.id,
+        senderId: replyTarget.senderId,
+        textSnippet: replyTarget.text?.slice(0, 120) ?? '',
+        attachmentKind: replyTarget.attachment?.kind ?? null,
+      }
     }
     if (file) {
       message.file = file
@@ -168,12 +187,21 @@ export default function ChatWindow({ conversationId }) {
           messages={entry.messages}
           hasMore={entry.hasMore}
           myId={user.id}
+          friendName={friend.displayName}
           readUpTo={readUpTo}
           onRetry={retry}
+          onReply={setReplyTarget}
         />
       )}
 
-      <MessageInput onSend={send} disabled={entry?.status !== 'ready'} />
+      <MessageInput
+        onSend={send}
+        disabled={entry?.status !== 'ready'}
+        replyTarget={replyTarget}
+        myId={user.id}
+        friendName={friend.displayName}
+        onCancelReply={() => setReplyTarget(null)}
+      />
     </section>
   )
 }

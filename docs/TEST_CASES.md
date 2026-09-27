@@ -2,13 +2,14 @@
 
 Kept up to date at the end of every phase.
 
-- **Automated** cases run with `npm test` (server: 194 tests) and
+- **Automated** cases run with `npm test` (server: 207 tests) and
   `npm run test:e2e` (Playwright: 11 browser tests).
 - **Manual** cases are the ones a person checks in the browser. Fill in the
   Actual and Result columns when you run them.
 
-Last full run: 2026-09-27 - **194/194 server tests pass, 11/11 end-to-end tests
-pass (run three times), lint clean.**
+Last full run: 2026-09-27 - **207/207 server tests pass, lint clean in both
+workspaces. Playwright e2e (11/11, from Phase 13) was not re-run this phase -
+see `docs/PROGRESS.md`, Known issues.**
 
 ---
 
@@ -211,6 +212,24 @@ pass (run three times), lint clean.**
 | A13.4 | An outsider (not in the conversation) tries to mark it read | Silently rejected; `lastRead` stays empty; nobody is notified |
 | A13.5 | Malformed or missing payload (`null`, missing `upToMessageId`) | Acked `{ ok: false }` - never left hanging with no reply, and the socket stays connected |
 
+### Phase 14 - `server/tests/messageActions.test.js`
+
+| ID | Case | Expected |
+|---|---|---|
+| A14.1 | Reply to a real message | The saved message's `replyTo` matches a snapshot of the original (id, sender, text snippet); delivered to the other participant with the same `replyTo` |
+| A14.2 | Reply to a nonexistent message id | Send still succeeds; `replyTo` is `null` (never fails the send) |
+| A14.3 | "Delete for me" | Ack `{ ok: true }`; my other tab gets `message:deleted { mode: 'me' }`; the other participant's socket gets nothing; my own `GET .../messages` excludes it; theirs still includes it |
+| A14.4 | "Delete for everyone" by the sender, within the window | Ack `{ ok: true }`; both participants get `message:deleted { mode: 'everyone' }`; `GET .../messages` shows `deletedForEveryone: true` and `text: ''` to both |
+| A14.5 | "Delete for everyone" attempted by the non-sender | Ack `{ ok: false, error: 'You can only delete your own messages for everyone' }` |
+| A14.6 | "Delete for everyone" after the 1-hour window | Ack `{ ok: false, error: 'This message is too old to delete for everyone' }` |
+| A14.7 | Deleting the newest message in a conversation | The recomputed `lastMessage` (in the ack and the broadcast) points at the next-newest non-deleted message, or `null` if there is none |
+| A14.8 | Delete on a conversation I am not part of | Ack `{ ok: false, error: 'Conversation not found' }` (404-style wording, not 403) |
+| A14.9 | Forward a message with an attachment to another friend | Ack `results[0].ok: true`; the new message has `forwarded: true`, the same text, and a cloned attachment (same file, new id); the recipient gets `message:new` live |
+| A14.10 | Forward to several conversations at once | One result per target, each independently `ok: true` |
+| A14.11 | Forward where one target is not actually reachable | That target's result is `ok: false`; the other targets still succeed |
+| A14.12 | Forward a message already deleted for everyone | Ack `{ ok: false, error: 'This message can no longer be forwarded' }` |
+| A14.13 | Forward a message from a conversation I have no access to | Ack `{ ok: false, error: 'Conversation not found' }` |
+
 ---
 
 ## Automated - end-to-end (`npm run test:e2e`)
@@ -359,6 +378,20 @@ different browsers, or one normal and one private window.
 | M13.4 | Reload after being read | Refresh the page that sent the message | Tick is still blue (loaded from the server, not just remembered locally) | | |
 | M13.5 | Ticks are private | Log in as the recipient | No tick appears on messages you received (ticks are sender-only) | | |
 | M13.6 | Overall look | Open the app | Green accent colour throughout, pale green outgoing bubbles vs white incoming, doodle-pattern chat background, pill-shaped composer with a circular send button, sidebar has a top bar (avatar + name + logout) instead of a footer | | |
+
+### Phase 14 - reply / delete / copy / forward
+
+| ID | Scenario | Steps | Expected | Actual | Result |
+|---|---|---|---|---|---|
+| M14.1 | Reply to a message | Hover a message → Reply, type a response, send | A quoted preview bar appears above the composer with a Cancel (×); the sent bubble shows the same quote inside it | Quote bar and sent bubble both showed "You / Doing great. Are you working on the project?" correctly | Pass |
+| M14.2 | Copy a message | Hover a message with text → Copy | A "Copied" toast appears; the text is on the clipboard | Clipboard write confirmed by the browser; toast observed on a later action | Pass |
+| M14.3 | Delete for me | Hover any message → Delete → "Delete for me" | The message disappears from MY view only, with no gap in the timeline; the other person still sees it | Priya deleted "Sure 🔥" for herself; it vanished from her chat with no gap, while Aman still saw it normally on his side | Pass |
+| M14.4 | Delete for everyone (my own recent message) | Hover my own message, sent within the last hour → Delete → "Delete for everyone" | Both dialog options appear ("Delete for everyone" and "Delete for me"); after confirming, both sides see "This message was deleted" in place of the content | Confirmed on both the aman and priya accounts | Pass |
+| M14.5 | Delete options on someone else's message | Hover a message THEY sent → Delete | Only "Delete for me" is offered - no "Delete for everyone" option at all | Confirmed - dialog showed only "Delete for me" | Pass |
+| M14.6 | Sidebar preview after deleting the newest message | Delete (for everyone) whatever is currently the chat's latest message | The Chats list preview updates immediately to the next most recent message, live, with no reload | Confirmed - preview went from the deleted text back to "Sure 🔥" instantly | Pass |
+| M14.7 | Forward a message | Hover a message → Forward → tick one or more friends → Forward | A toast confirms; the message appears in each selected friend's chat, marked "Forwarded" | Forwarded to Rahul Singh; message appeared instantly with the "Forwarded" label and arrow icon | Pass |
+| M14.8 | Forward with an attachment | Forward a message that has a photo or file attached | The attachment appears in the new chat too, without re-choosing or re-uploading the file | Not re-verified by hand this run (covered by A14.9) | |
+| M14.9 | Reply then cancel | Start a reply, then click the × on the preview bar | The preview bar disappears; sending now goes back to being a plain message | Not re-verified by hand this run (implementation mirrors M14.1's Cancel button) | |
 
 ### Phase 9 - deployment
 

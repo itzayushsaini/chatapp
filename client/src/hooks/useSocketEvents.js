@@ -78,6 +78,14 @@ export function useSocketEvents() {
       store().setReadUpTo(conversationId, upToMessageId)
     }
 
+    // `lastMessage` is only present when the deleted message WAS the
+    // sidebar preview - its absence means "nothing to update" there.
+    function onMessageDeleted(payload) {
+      const { conversationId, messageId, mode } = payload
+      store().applyMessageDeleted(conversationId, messageId, mode)
+      if ('lastMessage' in payload) store().setLastMessage(conversationId, payload.lastMessage)
+    }
+
     function onPresenceSnapshot({ online }) {
       store().setPresenceSnapshot(online)
     }
@@ -118,6 +126,7 @@ export function useSocketEvents() {
     socket.on('disconnect', onDisconnect)
     socket.on('message:new', onMessage)
     socket.on('message:read', onMessageRead)
+    socket.on('message:deleted', onMessageDeleted)
     socket.on('presence:snapshot', onPresenceSnapshot)
     socket.on('presence:update', onPresenceUpdate)
     socket.on('friend:request:new', onRequestNew)
@@ -134,6 +143,7 @@ export function useSocketEvents() {
       socket.off('disconnect', onDisconnect)
       socket.off('message:new', onMessage)
       socket.off('message:read', onMessageRead)
+      socket.off('message:deleted', onMessageDeleted)
       socket.off('presence:snapshot', onPresenceSnapshot)
       socket.off('presence:update', onPresenceUpdate)
       socket.off('friend:request:new', onRequestNew)

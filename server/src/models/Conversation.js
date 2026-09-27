@@ -17,6 +17,9 @@ const conversationSchema = new mongoose.Schema(
     lastMessage: {
       type: new mongoose.Schema(
         {
+          // Which message this snapshot is of, so a delete/forward can tell
+          // whether IT is the current preview and needs to be recomputed.
+          messageId: { type: ObjectId, ref: 'Message' },
           text: String,
           sender: { type: ObjectId, ref: 'User' },
           createdAt: Date,

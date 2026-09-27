@@ -118,6 +118,9 @@ describe('message:send', () => {
       text: 'hi priya', // trimmed
       clientId: payload.clientId,
       attachment: null,
+      replyTo: null,
+      forwarded: false,
+      deletedForEveryone: false,
       createdAt: expect.any(String),
     })
     expect(await toB).toEqual(ack.message)

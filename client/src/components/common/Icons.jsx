@@ -138,3 +138,29 @@ export const CheckCheckIcon = (p) => (
     <path d="M8.5 12.5 13 17l9-11" />
   </Icon>
 )
+export const MoreVerticalIcon = (p) => (
+  <Icon {...p}>
+    <circle cx="12" cy="5" r="1.2" fill="currentColor" stroke="none" />
+    <circle cx="12" cy="12" r="1.2" fill="currentColor" stroke="none" />
+    <circle cx="12" cy="19" r="1.2" fill="currentColor" stroke="none" />
+  </Icon>
+)
+export const ReplyIcon = (p) => (
+  <Icon {...p}>
+    <path d="M9 17 4 12l5-5" />
+    <path d="M4 12h10a6 6 0 0 1 6 6v1" />
+  </Icon>
+)
+export const ForwardIcon = (p) => (
+  <Icon {...p}>
+    <path d="m15 17 5-5-5-5" />
+    <path d="M20 12H10a6 6 0 0 0-6 6v1" />
+  </Icon>
+)
+export const TrashIcon = (p) => (
+  <Icon {...p}>
+    <path d="M4 7h16" />
+    <path d="M6 7v13a1 1 0 0 0 1 1h10a1 1 0 0 0 1-1V7" />
+    <path d="M9 7V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v3" />
+  </Icon>
+)

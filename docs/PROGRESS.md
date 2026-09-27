@@ -2,7 +2,7 @@
 
 A new session should be able to read this file and carry on from it.
 
-Last updated: 2026-09-27 (Phase 13 added same day)
+Last updated: 2026-09-27 (Phase 14 added same day)
 
 ---
 
@@ -23,8 +23,18 @@ Last updated: 2026-09-27 (Phase 13 added same day)
 | 11 | Attachments: photos, videos, documents - upload, magic-byte type check, permission-checked download with Range, cleanup, chat UI | **Done** |
 | 12 | Forgot password (Brevo email) and change password (from profile), with cross-device session invalidation | **Done** |
 | 13 | Read receipts (blue double tick) and a full WhatsApp-style visual reskin (green theme, bubble layout, doodle background, pill composer, sidebar top bar) | **Done** |
+| 14 | Message actions: reply (quoted preview), delete for me / delete for everyone (1-hour window), copy, forward (multi-select) | **Done** |
 
-**Verification (2026-09-27, after Phase 13):** `npm test` 194/194 pass,
+**Verification (2026-09-27, after Phase 14):** `npm test` 207/207 pass, lint
+clean in both workspaces. Also checked by hand in the browser with two real
+accounts (aman, priya): reply preview renders and sends correctly; delete for
+everyone shows "This message was deleted" to both sides and the sidebar
+preview recomputes live; delete for me removes the message on one account
+only, confirmed the other account still sees it; forward to a third friend
+(rahul) delivers instantly with a "Forwarded" label; copy writes to the
+clipboard. Playwright e2e was not re-run for this phase (see Known issues).
+
+**Earlier verification (2026-09-27, after Phase 13):** `npm test` 194/194 pass,
 `npm run test:e2e` 11/11 pass (run three times, no flakes), lint clean in both
 workspaces, `npm run build` succeeds, `npm audit --omit=dev` 0
 vulnerabilities. Also checked by hand in the browser: the green theme, pill
@@ -69,7 +79,8 @@ cleanly, so one commit "Phases 1-9: complete ChatApp (later renamed PingMe)" is 
 - `middleware/` - `requireAuth`, `validate` (+ `objectId`), `rateLimits`,
   `errorHandler`, `notFound`
 - `socket/` - `index.js` (init, rooms), `socketAuth.js`, `emitter.js`
-  (`emitToUser`), `handlers/messageHandlers.js`, `handlers/presenceHandlers.js`
+  (`emitToUser`), `handlers/messageHandlers.js` (`message:send`/`:delete`/`:forward`),
+  `handlers/presenceHandlers.js`, `handlers/readHandlers.js`
 - `utils/` - `AppError`, `pairKey`, `publicUser` (+ `selfUser`)
 - `scripts/seed.js`
 
@@ -149,6 +160,27 @@ cleanly, so one commit "Phases 1-9: complete ChatApp (later renamed PingMe)" is 
   `e2e/readReceipts.spec.js` (2 cases, live blue-tick behaviour on both
   triggers - opening a chat, and a message arriving while already open).
 
+### Phase 14 additions
+- Server: `Message` gained `replyTo` (a snapshot taken at send time, not a
+  live reference - see `docs/EXPLAINED.md`), `deletedForEveryone`,
+  `deletedFor` (an array of user ids) and `forwarded`; `Conversation.lastMessage`
+  gained `messageId`, so a delete can tell whether it needs to recompute the
+  sidebar preview. `messageService.js` gained `deleteMessage` and
+  `forwardMessage`, and `sendMessage`/`getHistory`/`messageView` were extended
+  for replies and soft deletes. `socket/handlers/messageHandlers.js` gained
+  `message:delete` and `message:forward` (sharing one rate limiter, 20 per 5
+  seconds), and `message:send` gained an optional `replyToId`.
+- Client: `useChatStore.js` gained `applyMessageDeleted` and `setLastMessage`;
+  `useSocketEvents.js` gained the `message:deleted` listener; `MessageBubble.jsx`
+  gained the hover/tap actions menu (Reply, Copy, Forward, Delete), the quoted
+  reply preview, the "Forwarded" label and the "This message was deleted"
+  placeholder; `MessageInput.jsx` gained the reply-preview bar; new
+  `ForwardDialog.jsx` (friend multi-select).
+- Tests: `server/tests/messageActions.test.js` (13 cases - reply snapshot,
+  delete for me, delete for everyone with its time limit and sender check,
+  sidebar preview recompute, forward including attachment cloning, multi-target
+  forward with a per-target failure, and the two 404 permission checks).
+
 ### Tests and deployment
 - `server/tests/` - `health`, `auth`, `rateLimits`, `friends`,
   `conversations`, `socket` + `setup.js`, `helpers.js`
@@ -203,8 +235,8 @@ cleanly, so one commit "Phases 1-9: complete ChatApp (later renamed PingMe)" is 
     profile, though not named in the request).
 16. **Profile pictures are cropped to 256×256 WebP in the browser**, so the
     server needs no image library. An animated GIF becomes a still picture.
-17. **Unsent uploads are deleted after 1 hour.** Messages (and so sent files)
-    are never deleted - the spec has no message deletion.
+17. **Unsent uploads are deleted after 1 hour.** Sent messages could not be
+    deleted until Phase 14 added it explicitly (see below).
 18. **`tests/setup.js` now wipes every collection**, including GridFS's
     `uploads.files` / `uploads.chunks`, which have no mongoose model.
 19. **Password reset was requested as its own feature after Phase 9**, adding
@@ -235,6 +267,35 @@ cleanly, so one commit "Phases 1-9: complete ChatApp (later renamed PingMe)" is 
     watched `node_modules` too, and something (likely OneDrive) touching files
     there restarted the server mid-request. `npm run dev` now uses
     `--watch-path=src`.
+24. **Message actions (Phase 14) were requested by the team after Phase 13**,
+    with two amendments they asked for directly: a time limit on "delete for
+    everyone" (1 hour, matching the intent of WhatsApp's own limit - not in
+    the original spec, so it was confirmed with the team rather than assumed)
+    and support for forwarding to several friends at once, not just one.
+25. **"Delete for everyone" is a soft delete**, never an actual row removal:
+    the text and attachment reference stay in the database, but every read
+    path (`messageView`, history, live events) hides them behind a fixed
+    placeholder once `deletedForEveryone` is true. This keeps the change
+    small and reversible at the database level, and matches the "delete for
+    me" design (`deletedFor`, an array of user ids) using the same underlying
+    document rather than a second collection.
+26. **A reply stores a snapshot, not a live reference.** `replyTo` is built
+    once, when the reply is sent, from the original message's text/attachment
+    at that moment - so if the original is later deleted, the quoted preview
+    still shows what it said, exactly like WhatsApp's own quoted replies.
+27. **Forwarding clones the attachment's metadata, never re-uploads the
+    bytes.** A new `Attachment` document is created pointing at the same
+    GridFS `fileId`, `message` already set (so the 1-hour unsent-upload
+    cleanup can never touch it, unlike a normal upload's brief unclaimed
+    window).
+28. **A known, deliberate gap: "delete for me" never touches the shared
+    sidebar preview** (`Conversation.lastMessage`). Since `lastMessage` is one
+    denormalized field shared by both participants, correctly showing a
+    different preview to each of them would need a second, per-user preview
+    field - out of proportion to what a "delete for me" is for (hiding a
+    message on my own devices, not rewriting shared conversation metadata).
+    "Delete for everyone" DOES recompute the shared preview, since in that
+    case the underlying message is actually gone for both people.
 
 ---
 
@@ -274,13 +335,17 @@ cleanly, so one commit "Phases 1-9: complete ChatApp (later renamed PingMe)" is 
 12. **Sessions from before Phase 12 shipped** have no `ts` claim, so the
     "log out every other device" check is skipped for them specifically
     (never for sessions created after that point). They age out within 7 days.
+13. **Playwright e2e was not re-run for Phase 14** (message actions were
+    verified with 207 passing server tests and by hand in the browser
+    instead). A dedicated `e2e/messageActions.spec.js` covering reply,
+    delete and forward through a real browser is still worth adding later.
 
 ---
 
 ## How to verify everything
 
 1. `npm install`
-2. `npm test` - 194 pass
+2. `npm test` - 207 pass
 3. `npm run lint` - no errors
 4. `npx playwright install chromium` (once), then `npm run test:e2e` - 11 pass
 5. `cp server/.env.example server/.env`, fill in `MONGO_URI` and `JWT_SECRET`

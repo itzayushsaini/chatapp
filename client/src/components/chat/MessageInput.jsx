@@ -8,8 +8,18 @@ const MAX_LENGTH = 2000
 // Show the character counter only once the user is getting close.
 const COUNTER_FROM = 1800
 
-// onSend(text, file) - file is null for a plain text message.
-export default function MessageInput({ onSend, disabled }) {
+function attachmentSnippetLabel(kind) {
+  if (kind === 'image') return '📷 Photo'
+  if (kind === 'video') return '🎥 Video'
+  if (kind === 'file') return '📄 File'
+  return 'Message'
+}
+
+// onSend(text, file, replyToId) - file and replyToId are null when not used.
+// `replyTarget` is the message being replied to (or null), and `onCancelReply`
+// clears it - both owned by the parent, since a reply started from a bubble
+// must reach this sibling component.
+export default function MessageInput({ onSend, disabled, replyTarget, myId, friendName, onCancelReply }) {
   const [text, setText] = useState('')
   const [file, setFile] = useState(null)
   const textareaRef = useRef(null)
@@ -21,10 +31,11 @@ export default function MessageInput({ onSend, disabled }) {
 
   function submit() {
     if (!canSend) return
-    onSend(trimmed, file)
+    onSend(trimmed, file, replyTarget?.id ?? null)
     setText('')
     setFile(null)
     resize('')
+    onCancelReply()
     textareaRef.current?.focus()
   }
 
@@ -52,6 +63,12 @@ export default function MessageInput({ onSend, disabled }) {
     textareaRef.current?.focus()
   }
 
+  // Focus the composer the moment a reply is picked, the same as clicking
+  // into the text field directly.
+  useEffect(() => {
+    if (replyTarget) textareaRef.current?.focus()
+  }, [replyTarget])
+
   // Grow the box with its content, up to about 5 lines.
   function resize(value) {
     const el = textareaRef.current
@@ -68,6 +85,9 @@ export default function MessageInput({ onSend, disabled }) {
       }}
       className="bg-slate-100 px-3 py-2.5 sm:px-4"
     >
+      {replyTarget && (
+        <ReplyPreview target={replyTarget} myId={myId} friendName={friendName} onCancel={onCancelReply} />
+      )}
       {file && <ChosenFile file={file} onRemove={() => setFile(null)} />}
 
       <div className="flex items-end gap-2">
@@ -129,6 +149,31 @@ export default function MessageInput({ onSend, disabled }) {
         </p>
       )}
     </form>
+  )
+}
+
+// The message being replied to, shown above the input with a Cancel button -
+// the same quoted preview that will appear inside the sent bubble.
+function ReplyPreview({ target, myId, friendName, onCancel }) {
+  return (
+    <div className="mb-2 flex items-center gap-3 rounded-xl border border-slate-200 bg-slate-50 p-2">
+      <div className="min-w-0 flex-1 border-l-4 border-brand-500 pl-2">
+        <p className="text-xs font-medium text-brand-700">
+          {target.senderId === myId ? 'You' : friendName}
+        </p>
+        <p className="truncate text-sm text-slate-600">
+          {target.text || (target.attachment ? attachmentSnippetLabel(target.attachment.kind) : 'Message')}
+        </p>
+      </div>
+      <button
+        type="button"
+        onClick={onCancel}
+        className="rounded-lg px-2 py-1 text-xl leading-none text-slate-500 hover:bg-slate-200 hover:text-slate-800 focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:outline-none"
+        aria-label="Cancel reply"
+      >
+        ×
+      </button>
+    </div>
   )
 }
 

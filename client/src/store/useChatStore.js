@@ -381,4 +381,30 @@ export const useChatStore = create((set, get) => ({
             : s.unreadCounts,
       }
     }),
+
+  // A message:deleted event (or its own ack, on the tab that asked - see
+  // ChatWindow). "me" removes it outright (hidden on my devices only); the
+  // conversation timeline must not shift for "everyone", so that one is
+  // marked in place instead, the same shape messageView() sends for it.
+  applyMessageDeleted: (conversationId, messageId, mode) =>
+    set((s) =>
+      patchConversation(s, conversationId, (e) => ({
+        messages:
+          mode === 'me'
+            ? e.messages.filter((m) => m.id !== messageId)
+            : e.messages.map((m) =>
+                m.id === messageId ? { ...m, deletedForEveryone: true, text: '', attachment: null } : m,
+              ),
+      })),
+    ),
+
+  // Overwrites a friend's sidebar preview with a value the SERVER has
+  // already decided (recomputed after a "delete for everyone"), so - unlike
+  // withLastMessage - there is no "only if newer" guard here.
+  setLastMessage: (conversationId, lastMessage) =>
+    set((s) => ({
+      friends: sortFriends(
+        s.friends.map((f) => (f.conversationId === conversationId ? { ...f, lastMessage } : f)),
+      ),
+    })),
 }))

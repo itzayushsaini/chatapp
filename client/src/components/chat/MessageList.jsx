@@ -11,7 +11,16 @@ import MessageBubble from './MessageBubble.jsx'
 const NEAR_BOTTOM_PX = 120
 const LOAD_OLDER_PX = 80
 
-export default function MessageList({ conversationId, messages, hasMore, myId, readUpTo, onRetry }) {
+export default function MessageList({
+  conversationId,
+  messages,
+  hasMore,
+  myId,
+  friendName,
+  readUpTo,
+  onRetry,
+  onReply,
+}) {
   const fetchOlder = useChatStore((s) => s.fetchOlder)
   const listRef = useRef(null)
   const nearBottom = useRef(true)
@@ -125,11 +134,14 @@ export default function MessageList({ conversationId, messages, hasMore, myId, r
                 <MessageBubble
                   message={m}
                   mine={m.senderId === myId}
+                  myId={myId}
+                  friendName={friendName}
                   // Same-length hex ids compare correctly as strings.
                   read={Boolean(m.id && readUpTo && m.id <= readUpTo)}
                   onRetry={onRetry}
                   onOpenImage={setViewing}
                   onMediaLoad={handleMediaLoad}
+                  onReply={onReply}
                 />
               </Fragment>
             )

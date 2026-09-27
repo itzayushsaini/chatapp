@@ -14,6 +14,31 @@ const messageSchema = new mongoose.Schema(
     // a timeout, the same clientId comes again and we return the message that
     // was already saved instead of storing it twice.
     clientId: { type: String, required: true },
+    // A snapshot taken AT SEND TIME, not a live reference - so the quoted
+    // preview still reads correctly even after the original message is later
+    // deleted. null when this message is not a reply.
+    replyTo: {
+      type: new mongoose.Schema(
+        {
+          messageId: { type: ObjectId, ref: 'Message' },
+          senderId: { type: ObjectId, ref: 'User' },
+          textSnippet: String,
+          attachmentKind: String,
+        },
+        { _id: false },
+      ),
+      default: null,
+    },
+    // Soft delete only - the real text/attachment stay in the database so
+    // "delete for everyone" can still be undone at the database level if
+    // ever needed, but every read path must hide them once this is true.
+    deletedForEveryone: { type: Boolean, default: false },
+    // Ids of users who chose "delete for me". Hidden from their view only;
+    // the other participant still sees the message normally.
+    deletedFor: { type: [ObjectId], default: [] },
+    // True for a message created by forwarding another one. We only need to
+    // show a "Forwarded" label, not the original message's history.
+    forwarded: { type: Boolean, default: false },
   },
   { timestamps: true },
 )

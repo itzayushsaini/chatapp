@@ -38,6 +38,9 @@ describe('GET /api/conversations/:id/messages', () => {
       text: 'message 6',
       clientId: expect.any(String),
       attachment: null,
+      replyTo: null,
+      forwarded: false,
+      deletedForEveryone: false,
       createdAt: expect.any(String),
     })
   })

@@ -1312,3 +1312,136 @@ Specific WhatsApp details recreated:
 of scope for this phase - the app remains light-only. Adding it later would
 mean giving every one of these colours a dark-mode counterpart via
 `@media (prefers-color-scheme: dark)`, which is real, separate work.
+
+# Phase 14 - message actions (reply, delete, copy, forward)
+
+## 1. Why a reply stores a snapshot, not a live link
+
+When you reply to a message, WhatsApp shows a small quoted box above your new
+message with a bit of the original text. The simplest way to build this would
+be to store a *reference* to the original message (its id) and look it up
+again every time the reply is displayed. That has a problem: if the original
+message is later deleted, the quote would either disappear or need special
+handling to still show something sensible.
+
+Instead, the moment a reply is sent, the server takes a **snapshot**: it
+copies the original message's text (or, for a photo/video/file, just what
+kind of attachment it was) directly onto the new message, as a small object
+called `replyTo`. From that point on, the reply's quoted preview never needs
+to look the original message up again - it already has everything it needs,
+frozen at the moment the reply was sent. This is also exactly what a printed
+or forwarded quotation is: a copy of what was said, not a live pointer to it.
+
+If you try to reply to a message that no longer exists (for example, someone
+deleted it in the half a second between you tapping Reply and your message
+actually reaching the server), the server does not fail your send - it just
+sends the message without a quote. A reply failing outright over a missing
+quote would be a worse experience than simply not showing one.
+
+## 2. Two different kinds of "delete", and why they need different rules
+
+WhatsApp actually offers two different delete operations, and it is
+important to see why they cannot use the same rules:
+
+- **"Delete for me"** only changes what *you* see. Your friend still has the
+  message. Since only your own view changes, there is no reason to restrict
+  who can do this, or when - you can hide any message, sent by anyone, at any
+  time, purely on your own device.
+- **"Delete for everyone"** actually removes the message's content from both
+  people's view. Because this affects someone else's screen too, it needs
+  real rules: only the person who *sent* the message can do it (otherwise
+  anyone could erase messages from your side of a chat), and - at the team's
+  request - only within **one hour** of sending. Without a time limit,
+  someone could rewrite a conversation's history long after the fact, which
+  defeats the purpose of a message history at all.
+
+Both are implemented as what's called a **soft delete**: the message's row is
+never actually removed from the database. Instead, a flag is set
+(`deletedForEveryone`, or the sender's id added to a `deletedFor` list), and
+every place that sends a message to a client - history, live events, sockets -
+checks that flag and substitutes an empty placeholder instead of the real
+content. The real text technically still exists in the database (the same way
+a "soft delete" works in most real systems), but no client, ever, is shown it
+once the flag is set. This is simpler and safer than trying to actually erase
+specific fields from a document while leaving others (like its position in
+the conversation) intact.
+
+## 3. Keeping the chat list's preview text honest
+
+The sidebar shows a one-line preview of each friend's most recent message
+(`Conversation.lastMessage`). If someone deletes their most recent message
+"for everyone", but the sidebar preview is never told, it would keep showing
+the deleted text - which defeats the whole point of "delete for everyone".
+
+So a delete checks: was the message I just deleted the one currently shown as
+the preview? If yes, the server looks up whatever is now the *newest*
+non-deleted message in that conversation (or decides there is none) and
+recomputes the preview, then tells both connected clients about the new
+preview in the same event that announces the delete. If the deleted message
+was **not** the preview (an older message, buried in the history), nothing
+about the preview needs to change, and the event says so by simply leaving
+that part out.
+
+**Deliberately not changed:** "delete for me" never touches this shared
+preview field, even if the message you hid happens to be the newest one. The
+reason is that `lastMessage` is one single field shared by both people in the
+conversation - there is no "my version of the preview" and "their version".
+Making "delete for me" correctly hide content from only your own preview
+would need a second, per-user preview field, which is a real schema change
+for a fairly small visual inconsistency (you'd briefly see old preview text
+for a message you specifically chose to hide from your own view only - not a
+message anyone else can see was deleted).
+
+## 4. Why the person who deletes doesn't get their own broadcast
+
+Both delete and forward reuse a trick already used by `message:send`: when the
+server tells other people about something over a socket, it uses
+`socket.to(room).emit(...)`, which reaches everyone *else* in that room but
+skips the very socket that triggered it. That's normally exactly what you
+want - your own tab already knows what it just did, so telling it again over
+the broadcast channel would be redundant.
+
+But this means the tab that clicked "Delete" needs *some* way to update its
+own screen immediately, without waiting for an event that will never reach
+it. The fix: the acknowledgement (`ack`) sent back to that specific click
+carries the exact same information as the broadcast event would have. The
+button's own click handler applies the update locally from the ack, and every
+other connected tab (mine or my friend's) applies the identical update from
+the broadcast event. Same information, two different delivery paths,
+depending on whether you are the one who clicked or not.
+
+## 5. Forwarding a file without re-uploading it
+
+Forwarding a message that has a photo or document attached does not ask you
+to upload the file again. Instead, the server creates a new `Attachment`
+record that points at the exact same underlying file in GridFS (the same
+`fileId`), just with a new owner (you) and a new conversation. The actual
+bytes of the file are never copied or moved - only a small pointer record is
+duplicated, which is instant and needs no extra storage space per forward.
+
+One extra care point: a normal upload briefly exists "unclaimed" (uploaded,
+but not yet attached to a sent message) until the send request claims it, and
+anything unclaimed for over an hour is automatically deleted by a cleanup job
+(Phase 11). A forwarded attachment is never in that unclaimed state even
+briefly - the server creates its `Attachment` record and its `Message`
+together, with the link between them already in place, so the cleanup job can
+never mistake it for an abandoned upload.
+
+## 6. Multiple decisions, made because the team asked for them directly
+
+Two things in this phase were built specifically because the team asked for
+them, rather than being implied by the original spec:
+
+- **The one-hour limit on "delete for everyone".** Without being asked, a
+  simpler version (no time limit at all) would have been just as easy to
+  build - the team specifically wanted a limit, closer to how WhatsApp itself
+  behaves, so it was added and is enforced entirely on the server (the
+  client's own "can I delete for everyone" check is just a convenience hint
+  for what buttons to show - the server checks it independently regardless of
+  what the client sends).
+- **Forwarding to more than one friend at once.** The simplest version of
+  forward would let you pick exactly one destination per action. The team
+  asked for the same multi-select WhatsApp offers, so the forward dialog is a
+  checklist, and one click can send the same message to several friends in
+  one request - each one checked and reported on independently, so being
+  unfriended with one of them does not block the rest from receiving it.

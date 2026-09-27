@@ -1,3 +1,5 @@
+import crypto from 'node:crypto'
+
 import mongoose from 'mongoose'
 
 import { Attachment } from '../models/Attachment.js'
@@ -7,9 +9,40 @@ import { AppError } from '../utils/AppError.js'
 import { attachmentView } from './attachmentService.js'
 import { assertFriends, assertParticipant } from './friendService.js'
 
+// A quoted reply is shown as its snapshot from send time (see the model
+// comment) - the id lets the client jump to the original if it's still here.
+function replyToView(replyTo) {
+  if (!replyTo) return null
+  return {
+    messageId: String(replyTo.messageId),
+    senderId: String(replyTo.senderId),
+    textSnippet: replyTo.textSnippet ?? '',
+    attachmentKind: replyTo.attachmentKind ?? null,
+  }
+}
+
 // The one shape a message has when it leaves the server (REST and sockets).
 // `message.attachment` must be populated (the Attachment document) or null.
+//
+// A message deleted "for everyone" is a soft delete: the row still exists,
+// but every reader is shown the same empty placeholder rather than the
+// original text or attachment.
 export function messageView(message) {
+  if (message.deletedForEveryone) {
+    return {
+      id: String(message._id),
+      conversationId: String(message.conversation),
+      senderId: String(message.sender),
+      text: '',
+      clientId: message.clientId,
+      attachment: null,
+      replyTo: replyToView(message.replyTo),
+      forwarded: message.forwarded ?? false,
+      deletedForEveryone: true,
+      createdAt: message.createdAt,
+    }
+  }
+
   return {
     id: String(message._id),
     conversationId: String(message.conversation),
@@ -17,6 +50,9 @@ export function messageView(message) {
     text: message.text ?? '',
     clientId: message.clientId,
     attachment: message.attachment ? attachmentView(message.attachment) : null,
+    replyTo: replyToView(message.replyTo),
+    forwarded: message.forwarded ?? false,
+    deletedForEveryone: false,
     createdAt: message.createdAt,
   }
 }
@@ -30,7 +66,12 @@ export function messageView(message) {
 export async function getHistory(meId, conversationId, { before, limit }) {
   const conversation = await assertParticipant(conversationId, meId)
 
-  const filter = { conversation: conversationId }
+  // A message I deleted "for me" is excluded entirely, not just flagged, so
+  // it never renders on my screen again. This can make a page come back with
+  // fewer than `limit` visible rows even though older history remains -
+  // acceptable for a chat this size, and simpler than shifting the cursor to
+  // compensate.
+  const filter = { conversation: conversationId, deletedFor: { $ne: meId } }
   if (before) filter._id = { $lt: before }
 
   // Fetch one extra row: if it exists, there are older messages to load.
@@ -79,13 +120,42 @@ async function findExisting(meId, clientId) {
   return Message.findOne({ sender: meId, clientId }).populate('attachment')
 }
 
+// Builds the `replyTo` snapshot stored on the new message, or null. Looked up
+// scoped to the SAME conversation, so a stray or cross-conversation id is
+// simply treated as "no reply" rather than failing the whole send - the
+// original may also have been deleted between the user tapping Reply and the
+// message actually going out.
+async function buildReplySnapshot(conversationId, replyToId) {
+  if (!replyToId) return null
+  const original = await Message.findOne({ _id: replyToId, conversation: conversationId }).populate(
+    'attachment',
+  )
+  if (!original) return null
+  return {
+    messageId: original._id,
+    senderId: original.sender,
+    textSnippet: original.deletedForEveryone ? '' : (original.text ?? '').slice(0, 120),
+    attachmentKind: original.deletedForEveryone ? null : (original.attachment?.kind ?? null),
+  }
+}
+
+function lastMessageSnapshot(message, attachment) {
+  return {
+    messageId: message._id,
+    text: message.text,
+    sender: message.sender,
+    createdAt: message.createdAt,
+    attachment: attachment ? { kind: attachment.kind, name: attachment.name } : null,
+  }
+}
+
 // Saves a message. The ORDER of the checks is the point: nothing is saved
 // unless I am in the conversation AND we are still friends. The caller
 // (the socket handler) emits and acknowledges only after this returns.
 //
 // Returns { message, otherId, created }. created is false when this was a
 // retry of a message we already have.
-export async function sendMessage(meId, { conversationId, text, clientId, attachmentId }) {
+export async function sendMessage(meId, { conversationId, text, clientId, attachmentId, replyToId }) {
   const conversation = await assertParticipant(conversationId, meId)
   const otherId = String(conversation.participants.find((p) => String(p) !== String(meId)))
   await assertFriends(meId, otherId)
@@ -117,6 +187,8 @@ export async function sendMessage(meId, { conversationId, text, clientId, attach
     }
   }
 
+  const replyTo = await buildReplySnapshot(conversationId, replyToId)
+
   let message
   try {
     message = await Message.create({
@@ -126,6 +198,7 @@ export async function sendMessage(meId, { conversationId, text, clientId, attach
       text,
       clientId,
       attachment: attachment?._id ?? null,
+      replyTo,
     })
   } catch (err) {
     // Release the claim so the upload can still be sent.
@@ -146,17 +219,146 @@ export async function sendMessage(meId, { conversationId, text, clientId, attach
       _id: conversationId,
       $or: [{ lastMessage: null }, { 'lastMessage.createdAt': { $lte: message.createdAt } }],
     },
-    {
-      lastMessage: {
-        text: message.text,
-        sender: meId,
-        createdAt: message.createdAt,
-        attachment: attachment ? { kind: attachment.kind, name: attachment.name } : null,
-      },
-    },
+    { lastMessage: lastMessageSnapshot(message, attachment) },
   )
 
   // A plain copy with the full attachment in place of its id, for messageView.
   const view = messageView({ ...message.toObject(), attachment })
   return { message: view, otherId, created: true }
+}
+
+// How long after sending a message can still be deleted "for everyone".
+// Matches the intent of WhatsApp's own limit: long enough to undo a mistake,
+// short enough that it can't rewrite a conversation's history much later.
+const DELETE_FOR_EVERYONE_WINDOW_MS = 60 * 60 * 1000
+
+// The client shape of a sidebar preview - see lastMessageView in
+// friendService.js, which this deliberately matches.
+function lastMessageClientView(snapshot) {
+  if (!snapshot) return null
+  return {
+    text: snapshot.text,
+    senderId: String(snapshot.sender),
+    createdAt: snapshot.createdAt,
+    attachment: snapshot.attachment,
+  }
+}
+
+// If the message I just deleted was the conversation's preview, recompute it
+// from whatever is now the newest non-deleted message (or clear it to null),
+// and return the new preview so the caller can tell connected clients about
+// it. Returns undefined (not null) when this message was NOT the preview, so
+// the caller can tell "nothing to update" apart from "cleared to nothing".
+async function recomputeLastMessageIfNeeded(conversationId, deletedMessageId) {
+  const conversation = await Conversation.findById(conversationId)
+  if (!conversation?.lastMessage || String(conversation.lastMessage.messageId) !== String(deletedMessageId)) {
+    return undefined
+  }
+
+  const replacement = await Message.findOne({ conversation: conversationId, deletedForEveryone: false })
+    .sort({ _id: -1 })
+    .populate('attachment')
+
+  const snapshot = replacement ? lastMessageSnapshot(replacement, replacement.attachment) : null
+  await Conversation.updateOne({ _id: conversationId }, { lastMessage: snapshot })
+  return lastMessageClientView(snapshot)
+}
+
+// Deletes a message "for me" (hidden on my devices only) or "for everyone"
+// (soft-deleted for both). Returns { otherId, mode, lastMessage } so the
+// handler knows who else, if anyone, needs telling, and whether the sidebar
+// preview changed. `lastMessage` is only present when it actually changed.
+export async function deleteMessage(meId, { conversationId, messageId, mode }) {
+  const conversation = await assertParticipant(conversationId, meId)
+  const otherId = String(conversation.participants.find((p) => String(p) !== String(meId)))
+
+  const message = await Message.findOne({ _id: messageId, conversation: conversationId })
+  if (!message) throw new AppError(404, 'Message not found')
+
+  if (mode === 'everyone') {
+    if (String(message.sender) !== String(meId)) {
+      throw new AppError(403, 'You can only delete your own messages for everyone')
+    }
+    if (Date.now() - message.createdAt.getTime() > DELETE_FOR_EVERYONE_WINDOW_MS) {
+      throw new AppError(400, 'This message is too old to delete for everyone')
+    }
+    let lastMessage
+    if (!message.deletedForEveryone) {
+      message.deletedForEveryone = true
+      await message.save()
+      lastMessage = await recomputeLastMessageIfNeeded(conversationId, messageId)
+    }
+    return { otherId, mode, lastMessage }
+  }
+
+  // mode === 'me': hides it on my own devices only, never announced to the
+  // other participant, and never touches the shared sidebar preview.
+  await Message.updateOne({ _id: messageId }, { $addToSet: { deletedFor: meId } })
+  return { otherId, mode, lastMessage: undefined }
+}
+
+// Copies a message's content into one or more OTHER conversations, as a brand
+// new message (own id, own clientId, marked forwarded: true). Each target is
+// checked independently, so being unfriended with one recipient doesn't
+// block forwarding to the rest.
+export async function forwardMessage(meId, { messageId, toConversationIds }) {
+  const source = await Message.findById(messageId).populate('attachment')
+  if (!source) throw new AppError(404, 'Message not found')
+  await assertParticipant(source.conversation, meId)
+  if (source.deletedForEveryone || source.deletedFor.some((id) => String(id) === String(meId))) {
+    throw new AppError(400, 'This message can no longer be forwarded')
+  }
+
+  const uniqueTargets = [...new Set(toConversationIds.map(String))]
+  const results = []
+
+  for (const conversationId of uniqueTargets) {
+    try {
+      const conversation = await assertParticipant(conversationId, meId)
+      const otherId = String(conversation.participants.find((p) => String(p) !== String(meId)))
+      await assertFriends(meId, otherId)
+
+      const newMessageId = new mongoose.Types.ObjectId()
+
+      let attachment = null
+      if (source.attachment) {
+        attachment = await Attachment.create({
+          uploader: meId,
+          conversation: conversationId,
+          fileId: source.attachment.fileId,
+          name: source.attachment.name,
+          mimeType: source.attachment.mimeType,
+          size: source.attachment.size,
+          kind: source.attachment.kind,
+          message: newMessageId,
+        })
+      }
+
+      const message = await Message.create({
+        _id: newMessageId,
+        conversation: conversationId,
+        sender: meId,
+        text: source.text,
+        clientId: crypto.randomUUID(),
+        attachment: attachment?._id ?? null,
+        forwarded: true,
+      })
+
+      await Conversation.updateOne(
+        {
+          _id: conversationId,
+          $or: [{ lastMessage: null }, { 'lastMessage.createdAt': { $lte: message.createdAt } }],
+        },
+        { lastMessage: lastMessageSnapshot(message, attachment) },
+      )
+
+      const view = messageView({ ...message.toObject(), attachment })
+      results.push({ conversationId, ok: true, message: view, otherId })
+    } catch (err) {
+      if (!(err instanceof AppError)) throw err
+      results.push({ conversationId, ok: false, error: err.message })
+    }
+  }
+
+  return results
 }
