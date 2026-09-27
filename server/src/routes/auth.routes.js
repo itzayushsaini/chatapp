@@ -1,0 +1,38 @@
+import { Router } from 'express'
+import { z } from 'zod'
+
+import * as auth from '../controllers/auth.controller.js'
+import { authLimiter } from '../middleware/rateLimits.js'
+import { requireAuth } from '../middleware/requireAuth.js'
+import { validate } from '../middleware/validate.js'
+import { USERNAME_REGEX } from '../models/User.js'
+
+const registerSchema = z.object({
+  username: z
+    .string()
+    .trim()
+    .toLowerCase()
+    .regex(USERNAME_REGEX, 'must be 3-20 characters: letters, numbers, _ or .'),
+  displayName: z.string().trim().min(1, 'is required').max(40, 'must be at most 40 characters'),
+  email: z.string().trim().toLowerCase().email('must be a valid email address'),
+  // bcrypt only uses the first 72 bytes, so a longer password would silently
+  // be cut short. Rejecting it is more honest.
+  password: z
+    .string()
+    .min(8, 'must be at least 8 characters')
+    .max(72, 'must be at most 72 characters'),
+})
+
+const loginSchema = z.object({
+  identifier: z.string().trim().toLowerCase().min(1, 'is required'),
+  password: z.string().min(1, 'is required').max(72),
+})
+
+const router = Router()
+
+router.post('/register', authLimiter, validate({ body: registerSchema }), auth.register)
+router.post('/login', authLimiter, validate({ body: loginSchema }), auth.login)
+router.post('/logout', auth.logout)
+router.get('/me', requireAuth, auth.me)
+
+export default router

@@ -1,0 +1,14 @@
+/* Tailwind v4 needs exactly this one line - no tailwind.config.js and no
+   PostCSS file. The @tailwindcss/vite plugin in vite.config.js scans the
+   source for class names and generates only the CSS actually used. */
+@import 'tailwindcss';
+
+/* v4 customises the theme in CSS. Inter is loaded in index.html; the rest
+   of the stack is the fallback while it loads or if it is blocked. */
+@theme {
+  --font-sans: 'Inter', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif;
+}
+
+body {
+  @apply bg-slate-50 font-sans text-slate-900 antialiased;
+}

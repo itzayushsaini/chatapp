@@ -1,0 +1,29 @@
+# Render "Blueprint": one web service that runs the whole app.
+# Render reads this file when you choose New > Blueprint and pick this repo.
+# See docs/DEPLOY.md for the step-by-step guide.
+services:
+  - type: web
+    name: chatapp
+    runtime: node
+    plan: free
+    # Dev dependencies are needed to BUILD the client (Vite, Tailwind), so
+    # include them even though NODE_ENV is production.
+    buildCommand: npm ci --include=dev && npm run build
+    startCommand: npm start
+    # Render checks this before switching traffic to a new deploy.
+    healthCheckPath: /api/health
+    envVars:
+      - key: NODE_ENV
+        value: production
+      # Paste your MongoDB Atlas connection string in the Render dashboard.
+      # sync: false means it is never stored in this file.
+      - key: MONGO_URI
+        sync: false
+      # Render generates a long random value once and keeps it.
+      - key: JWT_SECRET
+        generateValue: true
+      # The in-memory MongoDB used by the tests would otherwise download a
+      # ~600 MB binary during every build. Production never needs it.
+      - key: MONGOMS_DISABLE_POSTINSTALL
+        value: "1"
+      # PORT is set by Render automatically; config/env.js reads it.

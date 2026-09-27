@@ -1,0 +1,27 @@
+# Dependencies
+node_modules/
+
+# Build output
+dist/
+client/dist/
+
+# Secrets - never commit real environment values
+.env
+.env.local
+.env.*.local
+
+# Logs
+*.log
+npm-debug.log*
+
+# Test output
+coverage/
+playwright-report/
+test-results/
+
+# Downloaded MongoDB binaries used by mongodb-memory-server
+.cache/mongodb-binaries/
+
+# Editor / OS
+.DS_Store
+Thumbs.db
