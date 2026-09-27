@@ -4,6 +4,10 @@ A web-based, one-to-one, real-time text chat application.
 
 B.Tech CSE final-year project, COER University.
 
+**Live demo:** <https://chatapp-xu38.onrender.com/>
+> The free hosting tier sleeps after ~15 minutes of no traffic, so the first
+> load after a while can take up to a minute to wake up.
+
 ## What makes it different
 
 You cannot browse a list of everyone who has an account. To talk to someone you
