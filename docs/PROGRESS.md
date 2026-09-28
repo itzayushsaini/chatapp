@@ -69,6 +69,21 @@ original chat no-scroll-chaining test (`chat.spec.js`) still passes
 unchanged, proving both are satisfied at once. `npm test` 261/261,
 `npm run test:e2e` 19/19 (1 new), lint clean, build succeeds.
 
+**Follow-up (same day): the Admin panel's own header and tabs scrolled away
+too.** The fix above correctly restored page-level scrolling on the Admin
+panel, but `AdminPage.jsx` had never had a header/tabs pinned in place while
+its content scrolls - it was one plain `min-h-dvh` page in normal document
+flow, so once scrolling worked again, the header and Overview/Users/Settings
+tabs scrolled out of view along with everything else, and the team lost
+their place. Restructured it to the same pattern `SettingsPage.jsx` already
+uses: `h-dvh flex flex-col` with the header/tabs as fixed `shrink-0`
+children, and only `<main>` (`min-h-0 flex-1 overflow-y-auto`) scrolling.
+Verified visually against an isolated server, logged in as a real (in-memory)
+admin account: the header and tabs now stay in view while scrolling down to
+reach "Save settings". `npm test` 261/261, `npm run test:e2e` 19/19
+(unaffected - no e2e coverage of the admin panel exists yet, see Known
+issues), lint clean, build succeeds.
+
 **Earlier verification (2026-09-27, after Phase 16b):** `npm test` 261/261 pass (30
 new: 15 Google sign-in with Google's endpoints faked, 15 block / clear / mute /
 shared files / theme), `npm run test:e2e` 16/16 pass (4 new in
