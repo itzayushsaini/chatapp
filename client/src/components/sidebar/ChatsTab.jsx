@@ -7,7 +7,7 @@ import { previewTime } from '../../utils/time.js'
 import Avatar from '../common/Avatar.jsx'
 import Button from '../common/Button.jsx'
 import { AlertIcon, BellOffIcon, CheckIcon, CopyIcon, UserPlusIcon } from '../common/Icons.jsx'
-import Spinner from '../common/Spinner.jsx'
+import Skeleton from '../common/Skeleton.jsx'
 import TypingDots from '../common/TypingDots.jsx'
 
 export default function ChatsTab() {
@@ -17,9 +17,18 @@ export default function ChatsTab() {
 
   if (status === 'loading') {
     return (
-      <div className="flex justify-center py-10">
-        <Spinner />
-      </div>
+      <ul className="divide-y divide-slate-100" role="status">
+        <span className="sr-only">Loading chats…</span>
+        {[0, 1, 2, 3, 4].map((i) => (
+          <li key={i} className="flex items-center gap-3 px-3 py-3">
+            <Skeleton className="h-11 w-11 shrink-0 rounded-full" />
+            <div className="min-w-0 flex-1 space-y-2">
+              <Skeleton className="h-3.5 w-2/5" />
+              <Skeleton className="h-3 w-3/5" />
+            </div>
+          </li>
+        ))}
+      </ul>
     )
   }
 
@@ -72,10 +81,15 @@ function FriendRow({ item }) {
       type="button"
       onClick={() => open(conversationId)}
       aria-current={isActive ? 'true' : undefined}
-      className={`flex w-full items-center gap-3 px-3 py-3 text-left transition-colors duration-150 focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-brand-500 focus-visible:outline-none ${
+      className={`relative flex w-full items-center gap-3 px-3 py-3 text-left transition-colors duration-150 focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-brand-500 focus-visible:outline-none ${
         isActive ? 'bg-slate-100' : 'hover:bg-slate-50'
       }`}
     >
+      {/* The selected row's own left edge, so which chat is open is
+          obvious at a glance - not just a faint background tint. */}
+      {isActive && (
+        <span className="absolute inset-y-1 left-0 w-1 rounded-r-full bg-brand-600" aria-hidden="true" />
+      )}
       <Avatar user={friend} online={online} />
       <span className="min-w-0 flex-1">
         <span className="flex items-baseline justify-between gap-2">

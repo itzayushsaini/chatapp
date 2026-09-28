@@ -222,3 +222,119 @@ body,
     transform: scale(0.96);
   }
 }
+
+/* A slow, gentle pulse ring around an online friend's avatar dot - makes
+   "online" read as a live signal rather than a static coloured circle.
+   Kept separate from Tailwind's own animate-ping (which ignores reduced
+   motion) so it lives inside the same reduced-motion block as everything
+   else here. */
+@media (prefers-reduced-motion: no-preference) {
+  .animate-online-pulse {
+    animation: online-pulse 1.8s cubic-bezier(0, 0, 0.2, 1) infinite;
+  }
+}
+@keyframes online-pulse {
+  0% {
+    transform: scale(1);
+    opacity: 0.6;
+  }
+  75%,
+  100% {
+    transform: scale(1.8);
+    opacity: 0;
+  }
+}
+
+/* ---------------------------------------------------------------------------
+   Visual polish, round two: thinner scrollbars, a chat-bubble tail, loading
+   skeletons, and a soft auth-page background. Still plain CSS, still no
+   library, still themed entirely through the existing colour variables so
+   dark mode needs no separate rules for any of it.
+   --------------------------------------------------------------------------- */
+
+/* Thin, brand-toned scrollbars everywhere, instead of the browser's bulky
+   default - only elements that actually overflow ever show one. */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--color-slate-300) transparent;
+}
+*::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+*::-webkit-scrollbar-track {
+  background: transparent;
+}
+*::-webkit-scrollbar-thumb {
+  background-color: var(--color-slate-300);
+  border-radius: 9999px;
+}
+*::-webkit-scrollbar-thumb:hover {
+  background-color: var(--color-slate-400);
+}
+
+/* A small triangular "tail" on text-only message bubbles - the classic
+   speech-bubble shape, using the same squared corner the bubble already has
+   (rounded-tr-none / rounded-tl-none). Only added when there is no
+   attachment: an attachment bubble needs `overflow-hidden` to clip the
+   image/video to its rounded corners, which would cut the tail off, so it
+   is left plain there rather than showing a clipped sliver of one. */
+.bubble-tail-mine,
+.bubble-tail-theirs {
+  position: relative;
+}
+.bubble-tail-mine::after,
+.bubble-tail-theirs::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  width: 0;
+  height: 0;
+  border-style: solid;
+}
+.bubble-tail-mine::after {
+  right: -6px;
+  border-width: 0 0 8px 6px;
+  border-color: transparent transparent transparent var(--color-brand-100);
+}
+.bubble-tail-theirs::after {
+  left: -6px;
+  border-width: 0 6px 8px 0;
+  border-color: transparent var(--color-surface) transparent transparent;
+}
+
+/* Shimmering grey placeholders, shown in place of a bare spinner while the
+   Chats list or a chat's history is still loading. */
+.skeleton {
+  background-color: var(--color-slate-100);
+  background-image: linear-gradient(
+    90deg,
+    var(--color-slate-100) 25%,
+    var(--color-slate-200) 37%,
+    var(--color-slate-100) 63%
+  );
+  background-size: 400% 100%;
+}
+@media (prefers-reduced-motion: no-preference) {
+  .skeleton {
+    animation: shimmer 1.4s ease-in-out infinite;
+  }
+}
+@keyframes shimmer {
+  0% {
+    background-position: 100% 50%;
+  }
+  100% {
+    background-position: 0 50%;
+  }
+}
+
+/* A very soft, brand-tinted glow in two corners behind the login/register
+   card, instead of a flat grey page - color-mix() keeps this working
+   automatically in dark mode too, since --color-brand-* already has its own
+   dark-mode values with no extra rule needed here. */
+.auth-background {
+  background-image:
+    radial-gradient(circle at 15% 20%, color-mix(in srgb, var(--color-brand-100) 55%, transparent) 0%, transparent 45%),
+    radial-gradient(circle at 85% 80%, color-mix(in srgb, var(--color-brand-50) 65%, transparent) 0%, transparent 50%);
+}

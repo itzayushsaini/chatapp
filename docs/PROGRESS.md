@@ -2,7 +2,7 @@
 
 A new session should be able to read this file and carry on from it.
 
-Last updated: 2026-09-28 (Phase 17: visual polish - animations, micro-interactions, responsiveness)
+Last updated: 2026-09-28 (Phase 17 extended: thin scrollbars, bubble tail, skeleton loading, more)
 
 ---
 
@@ -40,6 +40,14 @@ fade and scale in on open; toasts, the announcement banner and the
 reconnecting banner all animate in instead of popping; buttons give a
 tactile press-scale; checked in both light and dark mode and at a mobile
 viewport (390×844) - no layout regressions.
+
+**Round-two verification (same day):** `npm test` 261/261, `npm run test:e2e`
+18/18, lint clean, build succeeds. Checked visually: the message bubble tail
+renders correctly on both outgoing and incoming text bubbles (and is
+correctly absent on attachment bubbles); the selected Chats row shows a
+left accent bar; the login/register page has a soft two-corner background;
+Settings cards lift on hover; the message-history skeleton appears correctly
+on a brand-new chat's first load, before real messages arrive.
 
 **Earlier verification (2026-09-27, after Phase 16b):** `npm test` 261/261 pass (30
 new: 15 Google sign-in with Google's endpoints faked, 15 block / clear / mute /
@@ -349,6 +357,24 @@ cleanly, so one commit "Phases 1-9: complete ChatApp (later renamed PingMe)" is 
   (1024px) instead of `xl` (1280px), with a narrower `lg:w-80` before
   widening to `xl:w-96` - it was previously cramped or absent on common
   laptop widths just under 1280px.
+
+### Phase 17 additions, round two (client only)
+- Thin, brand-toned scrollbars everywhere (`scrollbar-width`/`-color` +
+  `::-webkit-scrollbar`) instead of the browser default.
+- A CSS-drawn speech-bubble "tail" on text-only messages
+  (`.bubble-tail-mine` / `.bubble-tail-theirs`), skipped on attachment
+  bubbles (their `overflow-hidden`, needed to clip the image/video, would
+  cut a protruding tail off).
+- `components/common/Skeleton.jsx` - shimmering grey placeholders, replacing
+  the bare spinner while the Chats list or a chat's history loads.
+- The selected Chats row gets a left accent bar, not just a background tint.
+- A soft pulse ring behind an online friend's avatar dot (own
+  `.animate-online-pulse` keyframe, not Tailwind's `animate-ping`, so it
+  still respects `prefers-reduced-motion` like everything else here).
+- Settings cards get a hover shadow-lift; the composer's pill gets a
+  focus-within ring; `AuthLayout` gets a soft two-corner brand-tinted
+  background (`color-mix()`, so it adapts to dark mode automatically
+  through the same CSS variables, no separate dark rule needed).
 
 ### Tests and deployment
 - `server/tests/` - `health`, `auth`, `rateLimits`, `friends`,

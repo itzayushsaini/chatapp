@@ -115,7 +115,7 @@ export default function MessageBubble({
     <li className={`group flex ${mine ? 'justify-end' : 'justify-start'} ${animateIn ? 'animate-message-in' : ''}`}>
       <div className={`flex max-w-[80%] items-start gap-1 sm:max-w-[65%] ${mine ? 'flex-row-reverse' : ''}`}>
         <div
-          className={`overflow-hidden rounded-lg text-sm shadow-sm ${
+          className={`rounded-lg text-sm shadow-sm ${attachment ? 'overflow-hidden' : mine ? 'bubble-tail-mine' : 'bubble-tail-theirs'} ${
             mine ? 'rounded-tr-none bg-brand-100 text-slate-900' : 'rounded-tl-none bg-surface text-slate-900'
           } ${status === 'failed' ? 'opacity-70' : ''} ${attachment ? 'p-1' : 'px-2.5 py-1.5'}`}
         >

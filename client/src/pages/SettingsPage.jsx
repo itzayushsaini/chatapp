@@ -112,7 +112,10 @@ export default function SettingsPage() {
 
 function Card({ icon, title, children }) {
   return (
-    <section className="rounded-2xl bg-surface p-4 shadow-sm" aria-label={title}>
+    <section
+      className="rounded-2xl bg-surface p-4 shadow-sm transition-shadow duration-200 hover:shadow-md"
+      aria-label={title}
+    >
       <h2 className="mb-3 flex items-center gap-2 text-sm font-semibold text-slate-900">
         <span className="text-brand-700">{icon}</span>
         {title}

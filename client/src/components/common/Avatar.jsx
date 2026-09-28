@@ -38,12 +38,18 @@ export default function Avatar({ user, size = 'md', online }) {
         </span>
       )}
       {online !== undefined && (
-        <span
-          className={`absolute right-0 bottom-0 h-3 w-3 rounded-full ring-2 ring-surface transition-colors duration-300 ${
-            online ? 'bg-emerald-500' : 'bg-slate-300'
-          }`}
-          aria-hidden="true"
-        />
+        <span className="absolute right-0 bottom-0 h-3 w-3" aria-hidden="true">
+          {/* A soft pulse behind the dot, only while actually online - makes
+              "online" read as a live signal rather than a static colour. */}
+          {online && (
+            <span className="animate-online-pulse absolute inset-0 rounded-full bg-emerald-400" />
+          )}
+          <span
+            className={`absolute inset-0 rounded-full ring-2 ring-surface transition-colors duration-300 ${
+              online ? 'bg-emerald-500' : 'bg-slate-300'
+            }`}
+          />
+        </span>
       )}
     </span>
   )

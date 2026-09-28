@@ -4,7 +4,7 @@ import Logo from '../common/Logo.jsx'
 // The centred card shared by the login and register pages.
 export default function AuthLayout({ title, subtitle, children, footer }) {
   return (
-    <main className="flex min-h-dvh flex-col bg-slate-50">
+    <main className="auth-background flex min-h-dvh flex-col bg-slate-50">
       <AnnouncementBanner />
       <div className="flex flex-1 items-center justify-center px-4 py-10">
         <div className="w-full max-w-sm">

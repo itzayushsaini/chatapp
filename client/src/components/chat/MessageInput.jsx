@@ -157,7 +157,7 @@ export default function MessageInput({
         />
         {/* The paperclip and the text field share one white pill, the way
             WhatsApp's composer does; Send is its own circular button. */}
-        <div className="flex flex-1 items-end gap-1 rounded-3xl bg-surface pr-1 pl-1.5 shadow-sm">
+        <div className="flex flex-1 items-end gap-1 rounded-3xl bg-surface pr-1 pl-1.5 shadow-sm transition-shadow duration-150 focus-within:ring-2 focus-within:ring-brand-500/40">
           <button
             type="button"
             onClick={() => fileInputRef.current.click()}

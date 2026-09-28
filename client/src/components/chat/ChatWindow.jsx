@@ -10,7 +10,7 @@ import { kindOf } from '../../utils/files.js'
 import Avatar from '../common/Avatar.jsx'
 import Button from '../common/Button.jsx'
 import { AlertIcon, BackIcon, BellOffIcon } from '../common/Icons.jsx'
-import Spinner from '../common/Spinner.jsx'
+import Skeleton from '../common/Skeleton.jsx'
 import TypingDots from '../common/TypingDots.jsx'
 import ContactInfoPanel from './ContactInfoPanel.jsx'
 import MessageInput from './MessageInput.jsx'
@@ -183,8 +183,12 @@ export default function ChatWindow({ conversationId }) {
         />
 
         {!entry || entry.status === 'loading' ? (
-          <div className="flex flex-1 items-center justify-center">
-            <Spinner />
+          <div className="chat-background flex min-h-0 flex-1 flex-col justify-end gap-2 p-4" role="status">
+            <span className="sr-only">Loading messages…</span>
+            <Skeleton className="h-9 w-48" />
+            <Skeleton className="ml-auto h-9 w-40" />
+            <Skeleton className="h-9 w-56" />
+            <Skeleton className="ml-auto h-9 w-32" />
           </div>
         ) : entry.status === 'error' ? (
           <div className="flex flex-1 flex-col items-center justify-center gap-3 text-center">
