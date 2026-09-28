@@ -49,6 +49,26 @@ left accent bar; the login/register page has a soft two-corner background;
 Settings cards lift on hover; the message-history skeleton appears correctly
 on a brand-new chat's first load, before real messages arrive.
 
+**Bugfix (same day): the team reported the Admin panel and Register page
+could no longer scroll**, forcing them to zoom the whole browser out just
+to reach a Save button below the fold. Root cause: the scroll-chaining fix
+two commits earlier (`Fix: scrolling a chat could still scroll the whole
+page`) set `overflow: hidden` on `html`/`body` GLOBALLY to stop the chat
+message list from scroll-chaining onto the page - but html/body are shared
+by every page, including ones that are NOT the fixed-viewport chat shell
+(the admin panel, login/register) and deliberately rely on ordinary page
+scrolling when their content is taller than the viewport (`min-h-dvh`, not
+`h-dvh`, is exactly that signal). The fix is now scoped to
+`LoggedInLayout.jsx`'s own root element (the actual `h-dvh` chat shell)
+instead of html/body, so it stops chat scroll-chaining without touching any
+other page's ability to scroll. A new regression test
+(`e2e/pageScroll.spec.js`) opens Register at a short viewport and asserts
+the page itself can still scroll to reach the Sign up button - confirmed it
+fails on the over-broad fix and passes after narrowing it, while the
+original chat no-scroll-chaining test (`chat.spec.js`) still passes
+unchanged, proving both are satisfied at once. `npm test` 261/261,
+`npm run test:e2e` 19/19 (1 new), lint clean, build succeeds.
+
 **Earlier verification (2026-09-27, after Phase 16b):** `npm test` 261/261 pass (30
 new: 15 Google sign-in with Google's endpoints faked, 15 block / clear / mute /
 shared files / theme), `npm run test:e2e` 16/16 pass (4 new in

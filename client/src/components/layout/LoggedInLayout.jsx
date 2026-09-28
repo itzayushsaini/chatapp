@@ -48,7 +48,13 @@ function LiveShell() {
   }, [totalUnread])
 
   return (
-    <div className="flex h-dvh flex-col">
+    // overflow-hidden + overscroll-none here (not on html/body - see
+    // index.css) is what stops a message list, once scrolled to its own
+    // end, from "scroll chaining" any further wheel input to the page
+    // itself. Scoped to just this logged-in chat shell, so every OTHER
+    // page (Admin panel, Login/Register) keeps ordinary page scrolling for
+    // whatever does not fit the viewport.
+    <div className="flex h-dvh flex-col overflow-hidden overscroll-none">
       <AnnouncementBanner />
       {connection === 'reconnecting' && (
         <div className="animate-slide-down bg-amber-100 px-4 py-1.5 text-center text-sm text-amber-900" role="status">
