@@ -59,9 +59,15 @@ test('changing your password from the profile logs out other devices, not this o
   await page.reload()
   await expect(page.getByText('@neha_pw').first()).toBeVisible()
 
-  // The OTHER device gets logged out on its next request.
-  await otherPage.reload()
+  // The OTHER device gets logged out on its next request - here, a friend
+  // search from the chat page at "/". That 401 ends the session and must
+  // land on the login form, not on the public home page that "/" shows
+  // logged-out visitors since Phase 19 (AuthContext's clearSession does this).
+  await otherPage.getByRole('tab', { name: 'Add Friend' }).click()
+  await otherPage.getByLabel('Find a friend by their exact username').fill('someone')
+  await otherPage.getByRole('button', { name: 'Search' }).click()
   await expect(otherPage).toHaveURL(/\/login$/)
+  await expect(otherPage.getByRole('heading', { name: 'Welcome back' })).toBeVisible()
 
   // The new password works; the old one no longer does.
   await otherPage.getByLabel('Username or email').fill('neha_pw')

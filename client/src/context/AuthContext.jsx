@@ -1,4 +1,5 @@
-import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react'
+import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react'
+import { useNavigate } from 'react-router'
 
 import * as authApi from '../api/auth.js'
 import { setUnauthorizedHandler } from '../api/http.js'
@@ -18,11 +19,23 @@ export function AuthProvider({ children }) {
   // Try Again button, instead of wrongly showing the login page.
   const [bootError, setBootError] = useState(false)
 
+  // Kept in a ref so clearSession (below) never has to change when the
+  // router hands us a new navigate function.
+  const navigate = useNavigate()
+  const navigateRef = useRef(navigate)
+  useEffect(() => {
+    navigateRef.current = navigate
+  })
+
   // Forget the user AND everything we loaded for them, so the next person
   // to log in on this computer cannot see any of it.
+  // Then go to /login on purpose: "/" is the public home page for anyone
+  // logged out, so without this, logging out (or a session expiring) would
+  // land on the home page instead of the login form.
   const clearSession = useCallback(() => {
     setUser(null)
     useChatStore.getState().reset()
+    navigateRef.current('/login', { replace: true })
   }, [])
 
   // The cookie is httpOnly, so JavaScript cannot check it directly. Asking

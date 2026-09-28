@@ -2,7 +2,7 @@
 
 A new session should be able to read this file and carry on from it.
 
-Last updated: 2026-09-28 (Phase 18: voice notes - done and committed)
+Last updated: 2026-09-28 (Phase 19: public home page - done and committed)
 
 ---
 
@@ -29,6 +29,18 @@ Last updated: 2026-09-28 (Phase 18: voice notes - done and committed)
 | 16b | Google sign-in, Contact info panel (media, shared files, block, clear chat, mute), Settings page, real dark mode, Enter-to-send switch | **Done** (code + tests). Google sign-in stays hidden until `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` are set - see Known issues 16 |
 | 17 | Visual polish: entrance/hover/press animations (message bubbles, dialogs, toasts, banners, buttons), an animated typing indicator, and tuned responsive breakpoints - CSS only, no new dependency | **Done** |
 | 18 | Voice notes: record (tap to start, swipe left / trash / Escape to cancel, 5-minute limit), send as an `audio` attachment, waveform player with seeking and 1× / 1.5× / 2× speed, "Voice messages" in Contact info | **Done** |
+| 19 | Public home page at `/` for logged-out visitors: hero with an animated chat preview, highlights, 12 features, how it works, privacy and security, FAQ, call to action, footer - CSS-only motion, dark mode, phone to desktop | **Done** |
+
+**Verification (2026-09-28, after Phase 19):** `npm test` 283/283 (no server
+change), `npm run test:e2e` 27/27 (4 new in `landing.spec.js`; the
+logged-out test in `chat.spec.js`, the logout test and the "other devices
+are signed out" test in `password.spec.js` updated for the new `/`), lint
+clean, build succeeds. The password test now triggers the 401 from the chat
+page at `/` and was confirmed to FAIL without `clearSession`'s redirect to
+`/login` (it landed on the home page). Checked visually on an isolated
+server at 1440, 1180, 768, 390 and 320px wide, light and dark: nothing wider
+than the screen, the preview's phone never covers the laptop window's
+messages, cards fade in on scroll, FAQ opens.
 
 **Verification (2026-09-28, after Phase 18):** `npm test` 283/283 (22 new:
 the three recording formats detected as audio by their bytes, a WebM / MP4
@@ -450,6 +462,26 @@ cleanly, so one commit "Phases 1-9: complete ChatApp (later renamed PingMe)" is 
   plays it, speed cycling, swipe-to-cancel sends nothing, Contact info lists
   it; a too-short note is not sent).
 
+### Phase 19 additions (public home page)
+- `pages/LandingPage.jsx` - the home page at `/` for logged-out visitors
+  (sections listed in CLAUDE.md, "Home page"); `components/landing/ChatPreview.jsx`
+  - the laptop + phone picture of a chat, built from the app's own pieces.
+- `App.jsx` - `/` is `LandingPage` when logged out (the chat when logged
+  in); logged-out `/settings` and `/admin` go to `/login`.
+- `AuthContext` - `clearSession` (Log out, and any 401) now navigates to
+  `/login` itself, because `/` no longer redirects there.
+- `AuthLayout` - the logo links back to `/`.
+- `common/buttonClass.js` - `Button`'s classes as a function (plus a new `lg`
+  size), so links can look like buttons; `Button.jsx` now uses it.
+- `Icons.jsx` - Zap, Lock, Image, Smartphone, User, Keyboard, ArrowRight,
+  ChevronDown. `index.css` - `landing-pop`, `landing-tick`, `animate-float`,
+  `reveal` (scroll-driven) and smooth anchor scrolling, all reduced-motion
+  aware. `index.html` - fuller meta description, Open Graph tags, Inter 800.
+- Tests: `e2e/landing.spec.js` (content + honest claims, header link jumps,
+  FAQ opens, Get started / Log in / logo links, logged-in `/` is still the
+  chat, fits 320px, dark mode); `chat.spec.js` and `password.spec.js`
+  updated.
+
 ### Tests and deployment
 - `server/tests/` - `health`, `auth`, `rateLimits`, `friends`,
   `conversations`, `socket` + `setup.js`, `helpers.js`
@@ -740,6 +772,19 @@ cleanly, so one commit "Phases 1-9: complete ChatApp (later renamed PingMe)" is 
     its own recording; the file itself is still type-checked by its bytes.
     Scrubbing through a long Chrome WebM note can be slightly less precise,
     because MediaRecorder's WebM has no seek index.
+20. **A returning user whose session has ended sees the home page, not the
+    login form, when they next open the site** - to the app they are simply a
+    logged-out visitor (it cannot know they had an account). One click on
+    "Log in" gets them there. A session that ends WHILE the app is open
+    (log out, a 401) still goes straight to `/login`.
+21. **The scroll fade-in (`reveal`) needs CSS `animation-timeline`** (checked
+    in Chromium). A browser that does not support it yet skips the rule
+    (`@supports`) and simply shows the cards with no fade - nothing is hidden
+    or broken either way.
+22. **Vite now warns that the one JavaScript file is over 500 kB** (511 kB,
+    156 kB gzipped; it was 484 kB before the home page). Only a warning - the
+    build succeeds. Splitting the logged-in app from the home page with
+    `React.lazy` would fix it if it ever matters.
 
 ---
 

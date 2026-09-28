@@ -7,8 +7,8 @@ Kept up to date at the end of every phase.
 - **Manual** cases are the ones a person checks in the browser. Fill in the
   Actual and Result columns when you run them.
 
-Last full run: 2026-09-28 (after the post-18 admin back-arrow and phone-layout fixes) - **283/283
-server tests pass, 23/23 end-to-end tests pass, lint clean in both workspaces, `npm run build`
+Last full run: 2026-09-28 (after Phase 19 - public home page) - **283/283
+server tests pass, 27/27 end-to-end tests pass, lint clean in both workspaces, `npm run build`
 succeeds.**
 
 ---
@@ -327,7 +327,8 @@ that answers the token and profile requests.
 
 Files: `e2e/chat.spec.js`, `e2e/profile-attachments.spec.js`, `e2e/password.spec.js`,
 `e2e/readReceipts.spec.js`, `e2e/settings.spec.js`, `e2e/pageScroll.spec.js`,
-`e2e/voiceNotes.spec.js`, `e2e/adminNavigation.spec.js`, `e2e/mobileLayout.spec.js`. Run against the production build and server with
+`e2e/voiceNotes.spec.js`, `e2e/adminNavigation.spec.js`, `e2e/mobileLayout.spec.js`,
+`e2e/landing.spec.js`. Run against the production build and server with
 an in-memory database.
 Forgot/reset password's email-dependent half (does the link actually work) is
 covered at the server level instead - see A12.1-A12.8 - since e2e has no real
@@ -335,14 +336,14 @@ email provider configured.
 
 | ID | Case | Expected |
 |---|---|---|
-| E1 | Logged-out visit to `/` and to an unknown route | Both land on `/login` |
+| E1 | Logged-out visit to `/`, to an unknown route, to `/settings` and to `/admin` | `/` and the unknown route show the public home page (Phase 19); `/settings` and `/admin` go to `/login` |
 | E2 | Full flow with two browser contexts | Register both; partial search "No user found"; exact search (any case) finds; request arrives live with toast and badge; accept; requester gets "accepted" toast; open chat shows Online; message with `<b>` renders as text and is marked Delivered (the friend is online); unread badge on the other side; reply arrives live; after refresh still logged in with history; closing one side shows "Last seen today" |
-| E3 | Logout | "Log out?" dialog: Cancel keeps you logged in, Log out ends it; back to `/login`; `/` redirects to `/login`; logging in again works |
+| E3 | Logout | "Log out?" dialog: Cancel keeps you logged in, Log out ends it and goes to `/login`; `/` then shows the home page, not the chat; its "Log in" link leads back to a login that works |
 | E4 | Edit my profile (`e2e/profile-attachments.spec.js`) | Choosing a photo saves it (footer shows it, decoded); name, bio and username saved after confirming; survives a reload; username field then locked with the date |
 | E5 | Files and live profile updates, two browser contexts | Chosen photo previews from a blob: URL under the production CSP; photo with caption arrives decoded from `/api/attachments/:id`; sidebar shows "📷 Our poster"; click opens full size, Escape closes; PDF card downloads as `application/pdf` attachment; a bio edit is visible in the other person's Contact info panel without reload, which also lists the shared photo and PDF |
 | E6 | Forgot password request (`e2e/password.spec.js`) | "Forgot password?" link works; submitting shows the same message whatever the email; "Back to log in" returns to `/login` |
 | E7 | A reset link missing its token | Shows "Invalid reset link", not a broken form |
-| E8 | Change password, two browser contexts (two "devices") | Wrong current password shown inline, session NOT ended; correct current password: success message, this device stays logged in after reload, the OTHER device is redirected to `/login` on its next request, old password then fails there and the new one works |
+| E8 | Change password, two browser contexts (two "devices") | Wrong current password shown inline, session NOT ended; correct current password: success message, this device stays logged in after reload, the OTHER device's next request (a friend search on the chat page) gets a 401 and it lands on `/login` - not on the home page - old password then fails there and the new one works |
 | E9 | Change password with the wrong current password | Shown inline in the dialog: "Current password is incorrect" |
 | E10 | Ticks progress live (`e2e/readReceipts.spec.js`) | With the friend offline: one grey tick ("Sent"). They come back online without opening the chat: two grey ticks ("Delivered"), live. They open it: two blue ticks ("Read"), with no reload |
 | E11 | Read receipt when the chat is already open | A message sent while the recipient already has that chat open shows two blue ticks straight away |
@@ -358,6 +359,10 @@ email provider configured.
 | E21 | Too-short voice note | Send immediately → "too short" toast, nothing sent |
 | E22 | Leaving the admin panel doesn't crash (`e2e/adminNavigation.spec.js`) | With a chat open, go to Admin panel and press its back arrow, three times - the chat is still there each time, never the "Something went wrong" page (the browser is told it is an admin by rewriting `/api/auth/me`; regression test for the post-18 bugfix) |
 | E23 | Fits a 320px phone (`e2e/mobileLayout.spec.js`, touch emulation) | A friend with a 38-character name and a long link with no spaces: nothing in the chat is wider than the screen and nothing is hidden sideways; the ⋮ actions button is visible without hover; the first message's menu is on top of the bubbles below it (the element under "Reply" is Reply itself) and Reply works; Settings fits too, with "Edit profile" fully on screen |
+| E24 | Home page content and links (`e2e/landing.spec.js`) | Every section heading is there; nothing mentions video/voice calls or end-to-end encryption; the header's "Privacy" link jumps to that section (`#privacy`); an FAQ answer is hidden until its question is clicked; "Get started" → `/register`, whose logo returns to `/`; "Log in" → `/login` |
+| E25 | Logged-in user at `/` | Still the chat, never the home page |
+| E26 | Home page on a 320px phone (touch) | No element outside the decorative parts reaches past either screen edge; Sign up is fully on screen |
+| E27 | Home page in dark mode | `data-theme="dark"` and the page background is the dark theme's `#0b141a` |
 ---
 
 ## Manual
@@ -579,6 +584,21 @@ Google cases need `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` set (see
 | M18.10 | Microphone blocked | Block the mic for the site → tap mic | A toast explains it; the chat still works | | |
 | M18.11 | Contact info | Open the friend's Contact info | "Voice messages (n)" lists each note with who sent it and when, playable there | Checked visually | Pass |
 | M18.12 | Previews and forwarding | Look at the Chats row; forward a note to another friend | "🎤 Voice message" in the preview; the forwarded copy plays with the same waveform | | |
+
+### Phase 19 - public home page
+
+| ID | Scenario | Steps | Expected | Actual | Result |
+|---|---|---|---|---|---|
+| M19.1 | First visit | Log out (or use a private window), open `/` | The home page: headline, "Get started", "Log in", the laptop + phone chat preview | Checked visually (isolated server) | Pass |
+| M19.2 | Preview comes alive | Reload and watch the preview | Bubbles appear one by one, the ticks turn blue, "typing" dots bounce, the phone gently floats | Checked visually | Pass |
+| M19.3 | Header links | Click Features, How it works, Privacy, FAQ | The page glides to each section, which is not hidden under the sticky header | | |
+| M19.4 | Scroll fade-in | Scroll down slowly in Chrome/Edge | Cards fade and rise in as they come on screen | Checked visually | Pass |
+| M19.5 | Sign up / log in | "Get started" and the final "Create your account"; "Log in" and "I already have one" | → `/register` and → `/login`; the logo on those pages returns home | Automated (E24) | Pass |
+| M19.6 | Logged in | Log in, open `/` again | The chat, not the home page | Automated (E25) | Pass |
+| M19.7 | Phone | Open the home page on a real phone | Everything fits, no sideways scrolling; the header shows only Log in / Sign up | Checked at 320 / 390px | |
+| M19.8 | Dark mode | Choose Dark in Settings, log out, open `/` | The home page is dark too (it uses the theme this browser remembers) | Checked visually | Pass |
+| M19.9 | Reduce motion | Turn on "Reduce motion" in the OS, reload | The same page, with no animation at all | | |
+| M19.10 | Link preview | Paste the live URL into WhatsApp/Telegram | Shows "PingMe - private real-time chat" and the description | | |
 
 ### Phase 9 - deployment
 

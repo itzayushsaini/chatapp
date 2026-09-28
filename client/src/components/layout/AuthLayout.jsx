@@ -1,3 +1,5 @@
+import { Link } from 'react-router'
+
 import AnnouncementBanner from '../common/AnnouncementBanner.jsx'
 import Logo from '../common/Logo.jsx'
 
@@ -9,7 +11,14 @@ export default function AuthLayout({ title, subtitle, children, footer }) {
       <div className="flex flex-1 items-center justify-center px-4 py-10">
         <div className="w-full max-w-sm">
           <div className="mb-6 flex justify-center">
-            <Logo />
+            {/* Back to the public home page. */}
+            <Link
+              to="/"
+              className="rounded-xl focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:outline-none"
+              aria-label="PingMe home"
+            >
+              <Logo />
+            </Link>
           </div>
           <div className="animate-scale-in rounded-2xl border border-slate-200 bg-surface p-6 shadow-sm sm:p-8">
             <h1 className="text-center text-xl font-semibold text-slate-900">{title}</h1>

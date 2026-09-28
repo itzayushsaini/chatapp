@@ -75,8 +75,9 @@ pingme/
       store/         useChatStore.js (zustand)
       context/       AuthContext.jsx, SocketContext.jsx
       hooks/         useSocketEvents.js, useFriendStatus.js, useVoiceRecorder.js
-      pages/         LoginPage.jsx, RegisterPage.jsx, ChatPage.jsx, SettingsPage.jsx, AdminPage.jsx
-      components/    layout/, sidebar/, chat/, profile/, admin/, common/ (incl. AnnouncementBanner.jsx)
+      pages/         LandingPage.jsx, LoginPage.jsx, RegisterPage.jsx, ChatPage.jsx, SettingsPage.jsx, AdminPage.jsx
+      components/    layout/, sidebar/, chat/, profile/, admin/, landing/ (ChatPreview.jsx),
+                     common/ (incl. AnnouncementBanner.jsx, buttonClass.js)
       utils/         time.js, avatar.js, files.js, image.js, notifications.js, theme.js, preferences.js
     public/          favicon.svg, sw.js (service worker - notifications only),
                      theme-init.js (applies the saved theme before React loads)
@@ -832,7 +833,8 @@ All responses are JSON (except the two file downloads). Errors use the shape `{ 
 
 ### Routes and session
 
-- Routes: `/login`, `/register`, `/forgot-password`, `/reset-password`, `/` (the protected chat app), `/settings` (protected) and `/admin` (only when `user.isAdmin` - anyone else visiting it is sent to `/`). Unknown routes redirect to `/`.
+- Routes: `/login`, `/register`, `/forgot-password`, `/reset-password`, `/` (the chat app when logged in; the public **home page** when logged out - see "Home page" below), `/settings` (protected) and `/admin` (only when `user.isAdmin` - a logged-in non-admin is sent to `/`). Logged out, `/settings` and `/admin` send you to `/login`. Unknown routes redirect to `/`.
+- **Ending a session goes to `/login` explicitly** (`AuthContext`'s `clearSession`, used by Log out and by the 401 handler below): since `/` is the home page for logged-out visitors, a plain "clear the user" would otherwise land on the home page instead of the login form. A fresh visit (or reload) while logged out is just an ordinary visitor and gets the home page.
 - **AuthContext:** calls `GET /api/auth/me` on load and shows a full-screen spinner until it resolves. There must be no flash of the login page for users who are already logged in.
 - **axios instance:** `baseURL: '/api'`, `withCredentials: true`. On a 401 from any call except `/auth/me` and `/auth/login`, clear the user and go to `/login`. (`/auth/password`'s "wrong current password" is deliberately a 400, not a 401, so it is never mistaken for an expired session.)
 
@@ -924,6 +926,15 @@ All responses are JSON (except the two file downloads). Errors use the shape `{ 
   - **Forward** opens a dialog listing every friend with a checkbox
     (multi-select), and a Forward button.
   - **Copy** writes the message's text to the clipboard and shows a toast.
+
+### Home page (`/` when logged out, `pages/LandingPage.jsx`)
+
+- A static page - no API calls or state of its own (only the shared `AnnouncementBanner`): sticky header (logo, links to Features / How it works / Privacy / FAQ from `md` up, Log in, Sign up), hero ("Get started" → `/register`, "Log in" → `/login`) with `landing/ChatPreview.jsx`, three highlights, a features grid, three "how it works" steps, privacy and security, an FAQ (native `<details>`), a final call to action and a footer (project credit, GitHub, "built with").
+- **Only real features are advertised** - never calls, end-to-end encryption or anything else PingMe does not do (an e2e test checks for "video call" / "voice call" / "end-to-end").
+- `ChatPreview` is a picture of the app built from the app's own classes and components (Avatar, TypingDots, bubble tails), not a screenshot, so it follows dark mode; it is `aria-hidden` with an `sr-only` description, and contains nothing focusable.
+- Motion is CSS only, in `index.css`'s reduced-motion block: bubbles appear in turn (`landing-pop` with a per-bubble `--delay`), the preview's ticks turn blue (`landing-tick`), the phone floats, cards fade in on scroll (`reveal`, `animation-timeline: view()` inside `@supports` - browsers without it just show the cards), and header links scroll smoothly (`html:has(.landing-page)` only).
+- The page root is `overflow-x-clip` (not `hidden`, which would break the sticky header) so decorations can never make a phone scroll sideways. Links that look like buttons use `buttonClass()` from `common/buttonClass.js`, the same classes `Button` uses.
+- The login/register/forgot/reset pages' logo links back to `/`.
 
 ### Login, forgot password, reset password
 

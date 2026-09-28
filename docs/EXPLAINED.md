@@ -2064,3 +2064,85 @@ it runs again the moment the socket exists.
 Also: a touch screen has no hover, so the ⋮ actions button (which only
 appeared on hover) was invisible there - it is now always shown on devices
 without hover, using the `(hover: none)` media query.
+
+---
+
+# Phase 19 - the public home page
+
+**Goal of this phase:** someone who opens PingMe without an account should
+see what it is and why they would want it - not just a login box.
+
+## 1. One address, two pages
+
+`/` shows the chat to a logged-in user and the home page (`LandingPage.jsx`)
+to everyone else. `App.jsx` already knew who is logged in (from
+`/auth/me`), so this is just a different element for the same path -
+`user ? <the chat> : <LandingPage />` - rather than a separate `/welcome`
+address. `/settings` and `/admin` still send a logged-out visitor to
+`/login`, because those pages only make sense with an account.
+
+## 2. The one change outside the page: where logging out goes
+
+Before, "log out" simply forgot the user, and `/` then redirected to
+`/login` by itself. Now `/` is the home page, so forgetting the user would
+leave you on the home page. `clearSession` in `AuthContext` - used both by
+Log out and by the "session expired" (401) handler - therefore navigates to
+`/login` explicitly.
+
+> **Likely question: then why does a returning user with an expired session
+> see the home page, not the login form?**
+> Because the app cannot know they ever had an account: the session cookie
+> is httpOnly, so JavaScript cannot even see that one exists, and a fresh
+> visit only learns "not logged in" from `/auth/me`. To the app they are a
+> new visitor. When a session ends *while the app is open*, it does know,
+> and goes straight to the login form.
+
+## 3. The chat picture is code, not a screenshot
+
+The laptop and phone in the hero (`landing/ChatPreview.jsx`) are built from
+the app's own pieces - the real `Avatar` and `TypingDots` components, the
+bubble-tail classes, the doodle background, the tick colours. A screenshot
+would go out of date the moment the design changed, and would stay light in
+dark mode; this cannot. It is marked `aria-hidden` (a screen reader would
+otherwise read out a fake conversation) and described in one hidden
+sentence instead, and it contains nothing you can click or tab to.
+
+## 4. Motion with no JavaScript
+
+Everything that moves is CSS, in the same reduced-motion block as Phase 17:
+
+- **Bubbles appear in turn.** Every bubble uses one animation; each sets a
+  different `--delay` CSS variable in its `style`, and the animation reads
+  it (`animation-delay: var(--delay)`). The ticks reuse the variable too, to
+  turn blue 1.4 s after their own bubble - a tiny "read receipt" replay.
+- **Fade-in on scroll** uses `animation-timeline: view()`: the animation's
+  progress follows the element's position on screen instead of the clock.
+  No IntersectionObserver, no scroll listener. It sits inside `@supports`,
+  so a browser that does not have it just shows the cards normally.
+- **Smooth jumps** for the header links (`scroll-behavior: smooth`) are
+  limited to this page with `html:has(.landing-page)`, and `scroll-mt-20`
+  stops a section heading from ending up under the sticky header.
+
+## 5. Honest content
+
+Every feature card, FAQ answer and privacy point describes something the
+app really does, with its real limits (10 MB photos, 25 MB videos, 5-minute
+voice notes, an hour to delete for everyone by default). The design we
+worked from showed voice and video call buttons - they were left out,
+because PingMe has no calls, and an e2e test fails if the page ever mentions
+calls or end-to-end encryption (which PingMe does not claim either).
+
+## 6. Small pieces worth knowing
+
+- **Links that look like buttons.** "Get started" goes to another page, so
+  it must be a link (`<a>`), not a `<button>` - screen readers and "open in
+  new tab" depend on that. `buttonClass()` gives a link the exact classes
+  `Button` uses; it lives in its own file because a file of React components
+  should only export components (that keeps Vite's hot reload working).
+- **`overflow-x-clip`, not `overflow-hidden`,** on the page: both stop the
+  decorative blurred circles from making a phone scroll sideways, but
+  `hidden` would also stop the header from being sticky.
+- **The FAQ is `<details>` / `<summary>`** - the browser opens and closes
+  it, with keyboard support, and no React state at all.
+- **Open Graph tags** in `index.html` decide what a shared link shows in
+  WhatsApp or Telegram.

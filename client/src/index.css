@@ -336,3 +336,61 @@ body,
     radial-gradient(circle at 15% 20%, color-mix(in srgb, var(--color-brand-100) 55%, transparent) 0%, transparent 45%),
     radial-gradient(circle at 85% 80%, color-mix(in srgb, var(--color-brand-50) 65%, transparent) 0%, transparent 50%);
 }
+
+/* ---------------------------------------------------------------------------
+   The public home page (Phase 19, pages/LandingPage.jsx). Same rule as
+   above: plain CSS, and every bit of motion lives inside the reduced-motion
+   block - without it the page looks exactly the same, just still.
+   --------------------------------------------------------------------------- */
+@media (prefers-reduced-motion: no-preference) {
+  /* Clicking "Features" etc. in the header glides down to that section.
+     Only on the home page (:has), so nothing else in the app changes. */
+  html:has(.landing-page) {
+    scroll-behavior: smooth;
+  }
+
+  /* The preview's chat bubbles appear one after another: each bubble sets
+     its own --delay in the style attribute. */
+  .landing-pop {
+    animation: message-in 0.4s ease-out both;
+    animation-delay: var(--delay, 0s);
+  }
+  /* ...and the ticks on "my" bubbles start grey, then turn blue shortly
+     after - "read". Without animation they are simply blue. */
+  .landing-tick {
+    animation: tick-read 0.3s ease-out both;
+    animation-delay: calc(var(--delay, 0s) + 1.4s);
+  }
+  .animate-float {
+    animation: float 6s ease-in-out infinite;
+  }
+
+  /* Cards fade and rise in as they scroll into view. animation-timeline:
+     view() ties the animation to the element's own position on screen
+     instead of to time - no JavaScript, no IntersectionObserver. Browsers
+     that do not support it skip this block (@supports), and the cards are
+     simply there. */
+  @supports (animation-timeline: view()) {
+    .reveal {
+      animation: reveal linear both;
+      animation-timeline: view();
+      animation-range: entry 0% entry 100%;
+    }
+  }
+}
+@keyframes tick-read {
+  from {
+    color: var(--color-tick-sent);
+  }
+}
+@keyframes float {
+  50% {
+    transform: translateY(-10px);
+  }
+}
+@keyframes reveal {
+  from {
+    opacity: 0;
+    transform: translateY(24px);
+  }
+}

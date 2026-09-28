@@ -244,3 +244,51 @@ export const ShieldIcon = (p) => (
     <path d="m9 12 2 2 4-4" />
   </Icon>
 )
+// The icons below are used by the public home page (LandingPage).
+export const ZapIcon = (p) => (
+  <Icon {...p}>
+    <path d="M13 2 4 14h7l-1 8 9-12h-7Z" />
+  </Icon>
+)
+export const LockIcon = (p) => (
+  <Icon {...p}>
+    <rect x="4" y="11" width="16" height="10" rx="2" />
+    <path d="M8 11V7a4 4 0 0 1 8 0v4" />
+  </Icon>
+)
+export const ImageIcon = (p) => (
+  <Icon {...p}>
+    <rect x="3" y="3" width="18" height="18" rx="2" />
+    <circle cx="9" cy="9" r="2" />
+    <path d="m21 15-5-5L5 21" />
+  </Icon>
+)
+export const SmartphoneIcon = (p) => (
+  <Icon {...p}>
+    <rect x="6" y="2" width="12" height="20" rx="2" />
+    <path d="M11 18h2" />
+  </Icon>
+)
+export const UserIcon = (p) => (
+  <Icon {...p}>
+    <circle cx="12" cy="8" r="4" />
+    <path d="M4 21a8 8 0 0 1 16 0" />
+  </Icon>
+)
+export const KeyboardIcon = (p) => (
+  <Icon {...p}>
+    <rect x="2" y="6" width="20" height="12" rx="2" />
+    <path d="M6 10h.01M10 10h.01M14 10h.01M18 10h.01M7 14h10" />
+  </Icon>
+)
+export const ArrowRightIcon = (p) => (
+  <Icon {...p}>
+    <path d="M5 12h14" />
+    <path d="m13 6 6 6-6 6" />
+  </Icon>
+)
+export const ChevronDownIcon = (p) => (
+  <Icon {...p}>
+    <path d="m6 9 6 6 6-6" />
+  </Icon>
+)

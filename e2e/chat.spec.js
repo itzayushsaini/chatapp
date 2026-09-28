@@ -5,13 +5,22 @@ import { PASSWORD, register } from './helpers.js'
 // Each browser "context" is a separate, isolated browser profile with its own
 // cookies - so two contexts are two different people on two computers.
 
-test('a logged-out visitor is sent to /login, and unknown routes go home', async ({ page }) => {
+test('a logged-out visitor gets the home page at "/", and unknown routes go home', async ({ page }) => {
+  // Since Phase 19, "/" is the public home page for anyone not logged in.
   await page.goto('/')
-  await expect(page).toHaveURL(/\/login$/)
+  await expect(page).toHaveURL(/\/$/)
+  await expect(page.getByRole('heading', { level: 1 })).toContainText('Real conversations')
 
   await page.goto('/some/unknown/page')
+  await expect(page).toHaveURL(/\/$/)
+  await expect(page.getByRole('heading', { level: 1 })).toContainText('Real conversations')
+
+  // Pages that need an account still send you to log in.
+  await page.goto('/settings')
   await expect(page).toHaveURL(/\/login$/)
   await expect(page.getByRole('heading', { name: 'Welcome back' })).toBeVisible()
+  await page.goto('/admin')
+  await expect(page).toHaveURL(/\/login$/)
 })
 
 test('two people find each other, become friends and chat in real time', async ({ browser }) => {
@@ -204,11 +213,15 @@ test('logging out ends the session', async ({ page }) => {
   await confirm.getByRole('button', { name: 'Log out' }).click()
   await expect(page).toHaveURL(/\/login$/)
 
-  // The cookie is gone: going back to the app redirects to login again.
+  // The cookie is gone: going back to "/" shows the public home page, not
+  // the chat.
   await page.goto('/')
-  await expect(page).toHaveURL(/\/login$/)
+  await expect(page.getByRole('heading', { level: 1 })).toContainText('Real conversations')
+  await expect(page.getByText('@rahul_e2e')).toHaveCount(0)
 
-  // And logging back in works.
+  // And logging back in works (from the home page's "Log in").
+  await page.getByRole('link', { name: 'Log in' }).first().click()
+  await expect(page).toHaveURL(/\/login$/)
   await page.getByLabel('Username or email').fill('rahul_e2e')
   await page.getByLabel('Password', { exact: true }).fill(PASSWORD)
   await page.getByRole('button', { name: 'Log in' }).click()
