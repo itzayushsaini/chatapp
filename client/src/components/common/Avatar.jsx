@@ -39,7 +39,7 @@ export default function Avatar({ user, size = 'md', online }) {
       )}
       {online !== undefined && (
         <span
-          className={`absolute right-0 bottom-0 h-3 w-3 rounded-full ring-2 ring-surface ${
+          className={`absolute right-0 bottom-0 h-3 w-3 rounded-full ring-2 ring-surface transition-colors duration-300 ${
             online ? 'bg-emerald-500' : 'bg-slate-300'
           }`}
           aria-hidden="true"

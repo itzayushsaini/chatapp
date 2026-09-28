@@ -80,6 +80,7 @@ pingme/
       utils/         time.js, avatar.js, files.js, image.js, notifications.js, theme.js, preferences.js
     public/          favicon.svg, sw.js (service worker - notifications only),
                      theme-init.js (applies the saved theme before React loads)
+    (components/common/TypingDots.jsx - the animated "typing…" dots)
 ```
 
 ---
@@ -971,6 +972,13 @@ classes. Pure white/black must therefore be written as the tokens
 the cached theme before React loads (CSP forbids inline scripts), and
 `AuthContext` applies the account's saved theme once the user loads. Use
 accessible labels, visible focus rings, good contrast and full keyboard use.
+
+**Animation:** CSS only (`@keyframes` + `.animate-*` classes in
+`index.css`), no animation library. New messages slide in, dialogs/toasts/
+banners fade or scale in, buttons give a tactile press, and "typing…" gets
+three bouncing dots (`common/TypingDots.jsx`). Everything is inside one
+`@media (prefers-reduced-motion: no-preference)` block, so a user with
+reduced motion enabled gets the identical UI with no animation at all.
 
 ---
 

@@ -2,7 +2,7 @@
 
 A new session should be able to read this file and carry on from it.
 
-Last updated: 2026-09-27 (Phases 16a and 16b committed and pushed; one post-16b bugfix below)
+Last updated: 2026-09-28 (Phase 17: visual polish - animations, micro-interactions, responsiveness)
 
 ---
 
@@ -27,8 +27,21 @@ Last updated: 2026-09-27 (Phases 16a and 16b committed and pushed; one post-16b 
 | 15 | Admin panel: database-backed settings (Gmail-only sign-up, feature toggles, announcement banner), user management (suspend/delete), live stats, `isAdmin` accounts | **Done** |
 | 16a | Remember me, confirm password, logout confirmation, error screen, delivered (grey double) ticks, typing indicator, browser notifications | **Done** |
 | 16b | Google sign-in, Contact info panel (media, shared files, block, clear chat, mute), Settings page, real dark mode, Enter-to-send switch | **Done** (code + tests). Google sign-in stays hidden until `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` are set - see Known issues 16 |
+| 17 | Visual polish: entrance/hover/press animations (message bubbles, dialogs, toasts, banners, buttons), an animated typing indicator, and tuned responsive breakpoints - CSS only, no new dependency | **Done** |
 
-**Verification (2026-09-27, after Phase 16b):** `npm test` 261/261 pass (30
+**Verification (2026-09-28, after Phase 17):** `npm test` 261/261 pass
+(unaffected - purely a client visual change), `npm run test:e2e` 18/18 pass,
+lint clean, `npm run build` succeeds. Checked visually on an isolated
+in-memory server: message bubbles slide in only for genuinely new messages
+(never replayed for the initial page of history or for older messages
+loaded by scrolling up); the typing indicator's three dots animate in both
+the chat header and the Chats row; dialogs (profile, confirm, contact info)
+fade and scale in on open; toasts, the announcement banner and the
+reconnecting banner all animate in instead of popping; buttons give a
+tactile press-scale; checked in both light and dark mode and at a mobile
+viewport (390×844) - no layout regressions.
+
+**Earlier verification (2026-09-27, after Phase 16b):** `npm test` 261/261 pass (30
 new: 15 Google sign-in with Google's endpoints faked, 15 block / clear / mute /
 shared files / theme), `npm run test:e2e` 16/16 pass (4 new in
 `settings.spec.js`), lint clean, `npm run build` succeeds. Checked visually
@@ -305,6 +318,37 @@ cleanly, so one commit "Phases 1-9: complete ChatApp (later renamed PingMe)" is 
 - Tests: `server/tests/google.test.js`, `server/tests/chatControls.test.js`;
   `e2e/settings.spec.js`; `profile-attachments.spec.js` now checks the
   Contact info panel instead of the old profile dialog.
+
+### Phase 17 additions (client only - no server changes)
+- `index.css`: a small set of `@keyframes` (`message-in`, `fade-in`,
+  `slide-down`, `scale-in`, `pop`, `bounce-dot`, `dialog-in`) and matching
+  `.animate-*` utility classes, all inside one
+  `@media (prefers-reduced-motion: no-preference)` block so reduced-motion
+  users get the exact same UI with no animation, instantly. A native
+  `dialog[open]` CSS rule animates every dialog (profile, confirm, contact
+  info, forward) open with no JS changes needed. `body`/`.chat-background`
+  get a quick colour transition so switching light/dark fades instead of
+  snapping.
+- `components/common/TypingDots.jsx` - three bouncing dots, used next to
+  "typing…" in the chat header (`useFriendStatus` now also returns
+  `typing`) and the Chats row.
+- `MessageList.jsx` / `MessageBubble.jsx`: a message slides in only if it is
+  (a) at the current tail of the array and (b) the conversation's initial
+  history has already been shown - so opening a chat never animates in 30
+  bubbles at once, and older messages loaded by scrolling up never slide in
+  either. Captured once via a lazy `useState` at each bubble's own first
+  mount (`<Fragment key={m.clientId}>` guarantees one mount per message), so
+  later re-renders (a tick changing colour) never replay it.
+- Micro-interactions: buttons/switches get a tactile press-scale and
+  smoother hover transitions; the sidebar's tab panel gets a cross-fade on
+  switch (`key={tab}`); unread/request badges "pop" in; toasts, the
+  announcement banner, the reconnecting banner and the notification prompt
+  slide/fade in instead of appearing abruptly; the upload progress bar
+  animates its width; the Add Friend result card scales in.
+- Responsiveness: Contact info now goes side-by-side with the chat at `lg`
+  (1024px) instead of `xl` (1280px), with a narrower `lg:w-80` before
+  widening to `xl:w-96` - it was previously cramped or absent on common
+  laptop widths just under 1280px.
 
 ### Tests and deployment
 - `server/tests/` - `health`, `auth`, `rateLimits`, `friends`,

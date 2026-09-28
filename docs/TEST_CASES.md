@@ -7,7 +7,7 @@ Kept up to date at the end of every phase.
 - **Manual** cases are the ones a person checks in the browser. Fill in the
   Actual and Result columns when you run them.
 
-Last full run: 2026-09-28 (after the post-16b scroll-chaining bugfix) - **261/261
+Last full run: 2026-09-28 (after Phase 17 - visual polish, client only) - **261/261
 server tests pass, 18/18 end-to-end tests pass, lint clean in both workspaces, `npm run build`
 succeeds.**
 
@@ -523,6 +523,20 @@ Google cases need `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` set (see
 | M16b.13 | Theme follows the account | Choose Dark, log in on another browser | Dark there too | Covered by e2e E13 | Pass |
 | M16b.14 | Enter to send off | Settings → Chats → Enter to send off; in a chat press Enter | A new line, not a send; the Send button still sends | | |
 | M16b.15 | Log out from Settings | Settings → Log out | The same "Log out?" confirmation | | |
+
+### Phase 17 - visual polish
+
+| ID | Scenario | Steps | Expected | Actual | Result |
+|---|---|---|---|---|---|
+| M17.1 | New message slides in | Send or receive a message in an open chat | The new bubble slides/fades in from below | Checked visually (isolated server) | Pass |
+| M17.2 | History does not replay | Open a chat with existing messages | The whole page of history appears at once, with no per-bubble animation | Checked visually | Pass |
+| M17.3 | Older messages don't slide in | Scroll to the top of a long chat to load older messages | They appear without any entrance animation | | |
+| M17.4 | Typing dots | A friend starts typing | Three dots bounce next to "typing…" in both the chat header and the Chats row | Checked visually | Pass |
+| M17.5 | Dialogs animate | Open the profile dialog, a confirm dialog, and the forward dialog | Each fades and scales in | Checked visually | Pass |
+| M17.6 | Reduced motion | Turn on "Reduce motion" in the OS, reload PingMe | Everything still works, just with no animation anywhere | | |
+| M17.7 | Contact info at laptop width | Resize the window to ~1100-1279px wide, open Contact info | It sits beside the chat (not overlapping it) | Checked visually | Pass |
+| M17.8 | Mobile layout still works | 390×844 viewport | Sidebar/chat single-view with back button all still work, animations included | Checked visually | Pass |
+
 ### Phase 9 - deployment
 
 See the checklist in `docs/DEPLOY.md`, section 3.

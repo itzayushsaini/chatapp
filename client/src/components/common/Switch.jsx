@@ -17,12 +17,12 @@ export default function Switch({ checked, onChange, label, description, disabled
       </span>
       <span
         aria-hidden="true"
-        className={`relative inline-flex h-6 w-11 shrink-0 rounded-full transition-colors ${
+        className={`relative inline-flex h-6 w-11 shrink-0 rounded-full transition-colors duration-200 ${
           checked ? 'bg-brand-600' : 'bg-slate-300'
         }`}
       >
         <span
-          className={`absolute top-0.5 h-5 w-5 rounded-full bg-white shadow transition-transform ${
+          className={`absolute top-0.5 h-5 w-5 rounded-full bg-white shadow transition-transform duration-200 ease-out ${
             checked ? 'translate-x-5.5' : 'translate-x-0.5'
           }`}
         />

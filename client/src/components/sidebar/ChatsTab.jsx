@@ -8,6 +8,7 @@ import Avatar from '../common/Avatar.jsx'
 import Button from '../common/Button.jsx'
 import { AlertIcon, BellOffIcon, CheckIcon, CopyIcon, UserPlusIcon } from '../common/Icons.jsx'
 import Spinner from '../common/Spinner.jsx'
+import TypingDots from '../common/TypingDots.jsx'
 
 export default function ChatsTab() {
   const friends = useChatStore((s) => s.friends)
@@ -71,7 +72,7 @@ function FriendRow({ item }) {
       type="button"
       onClick={() => open(conversationId)}
       aria-current={isActive ? 'true' : undefined}
-      className={`flex w-full items-center gap-3 px-3 py-3 text-left focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-brand-500 focus-visible:outline-none ${
+      className={`flex w-full items-center gap-3 px-3 py-3 text-left transition-colors duration-150 focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-brand-500 focus-visible:outline-none ${
         isActive ? 'bg-slate-100' : 'hover:bg-slate-50'
       }`}
     >
@@ -85,11 +86,12 @@ function FriendRow({ item }) {
         </span>
         <span className="flex items-center justify-between gap-2">
           <span
-            className={`truncate text-sm ${
+            className={`flex min-w-0 items-center gap-1 truncate text-sm ${
               typing ? 'font-medium text-emerald-600' : unread ? 'font-medium text-slate-900' : 'text-slate-500'
             }`}
           >
-            {preview}
+            <span className="truncate">{preview}</span>
+            {typing && <TypingDots />}
           </span>
           <span className="flex shrink-0 items-center gap-1.5">
             {item.muted && (
@@ -102,7 +104,7 @@ function FriendRow({ item }) {
                 WhatsApp - so it is visible without demanding attention. */}
             {unread > 0 && (
               <span
-                className={`min-w-5 rounded-full px-1.5 text-center text-xs leading-5 font-semibold text-white ${
+                className={`animate-pop min-w-5 rounded-full px-1.5 text-center text-xs leading-5 font-semibold text-white ${
                   item.muted ? 'bg-slate-400' : 'bg-brand-600'
                 }`}
                 aria-label={`${unread} unread`}

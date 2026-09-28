@@ -16,5 +16,5 @@ export function useFriendStatus(friendId, conversationId) {
         ? lastSeenLabel(presence.lastSeen)
         : 'Offline'
 
-  return { text, active: typing || Boolean(presence?.online), online: Boolean(presence?.online) }
+  return { text, typing, active: typing || Boolean(presence?.online), online: Boolean(presence?.online) }
 }

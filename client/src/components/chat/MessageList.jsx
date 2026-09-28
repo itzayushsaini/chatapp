@@ -26,6 +26,11 @@ export default function MessageList({
   const listRef = useRef(null)
   const nearBottom = useRef(true)
   const lastKey = useRef(null)
+  // Becomes true once the FIRST page of history has been shown. Read by
+  // MessageBubble (see there) to decide whether a message sliding into view
+  // is a genuine live arrival or just part of the initial/older history
+  // being painted - so opening a chat never animates in 30 bubbles at once.
+  const historyShownRef = useRef(false)
   // Set just before older messages load: the scroll position to restore.
   const restoreFrom = useRef(null)
   const [loadingOlder, setLoadingOlder] = useState(false)
@@ -37,6 +42,11 @@ export default function MessageList({
   useLayoutEffect(() => {
     const el = listRef.current
     if (!el) return
+    // Runs after every render this effect fires for, including the very
+    // first one - so a bubble's OWN mount (which happens during render,
+    // before this line runs) always sees whatever this was on the PREVIOUS
+    // render, i.e. false for the initial page of history.
+    historyShownRef.current = true
 
     if (restoreFrom.current) {
       // Older messages were added ABOVE. Without this, the content would
@@ -134,6 +144,13 @@ export default function MessageList({
                 )}
                 <MessageBubble
                   message={m}
+                  // Only the bubble that is CURRENTLY the last one in the
+                  // list, and only once initial history is already on
+                  // screen, counts as "just arrived" - so a live message
+                  // slides in, but the 30 bubbles from opening the chat, and
+                  // older ones loaded by scrolling up (never the last item),
+                  // do not.
+                  isNew={historyShownRef.current && i === messages.length - 1}
                   mine={m.senderId === myId}
                   myId={myId}
                   friendName={friendName}
@@ -159,7 +176,7 @@ export default function MessageList({
         <button
           type="button"
           onClick={scrollToBottom}
-          className="absolute bottom-3 left-1/2 inline-flex -translate-x-1/2 items-center gap-1.5 rounded-full bg-brand-600 px-4 py-2 text-sm font-medium text-white shadow-lg hover:bg-brand-700 focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:ring-offset-2 focus-visible:outline-none"
+          className="animate-pop absolute bottom-3 left-1/2 inline-flex -translate-x-1/2 items-center gap-1.5 rounded-full bg-brand-600 px-4 py-2 text-sm font-medium text-white shadow-lg transition-colors duration-150 hover:bg-brand-700 focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:ring-offset-2 focus-visible:outline-none"
         >
           New messages
           <ArrowDownIcon className="h-4 w-4" />

@@ -29,7 +29,7 @@ export default function NotificationPrompt() {
   }
 
   return (
-    <div className="mx-3 mt-2 flex items-center gap-2 rounded-lg bg-brand-50 px-3 py-2 text-sm text-slate-700">
+    <div className="animate-slide-down mx-3 mt-2 flex items-center gap-2 rounded-lg bg-brand-50 px-3 py-2 text-sm text-slate-700">
       <span className="min-w-0 flex-1">Get notified when a message arrives</span>
       <button
         type="button"

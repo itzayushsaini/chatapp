@@ -11,7 +11,7 @@ export default function AuthLayout({ title, subtitle, children, footer }) {
           <div className="mb-6 flex justify-center">
             <Logo />
           </div>
-          <div className="rounded-2xl border border-slate-200 bg-surface p-6 shadow-sm sm:p-8">
+          <div className="animate-scale-in rounded-2xl border border-slate-200 bg-surface p-6 shadow-sm sm:p-8">
             <h1 className="text-center text-xl font-semibold text-slate-900">{title}</h1>
             <p className="mt-1 text-center text-sm text-slate-500">{subtitle}</p>
             <div className="mt-6">{children}</div>

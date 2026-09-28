@@ -51,7 +51,7 @@ function LiveShell() {
     <div className="flex h-dvh flex-col">
       <AnnouncementBanner />
       {connection === 'reconnecting' && (
-        <div className="bg-amber-100 px-4 py-1.5 text-center text-sm text-amber-900" role="status">
+        <div className="animate-slide-down bg-amber-100 px-4 py-1.5 text-center text-sm text-amber-900" role="status">
           Reconnecting…
         </div>
       )}

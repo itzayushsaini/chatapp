@@ -11,6 +11,7 @@ import Avatar from '../common/Avatar.jsx'
 import Button from '../common/Button.jsx'
 import { AlertIcon, BackIcon, BellOffIcon } from '../common/Icons.jsx'
 import Spinner from '../common/Spinner.jsx'
+import TypingDots from '../common/TypingDots.jsx'
 import ContactInfoPanel from './ContactInfoPanel.jsx'
 import MessageInput from './MessageInput.jsx'
 import MessageList from './MessageList.jsx'
@@ -269,10 +270,11 @@ function ChatHeader({ friend, muted, conversationId, onBack, onOpenInfo }) {
           )}
         </h2>
         <p
-          className={`truncate text-xs ${status.active ? 'text-emerald-600' : 'text-slate-500'}`}
+          className={`flex items-center gap-1 truncate text-xs ${status.active ? 'text-emerald-600' : 'text-slate-500'}`}
           aria-live="polite"
         >
           {status.text}
+          {status.typing && <TypingDots />}
         </p>
       </div>
     </header>

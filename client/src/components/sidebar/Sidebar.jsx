@@ -44,7 +44,7 @@ export default function Sidebar({ className = '' }) {
         <button
           type="button"
           onClick={() => setProfileOpen(true)}
-          className="flex min-w-0 items-center gap-2.5 rounded-lg py-1 pr-2 pl-1 text-left hover:bg-overlay/5 focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:outline-none"
+          className="flex min-w-0 items-center gap-2.5 rounded-lg py-1 pr-2 pl-1 text-left transition-colors duration-150 hover:bg-overlay/5 focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:outline-none"
           aria-label="Edit your profile"
           title="Edit your profile"
         >
@@ -60,7 +60,7 @@ export default function Sidebar({ className = '' }) {
           {user.isAdmin && (
             <Link
               to="/admin"
-              className="rounded-full p-2 text-slate-600 hover:bg-overlay/5 hover:text-brand-700 focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:outline-none"
+              className="rounded-full p-2 text-slate-600 transition-colors duration-150 hover:bg-overlay/5 hover:text-brand-700 focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:outline-none"
               aria-label="Admin panel"
               title="Admin panel"
             >
@@ -69,7 +69,7 @@ export default function Sidebar({ className = '' }) {
           )}
           <Link
             to="/settings"
-            className="rounded-full p-2 text-slate-600 hover:bg-overlay/5 hover:text-brand-700 focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:outline-none"
+            className="rounded-full p-2 text-slate-600 transition-colors duration-150 hover:bg-overlay/5 hover:text-brand-700 focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:outline-none"
             aria-label="Settings"
             title="Settings"
           >
@@ -78,7 +78,7 @@ export default function Sidebar({ className = '' }) {
           <button
             type="button"
             onClick={() => setConfirmLogout(true)}
-            className="rounded-full p-2 text-slate-600 hover:bg-overlay/5 hover:text-red-600 focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:outline-none"
+            className="rounded-full p-2 text-slate-600 transition-colors duration-150 hover:bg-overlay/5 hover:text-red-600 focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:outline-none"
             aria-label="Log out"
             title="Log out"
           >
@@ -109,7 +109,7 @@ export default function Sidebar({ className = '' }) {
               {t.label}
               {t.id === 'requests' && incomingCount > 0 && (
                 <span
-                  className={`min-w-5 rounded-full px-1.5 text-xs leading-5 font-semibold ${
+                  className={`animate-pop min-w-5 rounded-full px-1.5 text-xs leading-5 font-semibold ${
                     selected ? 'bg-white/25 text-white' : 'bg-brand-600 text-white'
                   }`}
                   aria-label={`${incomingCount} incoming`}
@@ -122,11 +122,15 @@ export default function Sidebar({ className = '' }) {
         })}
       </div>
 
+      {/* key={tab} remounts this panel on every tab switch, which is what
+          gives it a fresh fade-in each time instead of just swapping content
+          in place. */}
       <div
+        key={tab}
         id={`panel-${tab}`}
         role="tabpanel"
         aria-labelledby={`tab-${tab}`}
-        className="min-h-0 flex-1 overflow-y-auto overscroll-contain"
+        className="animate-fade-in min-h-0 flex-1 overflow-y-auto overscroll-contain"
       >
         {tab === 'chats' && <ChatsTab />}
         {tab === 'requests' && <RequestsTab />}

@@ -54,6 +54,7 @@ export default function MessageBubble({
   onOpenImage,
   onMediaLoad,
   onReply,
+  isNew,
 }) {
   const { status, attachment, text, replyTo, forwarded, deletedForEveryone } = message
   const socket = useSocket()
@@ -62,6 +63,13 @@ export default function MessageBubble({
   const [menuOpen, setMenuOpen] = useState(false)
   const [deleteChoiceOpen, setDeleteChoiceOpen] = useState(false)
   const [forwardOpen, setForwardOpen] = useState(false)
+  // Read only ONCE, at this bubble's own first render - `<Fragment
+  // key={m.clientId}>` in MessageList means this component mounts exactly
+  // once per message, so whatever `isNew` was AT THAT MOMENT is baked in
+  // for good. Later prop updates (a tick changing colour, an edit to
+  // `isNew` itself) never replay the slide-in, which is the point: it
+  // should play once, when the message truly appears, not on every re-render.
+  const [animateIn] = useState(() => isNew)
 
   if (deletedForEveryone) {
     return (
@@ -104,7 +112,7 @@ export default function MessageBubble({
     mine && Boolean(message.id) && Date.now() - new Date(message.createdAt).getTime() < DELETE_FOR_EVERYONE_WINDOW_MS
 
   return (
-    <li className={`group flex ${mine ? 'justify-end' : 'justify-start'}`}>
+    <li className={`group flex ${mine ? 'justify-end' : 'justify-start'} ${animateIn ? 'animate-message-in' : ''}`}>
       <div className={`flex max-w-[80%] items-start gap-1 sm:max-w-[65%] ${mine ? 'flex-row-reverse' : ''}`}>
         <div
           className={`overflow-hidden rounded-lg text-sm shadow-sm ${
@@ -220,7 +228,7 @@ function ActionsMenu({ items, onClose, align }) {
     <div
       ref={ref}
       role="menu"
-      className={`absolute top-full z-10 mt-1 w-40 rounded-lg bg-surface py-1 shadow-lg ring-1 ring-overlay/5 ${
+      className={`animate-scale-in absolute top-full z-10 mt-1 w-40 origin-top rounded-lg bg-surface py-1 shadow-lg ring-1 ring-overlay/5 ${
         align === 'right' ? 'right-0' : 'left-0'
       }`}
     >
@@ -373,7 +381,10 @@ function UploadProgress({ progress }) {
         aria-valuemax={100}
         aria-label="Upload progress"
       >
-        <div className="h-full bg-brand-600" style={{ width: `${percent}%` }} />
+        <div
+          className="h-full bg-brand-600 transition-[width] duration-300 ease-out"
+          style={{ width: `${percent}%` }}
+        />
       </div>
       <p className="mt-1 text-[11px] text-meta">Uploading {percent}%</p>
     </div>

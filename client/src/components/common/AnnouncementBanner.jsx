@@ -29,7 +29,7 @@ export default function AnnouncementBanner() {
   if (!announcement?.enabled || !announcement.text) return null
 
   return (
-    <div className="bg-brand-600 px-4 py-1.5 text-center text-sm text-white" role="status">
+    <div className="animate-slide-down bg-brand-600 px-4 py-1.5 text-center text-sm text-white" role="status">
       {announcement.text}
     </div>
   )

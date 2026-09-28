@@ -71,7 +71,7 @@ export default function AddFriendTab() {
       <div className="mt-4" aria-live="polite">
         {error && <p className="text-sm text-red-600">{error}</p>}
         {result === 'not-found' && (
-          <p className="rounded-lg bg-slate-50 px-3 py-4 text-center text-sm text-slate-500">
+          <p className="animate-fade-in rounded-lg bg-slate-50 px-3 py-4 text-center text-sm text-slate-500">
             No user found
           </p>
         )}
@@ -180,7 +180,7 @@ function ResultCard({ result, refresh }) {
   }
 
   return (
-    <div className="flex flex-col items-center rounded-2xl border border-slate-200 p-5 text-center">
+    <div className="animate-scale-in flex flex-col items-center rounded-2xl border border-slate-200 p-5 text-center">
       <Avatar user={user} size="lg" />
       <p className="mt-3 font-semibold text-slate-900">{user.displayName}</p>
       <p className="text-sm text-slate-500">@{user.username}</p>

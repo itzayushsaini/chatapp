@@ -1803,3 +1803,92 @@ device). It has to be a separate file, not inline code, because our Content
 Security Policy forbids inline scripts - a protection against script injection
 we did not want to weaken. "Same as device" follows the operating system, and
 even switches live if the OS changes while PingMe is open.
+
+---
+
+# Phase 17 - visual polish (animations, micro-interactions, responsiveness)
+
+## 1. Why CSS only, no animation library
+
+An animation library (Framer Motion, react-spring) would let us do more -
+spring physics, shared-layout transitions - but it is a whole new dependency
+with its own API to learn and explain. Every effect in this phase is instead
+a plain CSS `@keyframes` plus a class that uses it, all in one place
+(`index.css`). That means the team can point to any animation in the app and
+explain it in one or two lines, which matters far more for a viva than how
+smooth a spring curve is.
+
+## 2. One switch turns all of it off
+
+Every animation class in `index.css` lives inside a single
+`@media (prefers-reduced-motion: no-preference) { ... }` block. Someone who
+has told their operating system "reduce motion" (a real accessibility
+setting, not a guess) gets the *exact* same interface - nothing is missing,
+nothing is broken - just without any of it sliding, fading or bouncing. This
+is also why it is one shared block rather than repeating the media query on
+every single class: there is exactly one place that decision is made.
+
+> **Likely question: why not just remove the class with JavaScript when
+> reduced motion is on?**
+> That would need reading `matchMedia` in every component that animates, and
+> keeping it in sync if the setting changes. A single CSS media query does
+> the same job with no JavaScript and no component to get wrong.
+
+## 3. New messages slide in - but only the ones that are actually new
+
+The obvious way to animate "a message appeared" is to give every bubble an
+entrance animation. The problem: opening a 40-message chat would then
+animate in 40 bubbles at once, and scrolling up to load older history would
+do the same - neither is a "new message", so neither should slide in.
+
+The fix has two parts working together:
+
+- `MessageList` remembers (in a ref, not state - it must not itself cause a
+  re-render) whether the conversation's first page of history has already
+  been shown. It flips from false to true right after the very first render
+  finishes - so every bubble that mounts during that first render still
+  sees it as false.
+- Each bubble is told whether it is *currently the last message in the
+  array* AND *history has already been shown*. Only a message meeting both
+  conditions is "new": a live arrival is always the new last item; an older
+  message loaded by scrolling up is never the last item (it lands somewhere
+  above the messages already on screen).
+
+Inside `MessageBubble` itself, that flag is captured with
+`useState(() => isNew)` - a **lazy** initial state, which React only ever
+runs once, at the component's first render. Since each message gets its own
+permanent DOM element (`<Fragment key={m.clientId}>` in `MessageList`), a
+bubble is only ever "born" once for a given message; later re-renders (a
+tick turning blue) update its props but never re-run that lazy initializer,
+so the slide-in can never accidentally replay.
+
+## 4. Dialogs animate open for free
+
+Every dialog in the app (profile, confirm-are-you-sure, contact info, the
+forward picker) is the same `Dialog.jsx` wrapper around a native `<dialog>`
+element. Rather than add fade-in logic to that component, `index.css` has
+one rule: `dialog[open] { animation: dialog-in ...; }`. The browser treats
+`showModal()` as inserting the element fresh each time, so this animation
+plays every time any dialog opens, with zero JavaScript changes anywhere.
+There is deliberately no matching close animation - `dialog.close()` removes
+the element immediately, and delaying that just to play an exit animation
+would need its own bit of JavaScript timing, which was not worth it for how
+quick the fade already is.
+
+## 5. Typing dots
+
+`TypingDots.jsx` is three small spans, each with the same `bounce-dot`
+animation but a different `animation-delay`, so they bounce in a wave
+instead of together. It sits next to the existing "typing…" text (which
+still does the real work for screen readers) in both the chat header and
+that friend's row in the Chats list.
+
+## 6. Responsiveness: Contact info's breakpoint
+
+Contact info used to only sit beside the chat (instead of covering it) at
+`xl` (1280px) and up. Many laptop screens are narrower than that once
+window chrome and the taskbar are accounted for, so on a very common laptop
+size the panel would either not fit side-by-side at all, or feel cramped
+right at the edge of the breakpoint. It now goes side-by-side starting at
+`lg` (1024px), narrower there (`lg:w-80`) and widening again at `xl:w-96` -
+one class change, no restructuring.

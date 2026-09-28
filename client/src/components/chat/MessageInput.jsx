@@ -135,9 +135,15 @@ export default function MessageInput({
       className="bg-slate-100 px-3 py-2.5 sm:px-4"
     >
       {replyTarget && (
-        <ReplyPreview target={replyTarget} myId={myId} friendName={friendName} onCancel={onCancelReply} />
+        <div className="animate-slide-down">
+          <ReplyPreview target={replyTarget} myId={myId} friendName={friendName} onCancel={onCancelReply} />
+        </div>
       )}
-      {file && <ChosenFile file={file} onRemove={() => setFile(null)} />}
+      {file && (
+        <div className="animate-slide-down">
+          <ChosenFile file={file} onRemove={() => setFile(null)} />
+        </div>
+      )}
 
       <div className="flex items-end gap-2">
         <input
@@ -156,7 +162,7 @@ export default function MessageInput({
             type="button"
             onClick={() => fileInputRef.current.click()}
             disabled={disabled}
-            className="mb-1 inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-slate-500 hover:bg-slate-100 hover:text-slate-800 focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:outline-none disabled:text-slate-300"
+            className="mb-1 inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-slate-500 transition-colors duration-150 hover:bg-slate-100 hover:text-slate-800 focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:outline-none disabled:text-slate-300"
             aria-label="Attach a photo, video or document"
             title="Attach a photo, video or document"
           >
@@ -184,7 +190,7 @@ export default function MessageInput({
         <button
           type="submit"
           disabled={!canSend}
-          className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-brand-600 text-white hover:bg-brand-700 focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:ring-offset-2 focus-visible:outline-none disabled:bg-brand-300"
+          className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-brand-600 text-white transition-[background-color,transform] duration-150 hover:bg-brand-700 focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:ring-offset-2 focus-visible:outline-none active:scale-90 disabled:bg-brand-300 disabled:active:scale-100"
           aria-label="Send message"
         >
           <SendIcon className="h-5 w-5" />
