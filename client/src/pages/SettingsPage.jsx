@@ -89,7 +89,7 @@ export default function SettingsPage() {
               Report a problem or suggest a feature ↗
             </a>
             <p className="mt-3 text-xs text-slate-500">
-              PingMe - a B.Tech CSE final-year project, COER University.
+              PingMe - a B.Tech CSE 2nd year project, COER University.
             </p>
           </Card>
 
