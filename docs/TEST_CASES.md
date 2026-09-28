@@ -7,8 +7,8 @@ Kept up to date at the end of every phase.
 - **Manual** cases are the ones a person checks in the browser. Fill in the
   Actual and Result columns when you run them.
 
-Last full run: 2026-09-28 (after Phase 18 - voice notes) - **283/283
-server tests pass, 21/21 end-to-end tests pass, lint clean in both workspaces, `npm run build`
+Last full run: 2026-09-28 (after the post-18 admin back-arrow and phone-layout fixes) - **283/283
+server tests pass, 23/23 end-to-end tests pass, lint clean in both workspaces, `npm run build`
 succeeds.**
 
 ---
@@ -327,7 +327,7 @@ that answers the token and profile requests.
 
 Files: `e2e/chat.spec.js`, `e2e/profile-attachments.spec.js`, `e2e/password.spec.js`,
 `e2e/readReceipts.spec.js`, `e2e/settings.spec.js`, `e2e/pageScroll.spec.js`,
-`e2e/voiceNotes.spec.js`. Run against the production build and server with
+`e2e/voiceNotes.spec.js`, `e2e/adminNavigation.spec.js`, `e2e/mobileLayout.spec.js`. Run against the production build and server with
 an in-memory database.
 Forgot/reset password's email-dependent half (does the link actually work) is
 covered at the server level instead - see A12.1-A12.8 - since e2e has no real
@@ -356,6 +356,8 @@ email provider configured.
 | E19 | Page scroll still works off the chat shell (`e2e/pageScroll.spec.js`) | Register at a 400×500 viewport: the wheel scrolls the page to reach Sign up |
 | E20 | Voice note end to end (`e2e/voiceNotes.spec.js`, fake microphone) | Mic shows only while the box is empty; record ≥1 s and send → "Play voice message" bubble, "🎤 Voice message" preview, Delivered; swipe the strip left → recording cancelled, still one note; the friend receives it as a voice player (so the server saw real audio), speed cycles 1× → 1.5× → 2× → 1×, Play turns into Pause; Contact info shows "Voice messages (1)" |
 | E21 | Too-short voice note | Send immediately → "too short" toast, nothing sent |
+| E22 | Leaving the admin panel doesn't crash (`e2e/adminNavigation.spec.js`) | With a chat open, go to Admin panel and press its back arrow, three times - the chat is still there each time, never the "Something went wrong" page (the browser is told it is an admin by rewriting `/api/auth/me`; regression test for the post-18 bugfix) |
+| E23 | Fits a 320px phone (`e2e/mobileLayout.spec.js`, touch emulation) | A friend with a 38-character name and a long link with no spaces: nothing in the chat is wider than the screen and nothing is hidden sideways; the ⋮ actions button is visible without hover; the first message's menu is on top of the bubbles below it (the element under "Reply" is Reply itself) and Reply works; Settings fits too, with "Edit profile" fully on screen |
 ---
 
 ## Manual

@@ -122,7 +122,7 @@ export default function ContactInfoPanel({ item, onClose }) {
         <section className="bg-surface px-5 py-4">
           <h3 className="text-xs font-medium tracking-wide text-slate-500 uppercase">About</h3>
           <p
-            className={`mt-1.5 text-sm break-words whitespace-pre-wrap ${
+            className={`mt-1.5 text-sm whitespace-pre-wrap wrap-anywhere ${
               friend.bio ? 'text-slate-800' : 'text-slate-400 italic'
             }`}
           >

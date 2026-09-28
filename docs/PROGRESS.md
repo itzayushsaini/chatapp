@@ -808,6 +808,72 @@ Full suite after both fixes: `npm test` 261/261, `npm run test:e2e` 18/18
 
 ---
 
+## Post-18 bugfix (2026-09-28): the admin panel's back arrow sometimes crashed the page
+
+**Reported by the team:** pressing the back arrow on the Admin panel
+sometimes showed the full-page "Something went wrong" screen; a reload
+fixed it.
+
+**Root cause:** `/admin` sits outside `LoggedInLayout`, so going back to `/`
+mounts that layout - and its `SocketProvider` - afresh, and the socket is
+`null` for the first render (it is created in the provider's effect). The
+zustand store, however, still had the chat that was open before, with its
+messages already loaded, so `ChatWindow`'s "mark as read" effect ran at
+once and called `socket.emit` on `null`. It only happened when a chat was
+open before going to Admin (on a normal first load the messages are not
+loaded yet, so the effect returns early), and a reload fixed it because a
+reload empties the store.
+
+**Fix:** that effect now returns early while `socket` is null and lists
+`socket` in its dependencies, so it runs again (and marks the chat read) as
+soon as the socket exists; `onTyping` uses `socket?.emit` for the same reason.
+
+**Verification:** `e2e/adminNavigation.spec.js` opens a chat with a message,
+tells the browser it is an admin (rewrites the `/api/auth/me` response -
+the server still refuses the admin API), then goes Admin → back three
+times. Confirmed it fails on the pre-fix code (the page shows "Something
+went wrong") and passes after. `npm test` 283/283, `npm run test:e2e` 22/22,
+lint clean.
+
+## Post-18 bugfix (2026-09-28): the layout on phones
+
+**Reported by the team:** "a responsiveness problem on mobile". Checked every
+screen at 320, 360, 390 and 412px wide (and landscape) with touch emulation,
+screenshotting each one. Four problems, all in the logged-in part:
+
+1. **The chat was wider than the phone, with its left part cut off** (the
+   header read "…iam Iyer", bubbles and the message box were chopped). The
+   `<section>` in `ChatWindow` had no `min-w-0`, and a flex item is never
+   narrower than its content by default - so a long friend name, and above
+   all a long link with no spaces, stretched the whole chat (to 770px on a
+   390px phone). `LoggedInLayout`'s `overflow-hidden` then silently cut the
+   extra off. Fixed with `min-w-0` there, and **`wrap-anywhere` instead of
+   `break-words`** on message text (and the bio, forward preview and Add
+   Friend card): `break-words` only breaks a word after its box has already
+   grown to the word's full width; `wrap-anywhere` lets the box stay narrow.
+2. **Settings had the same missing `min-w-0`** on its `<main>` (the "Edit
+   profile" button and text were cut off at 320px).
+3. **The message actions menu was drawn behind the bubbles below it**, so
+   Reply/Copy/Forward/Delete could not be tapped (on desktop too). Phase 17's
+   slide-in animation (`animation: ... both`) leaves a transform on each new
+   row, which makes every row its own stacking layer and traps the menu's
+   `z-index` inside its row. Fixed by lifting the row (`relative z-20`) while
+   its menu is open. Also, the ⋮ button was invisible on touch screens (it
+   only appeared on hover); it is now always shown there
+   (`[@media(hover:none)]:opacity-100`), as its comment always intended.
+4. **Document cards and voice waveforms were cut off at 320px**: the card's
+   `min-w-56` and the waveform's 48 bars at 2px + 2px gaps needed more room
+   than the bubble had. The bubble now has `min-w-0`, the card is
+   `min-w-[min(14rem,100%)]`, and the bars/gaps are 1px below `sm`.
+
+**Verification:** `e2e/mobileLayout.spec.js` (320×640, touch) checks that
+nothing in the chat or Settings is wider than the screen or hidden sideways,
+that the ⋮ button is visible, and that the element under the menu's "Reply"
+really is Reply. Confirmed it fails on the pre-fix code and passes after.
+`npm test` 283/283, `npm run test:e2e` 23/23, lint clean.
+
+---
+
 ## How to verify everything
 
 1. `npm install`

@@ -43,7 +43,9 @@ export default function SettingsPage() {
   const [confirmLogout, setConfirmLogout] = useState(false)
 
   return (
-    <main className="flex min-h-0 flex-1 flex-col bg-slate-50">
+    // min-w-0 so a wide row inside cannot stretch the page past a phone's
+    // screen (a flex item is otherwise never narrower than its content).
+    <main className="flex min-h-0 min-w-0 flex-1 flex-col bg-slate-50">
       <header className="flex items-center gap-3 bg-surface px-3 py-3 shadow-sm sm:px-4">
         <Link
           to="/"

@@ -41,6 +41,9 @@ function attachmentSnippetLabel(kind) {
 // escapes - so a message containing <script> just shows those characters.
 // There is no dangerouslySetInnerHTML anywhere in the app.
 // `whitespace-pre-wrap` keeps the user's line breaks (Shift+Enter).
+// `wrap-anywhere` (not `break-words`) lets a long link or unbroken word wrap
+// INSIDE the bubble: `break-words` only breaks it after the bubble has already
+// grown to the word's full width, which pushed a phone's chat off-screen.
 //
 // `delivered` and `read` are only meaningful when `mine` is true: has the
 // OTHER person's app received this message yet, and have they read it?
@@ -114,10 +117,18 @@ export default function MessageBubble({
     mine && Boolean(message.id) && Date.now() - new Date(message.createdAt).getTime() < DELETE_FOR_EVERYONE_WINDOW_MS
 
   return (
-    <li className={`group flex ${mine ? 'justify-end' : 'justify-start'} ${animateIn ? 'animate-message-in' : ''}`}>
+    // While the actions menu is open, the whole row is lifted above the rows
+    // after it (`relative z-20`). The slide-in animation leaves a transform on
+    // each new row, which traps the menu's own z-index inside that row - so
+    // without this, later bubbles were drawn on top of the menu.
+    <li
+      className={`group flex ${mine ? 'justify-end' : 'justify-start'} ${animateIn ? 'animate-message-in' : ''} ${
+        menuOpen ? 'relative z-20' : ''
+      }`}
+    >
       <div className={`flex max-w-[80%] items-start gap-1 sm:max-w-[65%] ${mine ? 'flex-row-reverse' : ''}`}>
         <div
-          className={`rounded-lg text-sm shadow-sm ${attachment ? 'overflow-hidden' : mine ? 'bubble-tail-mine' : 'bubble-tail-theirs'} ${
+          className={`min-w-0 rounded-lg text-sm shadow-sm ${attachment ? 'overflow-hidden' : mine ? 'bubble-tail-mine' : 'bubble-tail-theirs'} ${
             mine ? 'rounded-tr-none bg-brand-100 text-slate-900' : 'rounded-tl-none bg-surface text-slate-900'
           } ${status === 'failed' ? 'opacity-70' : ''} ${attachment ? 'p-1' : 'px-2.5 py-1.5'}`}
         >
@@ -144,7 +155,7 @@ export default function MessageBubble({
           )}
           {status === 'uploading' && <UploadProgress progress={message.progress ?? 0} />}
           {text && (
-            <p className={`break-words whitespace-pre-wrap ${attachment ? 'px-2 pt-1.5' : ''}`}>{text}</p>
+            <p className={`whitespace-pre-wrap wrap-anywhere ${attachment ? 'px-2 pt-1.5' : ''}`}>{text}</p>
           )}
 
           {/* Time and tick sit INSIDE the bubble, bottom-right - the same
@@ -157,14 +168,16 @@ export default function MessageBubble({
           </div>
         </div>
 
-        {/* Hidden by default on desktop (appears on hover), always tappable
-            on touch, so it never blocks reading the message text. */}
+        {/* Hidden by default on desktop (appears on hover), so it never
+            blocks reading the message text. On a touch screen there is no
+            hover, so it is always shown there ([@media(hover:none)]) - it
+            used to be tappable but invisible. */}
         {message.id && (
           <div className="relative shrink-0 self-center">
             <button
               type="button"
               onClick={() => setMenuOpen((v) => !v)}
-              className="rounded-full p-1 text-slate-400 opacity-0 hover:bg-slate-200/70 hover:text-slate-700 focus-visible:opacity-100 focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:outline-none group-hover:opacity-100"
+              className="rounded-full p-1 text-slate-400 opacity-0 hover:bg-slate-200/70 hover:text-slate-700 focus-visible:opacity-100 focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:outline-none group-hover:opacity-100 [@media(hover:none)]:opacity-100"
               aria-label="Message actions"
               aria-haspopup="menu"
             >
@@ -352,11 +365,13 @@ function Attachment({ attachment, mine, onOpenImage, onMediaLoad }) {
     )
   }
 
+  // At least 14rem wide - but never wider than the bubble, so on a narrow
+  // phone the name truncates instead of the download icon being cut off.
   return (
     <a
       href={url}
       download={name}
-      className={`flex min-w-56 items-center gap-3 rounded-md p-2.5 focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:outline-none ${
+      className={`flex min-w-[min(14rem,100%)] items-center gap-3 rounded-md p-2.5 focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:outline-none ${
         mine ? 'bg-overlay/5 hover:bg-overlay/10' : 'bg-slate-100 hover:bg-slate-200'
       }`}
     >

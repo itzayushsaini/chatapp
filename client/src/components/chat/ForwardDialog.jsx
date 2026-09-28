@@ -59,7 +59,7 @@ export default function ForwardDialog({ message, onClose }) {
   return (
     <div className="flex flex-col gap-4">
       <div className="rounded-lg bg-slate-50 p-2.5 text-sm text-slate-600">
-        <p className="line-clamp-2 break-words">{message.text || (message.attachment ? attachmentLabel(message.attachment) : '')}</p>
+        <p className="line-clamp-2 wrap-anywhere">{message.text || (message.attachment ? attachmentLabel(message.attachment) : '')}</p>
       </div>
 
       {friends.length === 0 ? (

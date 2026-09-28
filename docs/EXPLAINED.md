@@ -2023,3 +2023,44 @@ preview, reply quotes and the forward dialog all say "🎤 Voice message".
   *fake* microphone that plays a test tone, so the test records a real file
   and the server really checks it). Firefox and Safari are in the manual test
   table.
+
+---
+
+# Fixes after Phase 18 - the admin back arrow and phones
+
+## 1. "Something went wrong" after leaving the Admin panel
+
+The socket is created in `SocketProvider`'s effect, so on the very first
+render of the logged-in layout `useSocket()` is still `null`. Normally
+nothing needs it yet. But `/admin` is outside that layout, so coming back
+mounts it afresh - while the zustand store still remembers the open chat and
+its messages. `ChatWindow`'s "mark as read" effect then ran immediately and
+called `socket.emit` on `null`, and the error boundary caught the crash. It
+now waits (`if (!socket) return`) and has `socket` in its dependency list, so
+it runs again the moment the socket exists.
+
+> **Likely question: why did a refresh fix it?** A refresh empties the
+> store, so no chat is open and the effect has nothing to do on that first
+> render. That is also why it only happened "sometimes": only when a chat
+> was open before going to Admin.
+
+## 2. Phones - three CSS rules worth knowing
+
+- **`min-w-0` on flex items.** A flex item's default minimum width is its
+  content's width. So one long name or link inside the chat made the whole
+  chat wider than the phone, and the part that didn't fit was cut off. `min-w-0`
+  says "you may be narrower than your content" - then text wraps or
+  truncates instead.
+- **`wrap-anywhere`, not `break-words`.** Both let a long word break, but
+  `break-words` only does it *after* the box has sized itself to the whole
+  word, so the bubble still grows. `wrap-anywhere` counts those break points
+  when working out the size, so the bubble stays inside the screen.
+- **Transforms create layers.** The slide-in animation leaves a
+  `transform` on each new message row, and any element with a transform
+  gets its own stacking layer. A child's `z-index` only counts inside that
+  layer, so the actions menu (inside one row) was drawn under the rows after
+  it. The fix lifts the whole row while its menu is open.
+
+Also: a touch screen has no hover, so the ⋮ actions button (which only
+appeared on hover) was invisible there - it is now always shown on devices
+without hover, using the `(hover: none)` media query.

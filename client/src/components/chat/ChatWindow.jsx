@@ -48,7 +48,14 @@ export default function ChatWindow({ conversationId }) {
   // actually visible: a chat left open in a minimised tab has not been
   // SEEN, so it stays "delivered" until the tab is shown again - which is
   // what the visibilitychange listener catches.
+  //
+  // The socket is null on the very first render of the logged-in layout (it
+  // is created in SocketProvider's effect). Coming back from /admin mounts
+  // that layout afresh while the store still has this chat open with its
+  // messages loaded, so without the guard this crashed the whole page.
+  // `socket` is in the dependencies, so it runs again once the socket exists.
   useEffect(() => {
+    if (!socket) return
     function markLatestRead() {
       if (document.hidden) return
       const current = store().messagesByConversation[conversationId]
@@ -62,7 +69,7 @@ export default function ChatWindow({ conversationId }) {
     // Only re-run when the LATEST message actually changes, not on every
     // store update (e.g. presence ticking) that happens to touch this entry.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [conversationId, entry?.status, entry?.messages?.at(-1)?.id])
+  }, [socket, conversationId, entry?.status, entry?.messages?.at(-1)?.id])
 
   if (!item) return null
   const { friend } = item
@@ -174,7 +181,10 @@ export default function ChatWindow({ conversationId }) {
   }
 
   return (
-    <section className="relative flex min-h-0 flex-1" aria-label={`Chat with ${friend.displayName}`}>
+    // min-w-0: a flex item is never narrower than its content by default, so
+    // without it a long name in the header or a wide bubble made the whole
+    // chat wider than a phone screen, with the left part cut off.
+    <section className="relative flex min-h-0 min-w-0 flex-1" aria-label={`Chat with ${friend.displayName}`}>
       {/* Keyed by conversationId so the WHOLE pane (header, list, input) is
           torn down and rebuilt on every switch - not just the list inside it.
           Without this, an old MessageList could end up not being cleanly
@@ -223,7 +233,7 @@ export default function ChatWindow({ conversationId }) {
         <MessageInput
           key={conversationId}
           onSend={send}
-          onTyping={(isTyping) => socket.emit('typing', { conversationId, isTyping })}
+          onTyping={(isTyping) => socket?.emit('typing', { conversationId, isTyping })}
           disabled={entry?.status !== 'ready'}
           replyTarget={replyTarget}
           myId={user.id}

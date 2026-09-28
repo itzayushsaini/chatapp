@@ -123,12 +123,14 @@ export default function VoicePlayer({ attachment, mine = false, compact = false 
           aria-valuetext={`${formatDuration(position * 1000)} of ${formatDuration(duration * 1000)}`}
           onClick={onBarsClick}
           onKeyDown={onBarsKey}
-          className="flex h-7 cursor-pointer items-center gap-[2px] rounded focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:outline-none"
+          // Thinner bars and gaps below `sm`: 48 bars at 2px + 2px gaps need
+          // 190px, more than a bubble has on a 320px phone.
+          className="flex h-7 cursor-pointer items-center gap-px rounded sm:gap-[2px] focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:outline-none"
         >
           {bars.map((height, i) => (
             <span
               key={i}
-              className={`min-w-[2px] flex-1 rounded-full transition-colors duration-150 ${i < playedBars ? played : unplayed}`}
+              className={`min-w-px flex-1 rounded-full sm:min-w-[2px] transition-colors duration-150 ${i < playedBars ? played : unplayed}`}
               style={{ height: `${Math.max(12, height)}%` }}
             />
           ))}
