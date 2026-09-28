@@ -19,6 +19,7 @@ import {
   TrashIcon,
 } from '../common/Icons.jsx'
 import ForwardDialog from './ForwardDialog.jsx'
+import VoicePlayer from './VoicePlayer.jsx'
 
 const ACK_TIMEOUT_MS = 10_000
 // Matches the server's own window (messageService.js) - purely to decide
@@ -31,6 +32,7 @@ const DELETE_FOR_EVERYONE_WINDOW_MS = 60 * 60 * 1000
 function attachmentSnippetLabel(kind) {
   if (kind === 'image') return '📷 Photo'
   if (kind === 'video') return '🎥 Video'
+  if (kind === 'audio') return '🎤 Voice message'
   if (kind === 'file') return '📄 File'
   return 'Message'
 }
@@ -315,6 +317,8 @@ function MessageStatus({ status, read, delivered, onRetry }) {
 // file on this computer.
 function Attachment({ attachment, mine, onOpenImage, onMediaLoad }) {
   const { kind, url, name, size } = attachment
+
+  if (kind === 'audio') return <VoicePlayer attachment={attachment} mine={mine} />
 
   if (kind === 'image') {
     return (

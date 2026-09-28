@@ -15,7 +15,10 @@ export const objectId = z.string().regex(/^[a-f0-9]{24}$/i, 'Invalid id')
 // { "username": { "$gt": "" } } fails because z.string() rejects an object.
 export function validate(schemas) {
   return (req, res, next) => {
-    req.valid = {}
+    // Kept if already there: a file upload validates its params BEFORE the
+    // file is read and its text fields only AFTER (multer is what parses
+    // them), so one route can run this twice.
+    req.valid ??= {}
     for (const part of ['params', 'query', 'body']) {
       if (!schemas[part]) continue
 

@@ -1892,3 +1892,134 @@ size the panel would either not fit side-by-side at all, or feel cramped
 right at the edge of the breakpoint. It now goes side-by-side starting at
 `lg` (1024px), narrower there (`lg:w-80`) and widening again at `xl:w-96` -
 one class change, no restructuring.
+
+---
+
+# Phase 18 - voice notes
+
+**Goal of this phase:** hold the mic, talk, send - and the other person sees
+a little waveform they can play, speed up and scrub through, like WhatsApp.
+
+## 1. A voice note is just an attachment
+
+The biggest decision is what we did *not* build. A voice note is not a new
+kind of message with its own route, model or socket event. It is an
+**attachment** of a new `kind`, `'audio'`, sent through the exact two steps
+every photo and document already uses (Phase 11): upload the file, then
+`message:send` with its `attachmentId`. So everything that already worked for
+files works for voice notes for free - permission checks, the atomic claim,
+Range downloads, deleting, forwarding, clearing, the 1-hour cleanup of unsent
+uploads. The new code is only: *recording* it (browser), *recognising* it
+(server), and *drawing* it (browser).
+
+## 2. Recording - only what the browser already has
+
+`hooks/useVoiceRecorder.js` uses three built-in browser features, no library:
+
+- **`getUserMedia({ audio: true })`** asks for the microphone. Browsers only
+  show that prompt for something the user actually clicked, which is why
+  recording starts from the mic button's click and nowhere else.
+- **`MediaRecorder`** compresses the sound into a file while you talk.
+  Browsers disagree on the format: Chrome/Edge make WebM, Firefox Ogg, Safari
+  MP4. We try a short list in order and use the first one this browser can
+  make (`MediaRecorder.isTypeSupported`). It only picks the file *name* - the
+  server decides for itself what the bytes are.
+- **An `AnalyserNode`** (Web Audio) lets us read the raw sound 10 times a
+  second. Each reading is turned into one loudness number (root-mean-square:
+  square each sample, average, square-root - the standard "how loud is this"
+  measure). Those numbers draw the live bars while recording, and, squeezed
+  into 48 bars scaled 0-100, become the note's saved waveform.
+
+When recording stops - sent, cancelled, or even just leaving the chat
+mid-recording - every microphone track is stopped, so the browser's red
+"recording" indicator goes away. Forgetting that is a real privacy bug in many
+apps, so the hook does it in one `release()` function used by every exit path,
+including the component's unmount cleanup.
+
+Two limits: under half a second is refused on the client ("too short" - almost
+always a mis-tap), and at 5 minutes the note stops and sends itself.
+
+## 3. The server checks the bytes, not the name (again)
+
+Phase 11's rule still holds: the type comes from the file's **magic bytes**,
+never from its name or the browser's claim. The tricky part is that the same
+container formats hold *both* audio and video:
+
+- **WebM**: we look inside the header for its track codecs. Opus/Vorbis and no
+  video codec (VP8, VP9, AV1...) → `audio/webm`; anything else stays video.
+- **MP4**: we look for the `hdlr` boxes, which name each track's type - `soun`
+  for sound, `vide` for video. Sound and no video → `audio/mp4`.
+- **Ogg** (new): must contain an Opus or Vorbis header. Ogg *video* (Theora) or
+  anything unrecognisable is refused - we only allow what we can name.
+
+When in doubt, a WebM or MP4 is still treated as **video**, exactly as before
+this phase - so no file that used to be accepted is now labelled differently
+except genuine audio. Voice notes have a 10 MB limit (5 minutes of Opus is
+only about 2-3 MB) and are served `inline` so they can play in the page.
+
+## 4. The waveform and the length - display-only, and said so
+
+The sender's browser measured the loudness and the length, so it uploads them
+as two extra form fields (`durationMs`, `waveform`) alongside the file.
+The server validates them with zod (length 0-5 minutes; at most 64 bars, each
+a whole number 0-100) and stores them on the Attachment - **only** if the file
+really turned out to be audio; on a photo they are silently ignored.
+
+> **Likely question: can't someone send a fake waveform or wrong length?**
+> Yes - and nothing breaks if they do. These numbers only decide how the
+> bubble *looks*. They cannot unlock anything, cannot make the file bigger
+> or change what is played, and are strictly bounded by zod. The alternative -
+> decoding every upload's audio on the server - would need a heavy library
+> (like ffmpeg) for a purely cosmetic gain. The player also prefers the real
+> duration from the audio itself once it has loaded.
+
+A forwarded voice note copies both fields onto the new Attachment, so it
+looks identical in the other chat.
+
+## 5. The recording bar and swipe-to-cancel
+
+While recording, `VoiceRecorderBar.jsx` replaces the text box: a bin button,
+a pulsing red dot, the timer, the live bars, "‹ Slide to cancel" and a Send
+button. Dragging the strip left uses **pointer events** (one code path for
+mouse, finger and pen) with `setPointerCapture`, so the drag keeps tracking
+even when the finger leaves the strip. The strip follows the finger and fades;
+past 120 px it cancels, otherwise it springs back. `touch-pan-y` tells the
+browser a sideways drag here is ours, not a page scroll.
+
+Swiping is not the only way: the bin button and the Escape key do the same,
+so it works with a keyboard and for people who cannot drag.
+
+## 6. The player
+
+`VoicePlayer.jsx` is a normal `<audio>` element with no visible controls, and
+our own UI on top:
+
+- **Play/Pause** button.
+- **The waveform is the progress bar.** Bars before the playback position are
+  coloured in, the rest are grey. It is a real `role="slider"`, so clicking
+  seeks there, and arrow keys jump 5 seconds, Home/End go to the ends - a
+  screen reader announces it as "Voice message position".
+- **Speed** cycles 1× → 1.5× → 2× → 1× (`audio.playbackRate`). Browsers keep
+  the voice's pitch natural when sped up, so no extra work there.
+- **One at a time:** a module-level variable remembers which player is
+  currently playing; starting another pauses it. It is a plain variable, not
+  React state or the zustand store, because no component needs to *re-render*
+  because of it - it is only ever read at the moment Play is pressed.
+
+## 7. Contact info and previews
+
+Contact info's shared-media list already came from
+`GET /conversations/:id/attachments`; it now splits the items three ways:
+photos/videos, **voice messages** (new - each with who sent it, when, and a
+compact player), and documents. No server change was needed. The Chats
+preview, reply quotes and the forward dialog all say "🎤 Voice message".
+
+## 8. What it deliberately does not do
+
+- No transcription, and no "listened to" (blue mic) state - the read receipts
+  of Phase 13 already say whether the chat was opened.
+- No pause-and-resume while recording - start, then send or cancel.
+- Only Chromium is tested automatically (Playwright can give Chromium a
+  *fake* microphone that plays a test tone, so the test records a real file
+  and the server really checks it). Firefox and Safari are in the manual test
+  table.

@@ -51,6 +51,7 @@ export function formatBytes(bytes) {
 
 // Short text for a sidebar preview, e.g. "📷 Photo" or "📄 notes.pdf".
 export function attachmentLabel(attachment, caption) {
+  if (attachment.kind === 'audio') return '🎤 Voice message'
   if (attachment.kind === 'image') return `📷 ${caption || 'Photo'}`
   if (attachment.kind === 'video') return `🎥 ${caption || 'Video'}`
   return `📄 ${attachment.name}`

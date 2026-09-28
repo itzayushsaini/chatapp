@@ -7,12 +7,14 @@ import { useFriendStatus } from '../../hooks/useFriendStatus.js'
 import { blockUser } from '../../api/profile.js'
 import { useChatStore } from '../../store/useChatStore.js'
 import { formatBytes } from '../../utils/files.js'
+import { previewTime } from '../../utils/time.js'
 import Avatar from '../common/Avatar.jsx'
 import ConfirmDialog from '../common/ConfirmDialog.jsx'
 import Dialog from '../common/Dialog.jsx'
 import { BanIcon, DownloadIcon, FileIcon, TrashIcon, UserMinusIcon, VideoIcon } from '../common/Icons.jsx'
 import Spinner from '../common/Spinner.jsx'
 import Switch from '../common/Switch.jsx'
+import VoicePlayer from './VoicePlayer.jsx'
 
 // How many photos/videos the grid shows before "Show all".
 const MEDIA_PREVIEW = 6
@@ -45,8 +47,10 @@ export default function ContactInfoPanel({ item, onClose }) {
     }
   }, [conversationId, latestId, messageCount])
 
-  const media = (shared ?? []).filter((s) => s.attachment.kind !== 'file')
-  const docs = (shared ?? []).filter((s) => s.attachment.kind === 'file')
+  const byKind = (...kinds) => (shared ?? []).filter((s) => kinds.includes(s.attachment.kind))
+  const media = byKind('image', 'video')
+  const voiceNotes = byKind('audio')
+  const docs = byKind('file')
 
   async function toggleMute(next) {
     setSavingMute(true)
@@ -156,6 +160,25 @@ export default function ContactInfoPanel({ item, onClose }) {
               ))}
             </ul>
           )}
+        </section>
+
+        <section className="bg-surface px-5 py-4" aria-label="Voice messages">
+          <h3 className="text-xs font-medium tracking-wide text-slate-500 uppercase">
+            Voice messages {shared && `(${voiceNotes.length})`}
+          </h3>
+          {shared !== null && voiceNotes.length === 0 && (
+            <p className="mt-1.5 text-sm text-slate-400">No voice messages yet</p>
+          )}
+          <ul className="mt-1 divide-y divide-slate-100">
+            {voiceNotes.map(({ attachment, senderId, createdAt }) => (
+              <li key={attachment.id} className="py-2">
+                <p className="mb-1 text-xs text-slate-500">
+                  {senderId === friend.id ? friend.displayName : 'You'} · {previewTime(createdAt)}
+                </p>
+                <VoicePlayer attachment={attachment} mine={senderId !== friend.id} compact />
+              </li>
+            ))}
+          </ul>
         </section>
 
         <section className="bg-surface px-5 py-4" aria-label="Documents">

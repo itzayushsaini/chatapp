@@ -5,7 +5,21 @@ import { describe, expect, it } from 'vitest'
 import app from '../src/app.js'
 import { Attachment } from '../src/models/Attachment.js'
 import { deleteUnsentUploads } from '../src/services/attachmentService.js'
-import { HTML, MP4, PDF, PNG, SVG, TEXT, ZIP, makeFriends, registerUser, sized, upload } from './helpers.js'
+import {
+  HTML,
+  MP4,
+  OGG_OPUS,
+  PDF,
+  PNG,
+  SVG,
+  TEXT,
+  WEBM_AUDIO,
+  ZIP,
+  makeFriends,
+  registerUser,
+  sized,
+  upload,
+} from './helpers.js'
 
 const MB = 1024 * 1024
 const storedFiles = () => mongoose.connection.db.collection('uploads.files').countDocuments()
@@ -43,6 +57,78 @@ describe('POST /api/conversations/:id/attachments', () => {
 
     expect(res.status).toBe(201)
     expect(res.body.attachment).toMatchObject({ mimeType, kind })
+  })
+
+  it('uploads a voice note with its length and waveform', async () => {
+    const { a, conversationId } = await makeFriends('aman', 'priya')
+    const waveform = [10, 40, 90, 60, 20]
+
+    const res = await upload(a.agent, conversationId, WEBM_AUDIO, 'voice-note.webm', {
+      durationMs: '4200',
+      waveform: JSON.stringify(waveform),
+    })
+
+    expect(res.status).toBe(201)
+    expect(res.body.attachment).toEqual({
+      id: expect.any(String),
+      name: 'voice-note.webm',
+      mimeType: 'audio/webm',
+      size: WEBM_AUDIO.length,
+      kind: 'audio',
+      url: `/api/attachments/${res.body.attachment.id}`,
+      durationMs: 4200,
+      waveform,
+    })
+  })
+
+  it('accepts a voice note sent with no length or waveform (shown as unknown)', async () => {
+    const { a, conversationId } = await makeFriends('aman', 'priya')
+    const res = await upload(a.agent, conversationId, OGG_OPUS, 'voice-note.ogg')
+
+    expect(res.status).toBe(201)
+    expect(res.body.attachment).toMatchObject({ kind: 'audio', durationMs: null, waveform: null })
+  })
+
+  it('ignores voice-note fields on a file that is not audio', async () => {
+    const { a, conversationId } = await makeFriends('aman', 'priya')
+    const res = await upload(a.agent, conversationId, PNG, 'photo.png', { durationMs: '4200', waveform: '[50]' })
+
+    expect(res.status).toBe(201)
+    expect(res.body.attachment).not.toHaveProperty('durationMs')
+    expect(res.body.attachment).not.toHaveProperty('waveform')
+  })
+
+  it.each([
+    ['a length over 5 minutes', { durationMs: String(5 * 60 * 1000 + 1) }],
+    ['a negative length', { durationMs: '-1' }],
+    ['a waveform that is not JSON', { waveform: 'loud' }],
+    ['a waveform bar over 100', { waveform: '[50, 101]' }],
+    ['a waveform with too many bars', { waveform: JSON.stringify(Array(65).fill(50)) }],
+    ['a waveform that is an object', { waveform: '{"$gt": 0}' }],
+  ])('refuses %s', async (_label, fields) => {
+    const { a, conversationId } = await makeFriends('aman', 'priya')
+    const res = await upload(a.agent, conversationId, WEBM_AUDIO, 'voice-note.webm', fields)
+
+    expect(res.status).toBe(400)
+  })
+
+  it('limits voice notes to 10 MB', async () => {
+    const { a, conversationId } = await makeFriends('aman', 'priya')
+    const res = await upload(a.agent, conversationId, sized(WEBM_AUDIO, 10 * MB + 1), 'long.webm')
+
+    expect(res.status).toBe(413)
+    expect(await storedFiles()).toBe(0)
+  })
+
+  it('serves a voice note inline, so the chat can play it', async () => {
+    const { a, b, conversationId } = await makeFriends('aman', 'priya')
+    const up = await upload(a.agent, conversationId, WEBM_AUDIO, 'voice-note.webm')
+    await markSent(up.body.attachment.id)
+
+    const res = await b.agent.get(up.body.attachment.url)
+    expect(res.status).toBe(200)
+    expect(res.headers['content-type']).toBe('audio/webm')
+    expect(res.headers['content-disposition']).toBe('inline')
   })
 
   it('keeps non-English file names intact', async () => {

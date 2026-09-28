@@ -35,6 +35,7 @@ export async function upload(req, res) {
     req.user._id,
     req.valid.params.id,
     req.file,
+    req.valid.body,
   )
   res.status(201).json({ attachment: attachmentService.attachmentView(attachment) })
 }

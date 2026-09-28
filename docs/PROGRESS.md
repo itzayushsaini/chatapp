@@ -2,7 +2,7 @@
 
 A new session should be able to read this file and carry on from it.
 
-Last updated: 2026-09-28 (Phase 17 extended: thin scrollbars, bubble tail, skeleton loading, more)
+Last updated: 2026-09-28 (Phase 18: voice notes - done and committed)
 
 ---
 
@@ -28,6 +28,19 @@ Last updated: 2026-09-28 (Phase 17 extended: thin scrollbars, bubble tail, skele
 | 16a | Remember me, confirm password, logout confirmation, error screen, delivered (grey double) ticks, typing indicator, browser notifications | **Done** |
 | 16b | Google sign-in, Contact info panel (media, shared files, block, clear chat, mute), Settings page, real dark mode, Enter-to-send switch | **Done** (code + tests). Google sign-in stays hidden until `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` are set - see Known issues 16 |
 | 17 | Visual polish: entrance/hover/press animations (message bubbles, dialogs, toasts, banners, buttons), an animated typing indicator, and tuned responsive breakpoints - CSS only, no new dependency | **Done** |
+| 18 | Voice notes: record (tap to start, swipe left / trash / Escape to cancel, 5-minute limit), send as an `audio` attachment, waveform player with seeking and 1× / 1.5× / 2× speed, "Voice messages" in Contact info | **Done** |
+
+**Verification (2026-09-28, after Phase 18):** `npm test` 283/283 (22 new:
+the three recording formats detected as audio by their bytes, a WebM / MP4
+with a picture track still a video, Ogg Theora refused, voice metadata
+stored / validated / ignored on non-audio, the 10 MB limit, inline download,
+and a forwarded voice note keeping its length and waveform), `npm run
+test:e2e` 21/21 (2 new in `voiceNotes.spec.js`, using Chromium's fake
+microphone, so a REAL MediaRecorder recording goes through the real upload
+and the server's byte check), lint clean, build succeeds. Checked visually on
+an isolated server in light and dark mode and at 390×844: the recording bar,
+sent and received waveform bubbles (one mid-playback at 1.5×), and the
+"Voice messages" section in Contact info.
 
 **Verification (2026-09-28, after Phase 17):** `npm test` 261/261 pass
 (unaffected - purely a client visual change), `npm run test:e2e` 18/18 pass,
@@ -411,6 +424,32 @@ cleanly, so one commit "Phases 1-9: complete ChatApp (later renamed PingMe)" is 
   background (`color-mix()`, so it adapts to dark mode automatically
   through the same CSS variables, no separate dark rule needed).
 
+### Phase 18 additions (voice notes)
+- Server: `utils/fileType.js` recognises voice recordings by their bytes -
+  WebM with only sound codecs (`A_OPUS`/`A_VORBIS`, no `V_*`), Ogg with
+  Opus/Vorbis (Theora refused), MP4 whose only `hdlr` track type is `soun`,
+  and the `M4A ` brand - as `kind: 'audio'`; any WebM/MP4 with a picture
+  track, or whose tracks can't be found, stays `video` exactly as before.
+  `Attachment` gained `kind: 'audio'`, `durationMs` and `waveform` (display
+  only, measured by the sender's browser); `attachmentView` includes them for
+  audio only; 10 MB limit; served inline; `forwardMessage` copies them.
+  The upload route validates two optional multipart fields after multer
+  (`validate` now keeps an earlier `req.valid` so a route can call it twice).
+- Client: `hooks/useVoiceRecorder.js` (MediaRecorder + AnalyserNode, format
+  chosen per browser, 5-minute limit, releases the mic on unmount),
+  `chat/VoiceRecorderBar.jsx` (timer, live waveform, swipe-left / trash /
+  Escape to cancel), `chat/VoicePlayer.jsx` (waveform seek bar, 1× / 1.5× /
+  2×, one playing at a time); `MessageInput` shows a mic instead of Send when
+  empty; `ChatWindow.send` passes `voice` through upload and Retry;
+  `uploadAttachment` sends the two fields; "🎤 Voice message" in the sidebar
+  preview, notifications, reply snippets and the forward dialog; a "Voice
+  messages" section in Contact info; `formatDuration` in `utils/time.js`;
+  Mic / Play / Pause icons.
+- Tests: fileType + attachments + messageActions cases on the server;
+  `e2e/voiceNotes.spec.js` (fake microphone: record → send → the other side
+  plays it, speed cycling, swipe-to-cancel sends nothing, Contact info lists
+  it; a too-short note is not sent).
+
 ### Tests and deployment
 - `server/tests/` - `health`, `auth`, `rateLimits`, `friends`,
   `conversations`, `socket` + `setup.js`, `helpers.js`
@@ -691,6 +730,16 @@ cleanly, so one commit "Phases 1-9: complete ChatApp (later renamed PingMe)" is 
 17. **Dark mode's red text is the same red as light mode** (`red-600`) - it
     passes contrast on the dark background but is not as soft as WhatsApp's
     own; changing it would also change the danger button, so it was left.
+18. **Voice notes are only automatically tested in Chromium.** Firefox (Ogg)
+    and Safari (MP4) recordings are covered by server tests built from their
+    documented header layout, but have not been recorded in those real
+    browsers yet - worth one manual try each (M18.6). The microphone also
+    needs HTTPS (or localhost), which Render provides.
+19. **A voice note's length and waveform are the sender's own measurements**
+    (display only). A dishonest client could only draw a wrong picture of
+    its own recording; the file itself is still type-checked by its bytes.
+    Scrubbing through a long Chrome WebM note can be slightly less precise,
+    because MediaRecorder's WebM has no seek index.
 
 ---
 

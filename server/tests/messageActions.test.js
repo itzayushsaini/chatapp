@@ -7,7 +7,7 @@ import app from '../src/app.js'
 import { Conversation } from '../src/models/Conversation.js'
 import { Message } from '../src/models/Message.js'
 import { initSocket } from '../src/socket/index.js'
-import { PNG, makeFriends, registerUser, upload } from './helpers.js'
+import { PNG, WEBM_AUDIO, makeFriends, registerUser, upload } from './helpers.js'
 
 // Same real http server + Socket.IO setup as socket.test.js.
 let httpServer
@@ -251,6 +251,27 @@ describe('message:forward', () => {
     expect(ack.results[0].message.text).toBe('check this out')
     expect(ack.results[0].message.attachment.name).toBe('photo.png')
     expect(ack.results[0].message.id).not.toBe(original.message.id)
+  })
+
+  it('a forwarded voice note keeps its length and waveform', async () => {
+    const { a, conversationId: abId } = await makeFriends('aman', 'priya')
+    const c = await registerUser('rahul')
+    const acId = await friendUp(a.agent, 'rahul', c.agent)
+    const { socket: aSocket } = await connect(a.cookie)
+
+    const uploaded = await upload(a.agent, abId, WEBM_AUDIO, 'voice-note.webm', {
+      durationMs: '3000',
+      waveform: '[20,80,40]',
+    })
+    const original = await send(aSocket, { conversationId: abId, text: '', attachmentId: uploaded.body.attachment.id })
+
+    const ack = await forward(aSocket, { messageId: original.message.id, toConversationIds: [acId] })
+
+    expect(ack.results[0].message.attachment).toMatchObject({
+      kind: 'audio',
+      durationMs: 3000,
+      waveform: [20, 80, 40],
+    })
   })
 
   it('forwards to several chats in one go, one per target result', async () => {

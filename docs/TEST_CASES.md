@@ -7,8 +7,8 @@ Kept up to date at the end of every phase.
 - **Manual** cases are the ones a person checks in the browser. Fill in the
   Actual and Result columns when you run them.
 
-Last full run: 2026-09-28 (after Phase 17 - visual polish, client only) - **261/261
-server tests pass, 18/18 end-to-end tests pass, lint clean in both workspaces, `npm run build`
+Last full run: 2026-09-28 (after Phase 18 - voice notes) - **283/283
+server tests pass, 21/21 end-to-end tests pass, lint clean in both workspaces, `npm run build`
 succeeds.**
 
 ---
@@ -301,12 +301,33 @@ that answers the token and profile requests.
 | A16b.28 | Shared files as a stranger | 404 |
 | A16b.29 | Theme `dark` / `system` | Saved, returned in SelfUser and by `/auth/me` |
 | A16b.30 | Unknown theme | 400 |
+
+### Phase 18 - voice notes (`fileType.test.js`, `attachments.test.js`, `messageActions.test.js`)
+
+| ID | Case | Expected |
+|---|---|---|
+| A18.1 | Chrome recording (WebM, Opus only) | `audio/webm`, `audio` |
+| A18.2 | Firefox recording (Ogg Opus) | `audio/ogg`, `audio` |
+| A18.3 | Safari recording (MP4, only a `soun` track) | `audio/mp4`, `audio` |
+| A18.4 | An `.m4a` file (`M4A ` brand) | `audio/mp4`, `audio` |
+| A18.5 | WebM with a `V_VP8` track / MP4 with a `vide` track | Still `video` |
+| A18.6 | WebM whose tracks can't be found | Still `video` (unchanged behaviour) |
+| A18.7 | Audio renamed `.mp4` | Still `audio` - the bytes decide |
+| A18.8 | Ogg Theora, or Ogg with no recognisable sound | Refused |
+| A18.9 | Upload a voice note with `durationMs` + `waveform` | 201, attachment includes both |
+| A18.10 | Voice note without them | 201, `durationMs: null`, `waveform: null` |
+| A18.11 | The same fields on a PNG | Ignored - not in the response |
+| A18.12 | Length over 5 min, negative, waveform not JSON / bar over 100 / 65 bars / an object | 400 each |
+| A18.13 | Voice note over 10 MB | 413, nothing stored |
+| A18.14 | Download a voice note | `Content-Type: audio/webm`, `Content-Disposition: inline` |
+| A18.15 | Forward a voice note | The copy keeps `durationMs` and `waveform` |
 ---
 
 ## Automated - end-to-end (`npm run test:e2e`)
 
 Files: `e2e/chat.spec.js`, `e2e/profile-attachments.spec.js`, `e2e/password.spec.js`,
-`e2e/readReceipts.spec.js`, `e2e/settings.spec.js`. Run against the production build and server with
+`e2e/readReceipts.spec.js`, `e2e/settings.spec.js`, `e2e/pageScroll.spec.js`,
+`e2e/voiceNotes.spec.js`. Run against the production build and server with
 an in-memory database.
 Forgot/reset password's email-dependent half (does the link actually work) is
 covered at the server level instead - see A12.1-A12.8 - since e2e has no real
@@ -332,6 +353,9 @@ email provider configured.
 | E16 | Failed Google sign-in | `/login?error=google_failed` shows the fixed message; no Google button when not configured |
 | E17 | Switching chats never bleeds content (`e2e/chat.spec.js`) | Messages sent in chat A, then chat B; switching between them always shows the right one, never the other; the page itself never scrolls (only the message list does) - regression test for the post-16b bugfix below |
 | E18 | No scroll chaining (`e2e/chat.spec.js`) | Real mouse-wheel input, hard past both the top and bottom of a long chat's message list - `window.scrollY` stays exactly 0 throughout, and the chat header never scrolls out of view |
+| E19 | Page scroll still works off the chat shell (`e2e/pageScroll.spec.js`) | Register at a 400×500 viewport: the wheel scrolls the page to reach Sign up |
+| E20 | Voice note end to end (`e2e/voiceNotes.spec.js`, fake microphone) | Mic shows only while the box is empty; record ≥1 s and send → "Play voice message" bubble, "🎤 Voice message" preview, Delivered; swipe the strip left → recording cancelled, still one note; the friend receives it as a voice player (so the server saw real audio), speed cycles 1× → 1.5× → 2× → 1×, Play turns into Pause; Contact info shows "Voice messages (1)" |
+| E21 | Too-short voice note | Send immediately → "too short" toast, nothing sent |
 ---
 
 ## Manual
@@ -536,6 +560,23 @@ Google cases need `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` set (see
 | M17.6 | Reduced motion | Turn on "Reduce motion" in the OS, reload PingMe | Everything still works, just with no animation anywhere | | |
 | M17.7 | Contact info at laptop width | Resize the window to ~1100-1279px wide, open Contact info | It sits beside the chat (not overlapping it) | Checked visually | Pass |
 | M17.8 | Mobile layout still works | 390×844 viewport | Sidebar/chat single-view with back button all still work, animations included | Checked visually | Pass |
+
+### Phase 18 - voice notes
+
+| ID | Scenario | Steps | Expected | Actual | Result |
+|---|---|---|---|---|---|
+| M18.1 | Record and send | Open a chat with an empty box → tap the mic → Allow the microphone → speak ~5 s → Send | The bar shows a red dot, a running timer and moving bars while you speak; a voice bubble appears with a waveform and the right length | Checked with Chromium's fake mic | |
+| M18.2 | Listen on the other side | Friend opens the chat → Play | It plays your voice; the waveform fills in as it plays; the time counts | | |
+| M18.3 | Speed | Tap 1× while playing | 1.5× then 2× then back to 1×, audibly faster | | |
+| M18.4 | Seek | Click partway along the waveform; or focus it and press → / ← | Jumps there (±5 s with the arrows) | | |
+| M18.5 | One at a time | Play one note, then another | The first one pauses | | |
+| M18.6 | Other browsers | Repeat M18.1 and M18.2 in real Firefox, and Safari (Mac/iPhone) if available | Records, sends and plays across browsers (not covered by the automated tests) | | |
+| M18.7 | Swipe to cancel | Start recording → drag the strip left (or press the bin, or Escape) | Recording stops, the mic light goes off, nothing is sent | Automated (E20) | Pass |
+| M18.8 | Too short | Tap mic → Send straight away | "too short" toast, nothing sent | Automated (E21) | Pass |
+| M18.9 | 5-minute limit | Record past 5:00 | It stops and sends by itself at 5:00 with a toast | | |
+| M18.10 | Microphone blocked | Block the mic for the site → tap mic | A toast explains it; the chat still works | | |
+| M18.11 | Contact info | Open the friend's Contact info | "Voice messages (n)" lists each note with who sent it and when, playable there | Checked visually | Pass |
+| M18.12 | Previews and forwarding | Look at the Chats row; forward a note to another friend | "🎤 Voice message" in the preview; the forwarded copy plays with the same waveform | | |
 
 ### Phase 9 - deployment
 

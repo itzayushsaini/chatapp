@@ -9,7 +9,9 @@ const MB = 1024 * 1024
 
 // Size limits per kind. The upload middleware is set to the largest one; the
 // real limit is checked here, once we know what the file actually is.
-export const MAX_BYTES = { image: 10 * MB, file: 10 * MB, video: 25 * MB }
+// A 5-minute voice note is well under 5 MB in any browser's format, so 10 MB
+// leaves plenty of room.
+export const MAX_BYTES = { image: 10 * MB, file: 10 * MB, audio: 10 * MB, video: 25 * MB }
 export const UPLOAD_MAX_BYTES = Math.max(...Object.values(MAX_BYTES))
 
 // An upload that no message has used after this long is deleted.
@@ -19,7 +21,7 @@ const UNSENT_TTL_MS = 60 * 60 * 1000
 // at our own download route, which checks permissions on every request.
 export function attachmentView(attachment) {
   const id = String(attachment._id)
-  return {
+  const view = {
     id,
     name: attachment.name,
     mimeType: attachment.mimeType,
@@ -27,6 +29,12 @@ export function attachmentView(attachment) {
     kind: attachment.kind,
     url: `/api/attachments/${id}`,
   }
+  // Only voice notes have these, so only voice notes carry them.
+  if (attachment.kind === 'audio') {
+    view.durationMs = attachment.durationMs ?? null
+    view.waveform = attachment.waveform?.length ? [...attachment.waveform] : null
+  }
+  return view
 }
 
 // The same rules as sending a message: I must be in the conversation and
@@ -41,8 +49,10 @@ export async function assertCanUpload(meId, conversationId) {
   await assertFriends(meId, otherId)
 }
 
-// `file` is multer's { buffer, originalname, size }.
-export async function createAttachment(meId, conversationId, file) {
+// `file` is multer's { buffer, originalname, size }. `voice` is the optional
+// { durationMs, waveform } a voice recording is sent with - kept only if the
+// file really turns out to be audio.
+export async function createAttachment(meId, conversationId, file, voice = {}) {
   await assertCanUpload(meId, conversationId)
 
   const type = detectFileType(file.buffer, file.originalname)
@@ -73,6 +83,10 @@ export async function createAttachment(meId, conversationId, file) {
     mimeType: type.mime,
     size: file.size,
     kind: type.kind,
+    ...(type.kind === 'audio' && {
+      durationMs: voice.durationMs ?? null,
+      waveform: voice.waveform ?? undefined,
+    }),
   })
   return attachment
 }

@@ -3,6 +3,7 @@ import { useState } from 'react'
 import { useAuth } from '../../context/AuthContext.jsx'
 import { useSocket } from '../../context/SocketContext.jsx'
 import { useChatStore } from '../../store/useChatStore.js'
+import { attachmentLabel } from '../../utils/files.js'
 import Avatar from '../common/Avatar.jsx'
 import Button from '../common/Button.jsx'
 
@@ -58,7 +59,7 @@ export default function ForwardDialog({ message, onClose }) {
   return (
     <div className="flex flex-col gap-4">
       <div className="rounded-lg bg-slate-50 p-2.5 text-sm text-slate-600">
-        <p className="line-clamp-2 break-words">{message.text || (message.attachment ? message.attachment.name : '')}</p>
+        <p className="line-clamp-2 break-words">{message.text || (message.attachment ? attachmentLabel(message.attachment) : '')}</p>
       </div>
 
       {friends.length === 0 ? (

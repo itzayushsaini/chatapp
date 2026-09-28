@@ -74,7 +74,7 @@ pingme/
                      settings.js, admin.js
       store/         useChatStore.js (zustand)
       context/       AuthContext.jsx, SocketContext.jsx
-      hooks/         useSocketEvents.js, useFriendStatus.js
+      hooks/         useSocketEvents.js, useFriendStatus.js, useVoiceRecorder.js
       pages/         LoginPage.jsx, RegisterPage.jsx, ChatPage.jsx, SettingsPage.jsx, AdminPage.jsx
       components/    layout/, sidebar/, chat/, profile/, admin/, common/ (incl. AnnouncementBanner.jsx)
       utils/         time.js, avatar.js, files.js, image.js, notifications.js, theme.js, preferences.js
@@ -234,7 +234,7 @@ The conversation is created when a request is accepted, by upserting on `pairKey
 
 Indexes: `{ conversation: 1, _id: -1 }`, and a unique index on `{ sender: 1, clientId: 1 }` (this makes retries idempotent).
 
-Message payload sent to clients: `{ id, conversationId, senderId, text, clientId, attachment, replyTo, forwarded, deletedForEveryone, createdAt }`, where `attachment` is null or `{ id, name, mimeType, size, kind, url }`. When `deletedForEveryone` is true, `text` is `''` and `attachment` is `null` regardless of what is actually stored - callers never see the deleted content.
+Message payload sent to clients: `{ id, conversationId, senderId, text, clientId, attachment, replyTo, forwarded, deletedForEveryone, createdAt }`, where `attachment` is null or `{ id, name, mimeType, size, kind, url }` (plus `durationMs` and `waveform` when `kind` is `'audio'`). When `deletedForEveryone` is true, `text` is `''` and `attachment` is `null` regardless of what is actually stored - callers never see the deleted content.
 
 Read status is **not** stored per message - see "Read receipts" below.
 
@@ -248,7 +248,9 @@ Read status is **not** stored per message - see "Read receipts" below.
 | `name` | String, the original file name (base name only, control characters removed), max 200 |
 | `mimeType` | String, **detected from the file's bytes**, never from the name or the browser |
 | `size` | Number (bytes) |
-| `kind` | `'image' \| 'video' \| 'file'` |
+| `kind` | `'image' \| 'video' \| 'audio' \| 'file'` - `audio` is a voice note |
+| `durationMs` | Number or null, 0-300000. Voice notes only, **display only**: the length the sender's browser measured while recording (many recordings don't state their own). |
+| `waveform` | `[Number]` (0-100 each, max 64 bars) or absent. Voice notes only, display only: the loudness shape measured while recording. |
 | `message` | ObjectId → Message, or null until a message uses it. One attachment belongs to at most one message. |
 | timestamps | |
 
@@ -413,9 +415,9 @@ Sending a file is **two steps**, so the rule "sending happens only through `mess
 1. **Upload:** `POST /api/conversations/:id/attachments` (multipart field `file`). Order: rate limit → valid id → `assertParticipant` + `assertFriends` (**before** the body is read, so strangers cannot make the server receive a file) → multer (memory, max 25 MB) → detect the type by magic bytes → per-kind size limit → store in GridFS → create the Attachment with `message: null` → 201 `{ attachment }`.
 2. **Send:** `message:send { conversationId, text?, clientId, attachmentId }`. The claim is ONE atomic `findOneAndUpdate({ _id, uploader: me, conversation, message: null }, { message: newMessageId })` - so nobody can send someone else's upload, move it to another chat, or use one upload twice. Failure → ack `{ ok: false, error: 'Attachment not found' }`.
 
-- **Allowed types (by magic bytes):** images JPEG, PNG, GIF, WebP; videos MP4, WebM, MOV; documents PDF, DOC/DOCX, XLS/XLSX, PPT/PPTX, ZIP (ZIP and OLE files are labelled by extension), TXT (must be valid UTF-8 with no NUL bytes). **Never SVG or HTML** (they can run scripts).
-- **Size limits:** images and documents 10 MB, videos 25 MB. Too large → 413 "File is too large". Wrong type → 400 "This file type is not supported".
-- **Download:** `GET /api/attachments/:id` → requireAuth → the requester must be a participant (404 otherwise, never 403); an unsent upload is visible only to its uploader. Supports HTTP `Range` (206 / 416) for video seeking. `Content-Type` is always the detected type, set after `res.attachment()`. Images and videos are served `inline`; documents always `Content-Disposition: attachment`. `Cache-Control: private, max-age=86400`.
+- **Allowed types (by magic bytes):** images JPEG, PNG, GIF, WebP; videos MP4, WebM, MOV; audio (voice notes) WebM/Opus, Ogg Opus/Vorbis, MP4/AAC and .m4a. WebM and MP4 are ALSO video containers, so a file is `audio` only if its header lists a sound track and no picture track (WebM codec IDs `A_OPUS`/`A_VORBIS` vs `V_*`; MP4 `hdlr` handler types `soun` vs `vide`) - otherwise it stays `video`. Ogg Theora (video) is refused; documents PDF, DOC/DOCX, XLS/XLSX, PPT/PPTX, ZIP (ZIP and OLE files are labelled by extension), TXT (must be valid UTF-8 with no NUL bytes). **Never SVG or HTML** (they can run scripts).
+- **Size limits:** images, documents and voice notes 10 MB, videos 25 MB. Too large → 413 "File is too large". Wrong type → 400 "This file type is not supported".
+- **Download:** `GET /api/attachments/:id` → requireAuth → the requester must be a participant (404 otherwise, never 403); an unsent upload is visible only to its uploader. Supports HTTP `Range` (206 / 416) for video seeking. `Content-Type` is always the detected type, set after `res.attachment()`. Images, videos and voice notes are served `inline`; documents always `Content-Disposition: attachment`. `Cache-Control: private, max-age=86400`.
 - After an unfriend, both people can still download files already in the chat (history stays readable), but cannot upload new ones.
 - **Cleanup:** uploads never used by a message are deleted after 1 hour (on startup, then hourly). Delete the document first (only if still unsent), then the GridFS file.
 - **CSP:** helmet's default policy plus `blob:` in `img-src` and `media-src`, so the chosen file can be previewed before upload.
@@ -953,7 +955,13 @@ All responses are JSON (except the two file downloads). Errors use the shape `{ 
 - The chosen file shows above the input (thumbnail or icon, name, size, Remove); the text becomes an optional caption.
 - Sending: the bubble appears at once (status `uploading` with a progress bar, previewed from a `blob:` URL), then `sending` after the upload, then saved. An upload or ack failure → `failed` with Retry; Retry skips the upload if it already succeeded. Blob URLs are revoked when no longer needed.
 - Photos show as thumbnails that open full size in a dialog; videos play inline with controls; documents are a card with name, size and a download link.
-- Sidebar preview: "📷 caption or Photo", "🎥 caption or Video", "📄 file name".
+- Sidebar preview: "📷 caption or Photo", "🎥 caption or Video", "📄 file name", "🎤 Voice message".
+
+### Voice notes
+
+- With nothing typed and no file chosen, the composer's round button is a **mic** (it turns back into Send as soon as you type). Tap to start recording (`MediaRecorder` + `getUserMedia`, no library; an `AnalyserNode` measures loudness every 100 ms for the waveform), then **Send**, or cancel with the trash button, Escape, or by **swiping the recording strip left** past 120 px. Max 5 minutes - reaching it stops and sends. Under 0.5 s is treated as a mis-tap and not sent. A blocked or missing microphone shows a readable toast.
+- Uploaded through the normal attachment route with two extra multipart fields, `durationMs` and `waveform` (a JSON array), zod-validated after multer and ignored unless the file really is audio. Then sent with `message:send` like any attachment - reply, delete, forward (keeps length and waveform) and the admin Attachments switch all apply unchanged.
+- **Player** (`chat/VoicePlayer.jsx`): play/pause; the waveform doubles as the seek bar (`role="slider"`: click it, or arrow keys ±5 s, Home/End) and played bars change colour; the time; and a speed button cycling 1× → 1.5× → 2×. Only one voice note plays at a time, app-wide. Contact info lists them in a "Voice messages" section.
 
 ### Style
 

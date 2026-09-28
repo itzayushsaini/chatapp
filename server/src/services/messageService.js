@@ -382,6 +382,9 @@ export async function forwardMessage(meId, { messageId, toConversationIds }) {
           mimeType: source.attachment.mimeType,
           size: source.attachment.size,
           kind: source.attachment.kind,
+          // A forwarded voice note keeps its length and waveform.
+          durationMs: source.attachment.durationMs ?? null,
+          waveform: source.attachment.waveform?.length ? source.attachment.waveform : undefined,
           message: newMessageId,
         })
       }

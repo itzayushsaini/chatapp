@@ -17,6 +17,25 @@ const historyQuery = z.object({
 
 const conversationParams = validate({ params: z.object({ id: objectId }) })
 
+// The text fields a voice note is uploaded with (multipart fields always
+// arrive as strings). Both optional, both display-only - see Attachment.js.
+const uploadFields = z.object({
+  durationMs: z.coerce.number().int().min(0).max(5 * 60 * 1000).optional(),
+  waveform: z
+    .string()
+    .max(1000)
+    .transform((text, ctx) => {
+      try {
+        return JSON.parse(text)
+      } catch {
+        ctx.addIssue({ code: z.ZodIssueCode.custom, message: 'must be a JSON array' })
+        return z.NEVER
+      }
+    })
+    .pipe(z.array(z.number().int().min(0).max(100)).max(64))
+    .optional(),
+})
+
 const router = Router()
 
 router.use(requireAuth)
@@ -29,13 +48,14 @@ router.get(
 
 // Step 1 of sending a file (step 2 is message:send with the attachmentId).
 // The order matters: rate limit -> valid id -> may I upload here? -> only
-// then read the file.
+// then read the file (and its text fields, which arrive with it).
 router.post(
   '/:id/attachments',
   uploadLimiter,
   conversationParams,
   conversations.checkCanUpload,
   singleFile('file', UPLOAD_MAX_BYTES),
+  validate({ body: uploadFields }),
   conversations.upload,
 )
 

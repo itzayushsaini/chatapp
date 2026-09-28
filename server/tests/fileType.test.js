@@ -2,7 +2,22 @@ import { describe, expect, it } from 'vitest'
 
 import { detectFileType } from '../src/utils/fileType.js'
 import { parseRange } from '../src/utils/sendStoredFile.js'
-import { HTML, JPEG, MP4, PDF, PNG, SVG, TEXT, ZIP } from './helpers.js'
+import {
+  HTML,
+  JPEG,
+  M4A,
+  MP4,
+  MP4_AUDIO,
+  MP4_VIDEO_TRACKS,
+  OGG_OPUS,
+  PDF,
+  PNG,
+  SVG,
+  TEXT,
+  WEBM_AUDIO,
+  WEBM_VIDEO,
+  ZIP,
+} from './helpers.js'
 
 // These run without HTTP: pure functions, checked directly.
 
@@ -22,6 +37,32 @@ describe('detectFileType - trusts the bytes, not the name', () => {
     ['TXT (UTF-8)', TEXT, 'notes.txt', 'text/plain', 'file'],
   ])('recognises %s', (_label, bytes, name, mime, kind) => {
     expect(detectFileType(bytes, name)).toEqual({ mime, kind })
+  })
+
+  // Voice notes come in whatever container the browser's recorder uses -
+  // and WebM / MP4 are ALSO video containers, so what decides it is whether
+  // the file has a picture track, not its name.
+  it.each([
+    ['a Chrome voice note (WebM, Opus only)', WEBM_AUDIO, 'voice-note.webm', 'audio/webm', 'audio'],
+    ['a Firefox voice note (Ogg Opus)', OGG_OPUS, 'voice-note.ogg', 'audio/ogg', 'audio'],
+    ['a Safari voice note (MP4, sound track only)', MP4_AUDIO, 'voice-note.m4a', 'audio/mp4', 'audio'],
+    ['an .m4a file', M4A, 'song.m4a', 'audio/mp4', 'audio'],
+    ['a WebM with a picture track', WEBM_VIDEO, 'clip.webm', 'video/webm', 'video'],
+    ['an MP4 with picture and sound tracks', MP4_VIDEO_TRACKS, 'clip.mp4', 'video/mp4', 'video'],
+    ['a WebM whose tracks are unknown (as before)', Buffer.from([0x1a, 0x45, 0xdf, 0xa3, 0, 0]), 'x.webm', 'video/webm', 'video'],
+  ])('labels %s correctly', (_label, bytes, name, mime, kind) => {
+    expect(detectFileType(bytes, name)).toEqual({ mime, kind })
+  })
+
+  it('an audio file renamed .mp4 is still audio - the bytes decide', () => {
+    expect(detectFileType(WEBM_AUDIO, 'clip.mp4')).toEqual({ mime: 'audio/webm', kind: 'audio' })
+  })
+
+  it.each([
+    ['an Ogg video (Theora)', Buffer.concat([Buffer.from('OggS'), Buffer.alloc(24, 0), Buffer.from('\x80theora')])],
+    ['an Ogg file with no recognisable sound', Buffer.concat([Buffer.from('OggS'), Buffer.alloc(40, 0)])],
+  ])('refuses %s', (_label, bytes) => {
+    expect(detectFileType(bytes, 'x.ogg')).toBeNull()
   })
 
   it.each([

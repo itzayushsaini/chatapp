@@ -18,9 +18,15 @@ export const setMuted = (conversationId, muted) =>
   http.patch(`/conversations/${conversationId}/mute`, { muted }).then((r) => r.data.muted)
 
 // Step 1 of sending a file. `onProgress` is called with 0..1 as it uploads.
+// `voice` ({ durationMs, waveform }) goes with a voice note, for display.
 // Resolves to the attachment; step 2 is message:send with its id.
-export const uploadAttachment = (conversationId, file, onProgress) => {
+export const uploadAttachment = (conversationId, file, onProgress, voice) => {
   const form = new FormData()
+  // Text fields before the file, the conventional order for multipart.
+  if (voice) {
+    form.append('durationMs', String(Math.round(voice.durationMs)))
+    form.append('waveform', JSON.stringify(voice.waveform))
+  }
   form.append('file', file)
   return http
     .post(`/conversations/${conversationId}/attachments`, form, {

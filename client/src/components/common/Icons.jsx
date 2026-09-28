@@ -220,6 +220,24 @@ export const KeyIcon = (p) => (
     <path d="m21 2-9.6 9.6M15.5 7.5l3 3L22 7l-3-3" />
   </Icon>
 )
+export const MicIcon = (p) => (
+  <Icon {...p}>
+    <rect x="9" y="2" width="6" height="12" rx="3" />
+    <path d="M5 10a7 7 0 0 0 14 0" />
+    <path d="M12 17v4" />
+  </Icon>
+)
+export const PlayIcon = (p) => (
+  <Icon {...p}>
+    <path d="M7 4.5v15a1 1 0 0 0 1.5.9l12-7.5a1 1 0 0 0 0-1.8l-12-7.5A1 1 0 0 0 7 4.5Z" fill="currentColor" stroke="none" />
+  </Icon>
+)
+export const PauseIcon = (p) => (
+  <Icon {...p}>
+    <rect x="6" y="4" width="4" height="16" rx="1" fill="currentColor" stroke="none" />
+    <rect x="14" y="4" width="4" height="16" rx="1" fill="currentColor" stroke="none" />
+  </Icon>
+)
 export const ShieldIcon = (p) => (
   <Icon {...p}>
     <path d="M12 3 4 6v6c0 5 3.5 7.5 8 9 4.5-1.5 8-4 8-9V6Z" />

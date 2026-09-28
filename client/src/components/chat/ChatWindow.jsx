@@ -98,8 +98,11 @@ export default function ChatWindow({ conversationId }) {
     const { clientId } = message
     if (message.file && !message.attachmentId) {
       try {
-        const attachment = await uploadAttachment(conversationId, message.file, (progress) =>
-          store().updatePendingMessage(conversationId, clientId, { progress }),
+        const attachment = await uploadAttachment(
+          conversationId,
+          message.file,
+          (progress) => store().updatePendingMessage(conversationId, clientId, { progress }),
+          message.voice,
         )
         message = { ...message, attachmentId: attachment.id }
         store().updatePendingMessage(conversationId, clientId, {
@@ -118,7 +121,8 @@ export default function ChatWindow({ conversationId }) {
   // Optimistic sending: show the bubble immediately, then send. The clientId
   // is made here, in the browser, so a Retry can reuse it and the server
   // recognises the retry instead of saving the message twice.
-  function send(text, file, replyToId) {
+  // `voice` ({ durationMs, waveform }) is set only for a recorded voice note.
+  function send(text, file, replyToId, voice) {
     const message = {
       clientId: crypto.randomUUID(),
       conversationId,
@@ -146,10 +150,13 @@ export default function ChatWindow({ conversationId }) {
       message.attachment = {
         name: file.name,
         size: file.size,
-        kind: kindOf(file),
+        kind: voice ? 'audio' : kindOf(file),
         url: URL.createObjectURL(file),
         local: true,
+        ...(voice && { durationMs: voice.durationMs, waveform: voice.waveform }),
       }
+      // Kept on the message so a Retry uploads it with the same details.
+      if (voice) message.voice = voice
     }
     store().addPendingMessage(message)
     deliver(message)

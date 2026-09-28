@@ -1,9 +1,14 @@
 import { useEffect, useRef, useState } from 'react'
 
+import { MAX_VOICE_MS, useVoiceRecorder } from '../../hooks/useVoiceRecorder.js'
 import { useChatStore } from '../../store/useChatStore.js'
 import { ACCEPT, checkFile, formatBytes, kindOf } from '../../utils/files.js'
 import { enterToSend } from '../../utils/preferences.js'
-import { FileIcon, PaperclipIcon, SendIcon, VideoIcon } from '../common/Icons.jsx'
+import { FileIcon, MicIcon, PaperclipIcon, SendIcon, VideoIcon } from '../common/Icons.jsx'
+import VoiceRecorderBar from './VoiceRecorderBar.jsx'
+
+// Anything shorter is almost certainly a mis-tap, not a message.
+const MIN_VOICE_MS = 500
 
 const MAX_LENGTH = 2000
 // Show the character counter only once the user is getting close.
@@ -16,11 +21,13 @@ const TYPING_IDLE_MS = 3000
 function attachmentSnippetLabel(kind) {
   if (kind === 'image') return '📷 Photo'
   if (kind === 'video') return '🎥 Video'
+  if (kind === 'audio') return '🎤 Voice message'
   if (kind === 'file') return '📄 File'
   return 'Message'
 }
 
-// onSend(text, file, replyToId) - file and replyToId are null when not used.
+// onSend(text, file, replyToId, voice) - file and replyToId are null when not
+// used; `voice` ({ durationMs, waveform }) is only there for a voice note.
 // `replyTarget` is the message being replied to (or null), and `onCancelReply`
 // clears it - both owned by the parent, since a reply started from a bubble
 // must reach this sibling component.
@@ -48,6 +55,39 @@ export default function MessageInput({
 
   const trimmed = text.trim()
   const canSend = !disabled && (trimmed.length > 0 || file) && text.length <= MAX_LENGTH
+  // With nothing typed and no file chosen, the round button records a voice
+  // note instead of sending - it turns back into Send the moment you type.
+  const showMic = !trimmed && !file
+
+  const voice = useVoiceRecorder({
+    onLimit: () => {
+      addToast(`Voice notes can be up to ${MAX_VOICE_MS / 60000} minutes - sent.`)
+      sendVoice()
+    },
+  })
+
+  async function startVoice() {
+    if (disabled) return
+    try {
+      await voice.start()
+    } catch (err) {
+      addToast(err.message, 'error')
+    }
+  }
+
+  async function sendVoice() {
+    const result = await voice.stop()
+    if (!result) return
+    if (result.durationMs < MIN_VOICE_MS) {
+      addToast('Hold on a little longer - that voice note was too short.')
+      return
+    }
+    onSend('', result.file, replyTarget?.id ?? null, {
+      durationMs: result.durationMs,
+      waveform: result.waveform,
+    })
+    onCancelReply()
+  }
 
   function stopTyping() {
     const t = typing.current
@@ -145,57 +185,80 @@ export default function MessageInput({
         </div>
       )}
 
-      <div className="flex items-end gap-2">
-        <input
-          ref={fileInputRef}
-          type="file"
-          accept={ACCEPT}
-          onChange={handleFile}
-          className="hidden"
-          aria-label="Attach a file"
-          data-testid="attach-input"
+      <input
+        ref={fileInputRef}
+        type="file"
+        accept={ACCEPT}
+        onChange={handleFile}
+        className="hidden"
+        aria-label="Attach a file"
+        data-testid="attach-input"
+      />
+
+      {voice.recording ? (
+        <VoiceRecorderBar
+          elapsedMs={voice.elapsedMs}
+          levels={voice.liveLevels}
+          onCancel={voice.cancel}
+          onSend={sendVoice}
         />
-        {/* The paperclip and the text field share one white pill, the way
-            WhatsApp's composer does; Send is its own circular button. */}
-        <div className="flex flex-1 items-end gap-1 rounded-3xl bg-surface pr-1 pl-1.5 shadow-sm transition-shadow duration-150 focus-within:ring-2 focus-within:ring-brand-500/40">
-          <button
-            type="button"
-            onClick={() => fileInputRef.current.click()}
-            disabled={disabled}
-            className="mb-1 inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-slate-500 transition-colors duration-150 hover:bg-slate-100 hover:text-slate-800 focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:outline-none disabled:text-slate-300"
-            aria-label="Attach a photo, video or document"
-            title="Attach a photo, video or document"
-          >
-            <PaperclipIcon />
-          </button>
-          <label htmlFor="message-input" className="sr-only">
-            Type a message
-          </label>
-          <textarea
-            id="message-input"
-            ref={textareaRef}
-            rows={1}
-            value={text}
-            onChange={(e) => {
-              setText(e.target.value)
-              resize(e.target.value)
-              noteTyping(e.target.value)
-            }}
-            onKeyDown={handleKeyDown}
-            maxLength={MAX_LENGTH}
-            placeholder={file ? 'Add a caption (optional)...' : 'Type a message'}
-            className="block max-h-32 min-h-10 flex-1 resize-none bg-transparent py-2 text-sm text-slate-900 placeholder:text-slate-400 focus:outline-none"
-          />
+      ) : (
+        <div className="flex items-end gap-2">
+          {/* The paperclip and the text field share one white pill, the way
+              WhatsApp's composer does; Send is its own circular button. */}
+          <div className="flex flex-1 items-end gap-1 rounded-3xl bg-surface pr-1 pl-1.5 shadow-sm transition-shadow duration-150 focus-within:ring-2 focus-within:ring-brand-500/40">
+            <button
+              type="button"
+              onClick={() => fileInputRef.current.click()}
+              disabled={disabled}
+              className="mb-1 inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-slate-500 transition-colors duration-150 hover:bg-slate-100 hover:text-slate-800 focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:outline-none disabled:text-slate-300"
+              aria-label="Attach a photo, video or document"
+              title="Attach a photo, video or document"
+            >
+              <PaperclipIcon />
+            </button>
+            <label htmlFor="message-input" className="sr-only">
+              Type a message
+            </label>
+            <textarea
+              id="message-input"
+              ref={textareaRef}
+              rows={1}
+              value={text}
+              onChange={(e) => {
+                setText(e.target.value)
+                resize(e.target.value)
+                noteTyping(e.target.value)
+              }}
+              onKeyDown={handleKeyDown}
+              maxLength={MAX_LENGTH}
+              placeholder={file ? 'Add a caption (optional)...' : 'Type a message'}
+              className="block max-h-32 min-h-10 flex-1 resize-none bg-transparent py-2 text-sm text-slate-900 placeholder:text-slate-400 focus:outline-none"
+            />
+          </div>
+          {showMic ? (
+            <button
+              type="button"
+              onClick={startVoice}
+              disabled={disabled}
+              className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-brand-600 text-white transition-[background-color,transform] duration-150 hover:bg-brand-700 focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:ring-offset-2 focus-visible:outline-none active:scale-90 disabled:bg-brand-300 disabled:active:scale-100"
+              aria-label="Record a voice note"
+              title="Record a voice note"
+            >
+              <MicIcon className="h-5 w-5" />
+            </button>
+          ) : (
+            <button
+              type="submit"
+              disabled={!canSend}
+              className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-brand-600 text-white transition-[background-color,transform] duration-150 hover:bg-brand-700 focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:ring-offset-2 focus-visible:outline-none active:scale-90 disabled:bg-brand-300 disabled:active:scale-100"
+              aria-label="Send message"
+            >
+              <SendIcon className="h-5 w-5" />
+            </button>
+          )}
         </div>
-        <button
-          type="submit"
-          disabled={!canSend}
-          className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-brand-600 text-white transition-[background-color,transform] duration-150 hover:bg-brand-700 focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:ring-offset-2 focus-visible:outline-none active:scale-90 disabled:bg-brand-300 disabled:active:scale-100"
-          aria-label="Send message"
-        >
-          <SendIcon className="h-5 w-5" />
-        </button>
-      </div>
+      )}
       {text.length >= COUNTER_FROM && (
         <p
           className={`mt-1 text-right text-xs ${text.length >= MAX_LENGTH ? 'text-red-600' : 'text-slate-500'}`}
