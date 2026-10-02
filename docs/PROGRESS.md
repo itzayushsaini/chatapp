@@ -1028,6 +1028,21 @@ times. Confirmed it fails on the pre-fix code (the page shows "Something
 went wrong") and passes after. `npm test` 283/283, `npm run test:e2e` 22/22,
 lint clean.
 
+## Post-21 polish (2026-10-02): the announcement banner looks professional
+
+The admin's banner was a plain solid-green strip with centred text, which
+looked like an error bar. `AnnouncementBanner.jsx` is now a soft brand-tinted
+bar (`bg-brand-50`, a thin bottom border) with a round megaphone badge
+(`MegaphoneIcon`), an "Announcement" label from 640px up, and the message in
+medium weight - centred on wide screens, left-aligned and wrapping cleanly
+on phones. `brand-50` / `brand-700` are already redefined for dark mode, so
+no extra CSS was needed. Screen readers hear "Announcement:" first on every
+screen size (a `sr-only` prefix; the visible label is `aria-hidden`, because
+Tailwind's `not-sr-only` resets padding and margin and broke the label).
+Checked on the isolated server: landing, login and chat pages, desktop and
+iPhone size, light and dark, no sideways overflow. New test:
+`e2e/announcement.spec.js` (E34) - the banner had no browser test before.
+
 ## Post-18 bugfix (2026-09-28): the layout on phones
 
 **Reported by the team:** "a responsiveness problem on mobile". Checked every

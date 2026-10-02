@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 
 import { getPublicSettings } from '../../api/settings.js'
 import { useSocket } from '../../context/SocketContext.jsx'
+import { MegaphoneIcon } from './Icons.jsx'
 
 // Shown to EVERYONE with the app open, logged in or not - an admin sets this
 // from the admin panel. Rendered in two places (AuthLayout and ChatPage): the
@@ -28,9 +29,31 @@ export default function AnnouncementBanner() {
 
   if (!announcement?.enabled || !announcement.text) return null
 
+  // A soft brand tint rather than a solid colour block, so it reads as a
+  // notice instead of an error. brand-50 / brand-700 are redefined for dark
+  // mode in index.css, so the same classes work in both themes.
   return (
-    <div className="animate-slide-down bg-brand-600 px-4 py-1.5 text-center text-sm text-white" role="status">
-      {announcement.text}
+    <div className="animate-slide-down border-b border-brand-600/20 bg-brand-50" role="status">
+      <div className="mx-auto flex max-w-5xl items-start gap-3 px-4 py-2.5 sm:items-center sm:justify-center sm:px-6">
+        <span
+          className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-brand-600 text-white shadow-sm"
+          aria-hidden="true"
+        >
+          <MegaphoneIcon className="h-3.5 w-3.5" />
+        </span>
+        <p className="min-w-0 pt-1 text-sm leading-snug text-slate-800 sm:pt-0">
+          <span className="sr-only">Announcement: </span>
+          {/* The visible label, from 640px up (the screen-reader text above
+              says the same on every screen size). */}
+          <span
+            className="mr-2 hidden rounded-full bg-brand-600/15 px-2 py-0.5 align-[1px] text-[11px] font-semibold tracking-wide text-brand-700 uppercase sm:inline-block"
+            aria-hidden="true"
+          >
+            Announcement
+          </span>
+          <span className="font-medium wrap-anywhere">{announcement.text}</span>
+        </p>
+      </div>
     </div>
   )
 }

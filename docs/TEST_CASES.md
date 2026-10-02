@@ -8,7 +8,7 @@ Kept up to date at the end of every phase.
   Actual and Result columns when you run them.
 
 Last full run: 2026-10-02 (after Phase 21 - PingMe AI) - **364/364
-server tests pass, 33/33 end-to-end tests pass, lint clean in both workspaces, `npm run build`
+server tests pass, 34/34 end-to-end tests pass (E34 added afterwards, with the banner restyle), lint clean in both workspaces, `npm run build`
 succeeds.** No automated test ever calls Google: `npm test` fakes
 `geminiClient.js` (or Google's SDK), and the e2e server uses `e2e/fakeGemini.js`.
 
@@ -460,6 +460,7 @@ email provider configured.
 | E31 | Stop, Try again, Clear chat | Stop keeps "Once upon…" and "You stopped this answer."; a 503 on every model shows "busy right now" and Try again then answers; Clear chat (confirmed) brings back the welcome screen, also after a reload |
 | E32 | A photo, and a forwarded chat message | A photo question gets "I can see your file: image/png." and the photo shows; a friend's message forwarded to PingMe AI (Forward dialog → PingMe AI) appears labelled "Forwarded" and is answered |
 | E33 | "Imagine" | Hidden by default; an admin switches "Creating pictures" on; the user sees the chip, the placeholder changes, and the created picture appears and loads; switched off again afterwards |
+| E34 | Announcement banner (`e2e/announcement.spec.js`) | An admin turns it on: a logged-out visitor sees it on the login page as one status labelled "Announcement", and the logged-in admin sees it in the chat; turned off, it disappears live for the admin and after a reload for the visitor |
 ---
 
 ## Manual
