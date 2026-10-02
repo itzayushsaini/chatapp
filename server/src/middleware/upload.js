@@ -1,6 +1,28 @@
 import multer from 'multer'
+import { z } from 'zod'
 
 import { AppError } from '../utils/AppError.js'
+
+// The text fields a voice note is uploaded with (multipart fields always
+// arrive as strings), for spreading into a route's body schema - used by
+// chat uploads and by PingMe AI. Both optional, both display-only - see
+// models/Attachment.js.
+export const voiceNoteFields = {
+  durationMs: z.coerce.number().int().min(0).max(5 * 60 * 1000).optional(),
+  waveform: z
+    .string()
+    .max(1000)
+    .transform((text, ctx) => {
+      try {
+        return JSON.parse(text)
+      } catch {
+        ctx.addIssue({ code: z.ZodIssueCode.custom, message: 'must be a JSON array' })
+        return z.NEVER
+      }
+    })
+    .pipe(z.array(z.number().int().min(0).max(100)).max(64))
+    .optional(),
+}
 
 // Parses ONE file from a multipart/form-data request (the format browsers use
 // to upload files) into req.file = { buffer, originalname, size, ... }.

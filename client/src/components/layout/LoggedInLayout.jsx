@@ -33,10 +33,11 @@ function LiveShell() {
 
   // Initial data comes over REST; sockets then keep it up to date.
   useEffect(() => {
-    const { fetchFriends, fetchRequests, fetchUpdatesSummary } = useChatStore.getState()
+    const { fetchFriends, fetchRequests, fetchUpdatesSummary, fetchAiSummary } = useChatStore.getState()
     fetchFriends()
     fetchRequests()
     fetchUpdatesSummary() // the pinned "PingMe" row's preview and badge
+    fetchAiSummary() // whether to show the pinned PingMe AI row
   }, [])
 
   // "(3) PingMe" in the browser tab, so unread messages are visible even

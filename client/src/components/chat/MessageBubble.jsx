@@ -328,7 +328,7 @@ function MessageStatus({ status, read, delivered, onRetry }) {
 // download link. The url is our own /api/attachments/:id route (which checks
 // permissions), or - while still uploading - a temporary blob: URL of the
 // file on this computer.
-function Attachment({ attachment, mine, onOpenImage, onMediaLoad }) {
+export function Attachment({ attachment, mine, onOpenImage, onMediaLoad }) {
   const { kind, url, name, size } = attachment
 
   if (kind === 'audio') return <VoicePlayer attachment={attachment} mine={mine} />
@@ -388,7 +388,7 @@ function Attachment({ attachment, mine, onOpenImage, onMediaLoad }) {
   )
 }
 
-function UploadProgress({ progress }) {
+export function UploadProgress({ progress }) {
   const percent = Math.round(progress * 100)
   return (
     <div className="px-2 pt-2 pb-1">

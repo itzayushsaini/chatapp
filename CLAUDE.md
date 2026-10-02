@@ -19,6 +19,7 @@ Do not add features that are not listed here. If something seems missing, or a r
 
 - **Server:** Node.js (current LTS), Express 5, Mongoose, Socket.IO 4, zod, bcryptjs, jsonwebtoken, cookie-parser, cookie, helmet, express-rate-limit, morgan, multer (file uploads).
 - **Password-reset email:** sent via the Brevo API using Node's built-in `fetch` - no extra library.
+- **PingMe AI:** Google Gemini through Google's official SDK, `@google/genai` (the one place a vendor SDK is used: streaming, reasoning summaries and file input are what it handles for us). Only `services/geminiClient.js` imports it.
 - **File storage:** MongoDB GridFS (built into the MongoDB driver - no extra service or account).
 - **Client:** React + Vite (JavaScript, not TypeScript), React Router, Tailwind CSS, axios, socket.io-client, zustand.
 - **Tests:** Vitest + Supertest + mongodb-memory-server on the server; Playwright for end-to-end tests.
@@ -52,17 +53,19 @@ pingme/
     src/
       config/        env.js (zod-validated env), db.js
       models/        User.js, Friendship.js, Conversation.js, Message.js, Attachment.js, Setting.js, Block.js,
-                     Update.js
+                     Update.js, AiMessage.js
       services/      authService.js, friendService.js, messageService.js, presenceService.js,
                      profileService.js, attachmentService.js, storageService.js, emailService.js,
-                     settingsService.js, adminService.js, googleAuthService.js, updateService.js
-      controllers/   auth, users, friends, conversations, attachments, admin, updates
+                     settingsService.js, adminService.js, googleAuthService.js, updateService.js,
+                     aiService.js, geminiClient.js (the ONLY file that talks to Google's Gemini)
+      controllers/   auth, users, friends, conversations, attachments, admin, updates, ai
       routes/        auth.routes.js, users.routes.js, friends.routes.js, conversations.routes.js,
-                     attachments.routes.js, settings.routes.js, admin.routes.js, updates.routes.js
+                     attachments.routes.js, settings.routes.js, admin.routes.js, updates.routes.js,
+                     ai.routes.js
       middleware/    requireAuth.js, requireAdmin.js, validate.js, rateLimits.js, upload.js,
                      errorHandler.js, notFound.js
       socket/        index.js, socketAuth.js, emitter.js, handlers/
-      utils/         AppError.js, pairKey.js, publicUser.js, fileType.js, sendStoredFile.js
+      utils/         AppError.js, pairKey.js, publicUser.js, fileType.js, sendStoredFile.js, fileName.js
       scripts/       seed.js, makeAdmin.js
       app.js         # builds and exports the Express app (does NOT listen) — used by tests
       server.js      # http server + Socket.IO + DB connect + listen + graceful shutdown
@@ -72,13 +75,15 @@ pingme/
     vite.config.js
     src/
       api/           http.js (axios instance), auth.js, friends.js, conversations.js, profile.js,
-                     settings.js, admin.js, updates.js
+                     settings.js, admin.js, updates.js, ai.js
       store/         useChatStore.js (zustand)
       context/       AuthContext.jsx, SocketContext.jsx
       hooks/         useSocketEvents.js, useFriendStatus.js, useVoiceRecorder.js
       pages/         LandingPage.jsx, LoginPage.jsx, RegisterPage.jsx, ChatPage.jsx, SettingsPage.jsx, AdminPage.jsx
       components/    layout/, sidebar/, chat/, profile/, admin/, landing/ (ChatPreview.jsx),
                      updates/ (UpdatesRow.jsx, UpdatesChannel.jsx, PingMeAvatar.jsx),
+                     ai/ (AiRow.jsx, AiChat.jsx, AiBubble.jsx, AiComposer.jsx, AiAvatar.jsx,
+                     Markdown.jsx - the safe Markdown renderer for answers),
                      common/ (incl. AnnouncementBanner.jsx, buttonClass.js)
       utils/         time.js, avatar.js, files.js, image.js, notifications.js, theme.js, preferences.js
     public/          favicon.svg, sw.js (service worker - notifications only),
@@ -127,6 +132,12 @@ APP_URL=http://localhost:5173  # set to the deployed URL in production
 # "Continue with Google". Optional - without both, the button is not shown.
 GOOGLE_CLIENT_ID=
 GOOGLE_CLIENT_SECRET=
+
+# PingMe AI (Google Gemini). Optional - without a key, PingMe AI is hidden.
+GEMINI_API_KEY=
+GEMINI_MODEL=gemini-3.8-flash               # default
+GEMINI_FALLBACK_MODEL=gemini-3.5-flash      # default; tried when the main one is busy
+GEMINI_IMAGE_MODEL=gemini-3.1-flash-image   # default; "Imagine" only (paid plans)
 ```
 
 Validate them at startup with zod in `config/env.js`. If one is missing or invalid, exit with a clear message.
@@ -271,6 +282,26 @@ Index: `{ message: 1, createdAt: 1 }` (cleanup of unsent uploads).
 
 Update payload sent to clients: `{ id, text, imageUrl, createdAt }`, where `imageUrl` is `/api/updates/:id/image` or null. Deliberately NOT a Message from a fake "PingMe" user - see "Updates channel".
 
+### AiMessage (one message in a user's private chat with PingMe AI)
+
+| Field | Rules |
+|---|---|
+| `user` | ObjectId → User - the owner, the ONLY person who can ever see it |
+| `role` | `'user'` (a question) \| `'model'` (PingMe AI's answer) - Gemini's own two words |
+| `text` | String. A question is 0-4000 characters (empty only with a file); an answer's length is capped by `maxOutputTokens`. |
+| `reasoning` | String, default `''`. Answers only: Gemini's thought summary ("Show reasoning"). |
+| `mode` | `'chat' \| 'think' \| 'imagine'`, default `'chat'` - normal, "Think deeper", or create a picture |
+| `attachment` | Embedded `{ fileId, name, mimeType, size, kind, durationMs?, waveform?, shared }` or null - a question's photo/PDF/text/voice note/video, or an answer's created picture. `shared: true` = the bytes belong to a CHAT attachment (forwarded), so clearing the AI chat never deletes them. |
+| `status` | `'streaming' \| 'done' \| 'stopped' \| 'error'`, default `'done'` (answers move from streaming to one of the others) |
+| `error` | String, default `''` - for `'error'`, a sentence safe to show |
+| `clientId` | String (browser UUID), questions only - unique per user (partial index), so a retried request is never saved twice |
+| `forwarded` | Boolean, default false |
+| timestamps | |
+
+Indexes: `{ user: 1, _id: -1 }` (history), `{ user: 1, role: 1, createdAt: -1 }` (daily limit), unique `{ user: 1, clientId: 1 }` where `clientId` is a string.
+
+AiMessage payload: `{ id, role, text, reasoning, mode, status, error, attachment, clientId, forwarded, createdAt, updatedAt }`, where `attachment` is null or `{ name, mimeType, size, kind, url }` (+ `durationMs`, `waveform` for audio) and `url` is `/api/ai/files/:messageId`. `updatedAt` lets the client keep the newest copy when the same message arrives twice.
+
 ### Setting (exactly one document ever exists)
 
 | Field | Rules |
@@ -282,6 +313,9 @@ Update payload sent to clients: `{ id, text, imageUrl, createdAt }`, where `imag
 | `forwardingEnabled` | Boolean, default true |
 | `deleteForEveryoneWindowMinutes` | Number, default 60, 1-10080. Replaces a hardcoded constant - see "Delete" under Message actions. |
 | `announcement` | `{ enabled: Boolean, text: String (max 200) }`, default both false/`''` |
+| `aiEnabled` | Boolean, default true. PingMe AI on/off (it is also hidden without a `GEMINI_API_KEY`). |
+| `aiDailyLimit` | Number, default 50, 1-1000. Answers per user in any rolling 24 hours (failed answers don't count). |
+| `aiImageGenerationEnabled` | Boolean, default **false** - "Imagine" needs a paid Gemini plan. |
 | timestamps | |
 
 `settingsService.getSettings()` upserts this document on first read (`$setOnInsert`), so a brand new database just gets the schema's defaults - there is no separate "seed the settings" step. Every feature this document controls is described in its own rules section above/below; this table is just the data shape. See "Admin panel" for who may read/change it and how.
@@ -700,7 +734,8 @@ escalation.
 
 ### Stats
 
-**`GET /api/admin/stats`** returns `{ totalUsers, totalMessages, onlineNow }`.
+**`GET /api/admin/stats`** returns `{ totalUsers, totalMessages, onlineNow, aiAnswersToday }`
+(`aiAnswersToday`: PingMe AI answers in the last 24 hours, failed ones not counted).
 `onlineNow` is computed by checking every user against the existing
 `presenceService.isOnline` (there is no separate "list everyone online" call)
 - fine at this app's scale, and avoids a second, parallel tracking structure
@@ -720,12 +755,13 @@ runaway script.
   live updates; refreshing is enough). Reached only via a small shield icon
   next to Log out in the sidebar, shown only when `user.isAdmin`; the route
   itself redirects anyone else straight back to `/`.
-- Four tabs: **Overview** (the three stats), **Users** (search, suspend/
+- Four tabs: **Overview** (the four stats), **Users** (search, suspend/
   unsuspend, delete - delete asks for confirmation with a native
   `window.confirm`, the same pattern the chat header's "Remove friend" already
   uses), **Updates** (post to / delete from the "PingMe" updates channel -
-  see "Updates channel"), **Settings** (every toggle above, plus the
-  announcement banner).
+  see "Updates channel"), **Settings** (every toggle above, the PingMe AI
+  switch / daily limit / picture creation - with a warning when the server
+  has no `GEMINI_API_KEY` - plus the announcement banner).
 - **`AnnouncementBanner.jsx`** is rendered in TWO places - inside `AuthLayout`
   (login/register/forgot/reset pages) and inside `ChatPage` - because
   `useSocket()` only returns a real socket inside the logged-in part of the
@@ -785,6 +821,90 @@ Chats list, where admins announce new features and news.
 
 ---
 
+## PingMe AI (like Meta AI in WhatsApp)
+
+Each user's own private chat with an AI assistant, **Google Gemini**,
+pinned at the top of Chats (above the "PingMe" updates row) while it is
+available: the server has a `GEMINI_API_KEY` AND an admin has not switched
+`aiEnabled` off.
+
+- **Not a fake user, not a Conversation** - its own `AiMessage` collection,
+  for the same reason as the updates channel: the friend rules stay
+  untouched. The client opens it with the sentinel `AI_CHAT_ID`
+  (`'pingme-ai'`); anything that treats the open id as a conversation (the
+  reconnect refetch) must skip it.
+- **One file talks to Google:** `services/geminiClient.js` (the SDK, the
+  models, error mapping). `aiService.js` only passes plain objects, and the
+  tests replace `geminiClient.js` with a fake - no test ever calls Google.
+  The e2e server wraps `fetch` with a fake Gemini (`e2e/fakeGemini.js`).
+- **Asking** (`POST /api/ai/messages`, multipart `text`, `clientId`,
+  `mode`, optional `file` + voice fields): `aiLimiter` → `checkCanAsk`
+  (available, not already answering, under the daily limit) **before**
+  multer reads any file → zod → `aiService.ask`, which takes the user's one
+  "answer in progress" slot synchronously (a second request → 409 "still
+  answering"), saves the question AND an empty answer (`status:
+  'streaming'`), emits `ai:new`, and returns **202** `{ question, answer }`.
+  The answer is then written in the background and streamed over the
+  socket (REST because a question may carry a 10 MB file, the socket because
+  the answer *happens* over time).
+- **Streaming:** `ai:delta { id, text, reasoning }` carries the WHOLE answer
+  so far (not a piece), so a missed event is harmless; `ai:done { message }`
+  is the final saved copy. All to the user's own room (`emitToUser`) - every
+  tab, nobody else. A server restart mid-answer leaves it `streaming`;
+  `recoverInterrupted()` at startup marks those `error` (with Try again).
+- **Memory:** Gemini keeps nothing between requests - each request carries
+  the last 20 messages (errors left out, starting with a question). Files go
+  in as their real bytes (`inlineData`) only for the newest 3 questions that
+  have one, within 12 MB; older ones become a one-line note.
+- **Reasoning:** `thinkingConfig { thinkingLevel: LOW | HIGH, includeThoughts:
+  true }` - HIGH for "Think deeper". Thought parts (`part.thought`) are saved
+  as `reasoning`, shown behind "Show reasoning" (and as "Thinking: <heading>"
+  while it works). Simple questions may have none.
+- **Files PingMe AI reads** (by magic bytes, max 10 MB): JPEG, PNG, WebP,
+  PDF, TXT, voice notes (WebM/Ogg/MP4 audio), MP4/WebM/MOV video. Not GIF or
+  Office files (Gemini can't). Downloads (`GET /api/ai/files/:id`) are for
+  the owner only (404 otherwise); photos/audio/video inline, documents as
+  downloads.
+- **"Imagine"** (create or change a picture) uses `GEMINI_IMAGE_MODEL`, which
+  is NOT on Gemini's free tier - so `aiImageGenerationEnabled` is false by
+  default and the chip is hidden. The returned picture is checked by its
+  bytes before it is stored and served. A free key gives "isn't available on
+  this server's Gemini plan".
+- **Forward to PingMe AI:** the Forward dialog lists PingMe AI first.
+  `POST /api/ai/forward { messageId, clientId }` - `assertParticipant` on the
+  source chat (404 otherwise), not deleted, the admin forwarding switch
+  applies; the file is shared, not copied.
+- **Stop** (`POST /api/ai/stop`) aborts the request (AbortController) and keeps
+  what had arrived (`stopped`). **Try again** (`POST /api/ai/retry`) re-answers
+  the latest answer if it is `error`. **Clear chat** (`DELETE
+  /api/ai/messages`) deletes my AI messages and their own files, emits
+  `ai:cleared`; an admin deleting an account does the same.
+- **Busy Gemini (common on the free tier):** a 429/5xx or a dropped stream is
+  tried on `GEMINI_FALLBACK_MODEL`, then - after 2 s - the main model once
+  more; each failure is logged (model + status, never the key). Then the
+  answer is `error` "PingMe AI is busy right now - please try again in a
+  minute." Safety-blocked → "Sorry, PingMe AI can't help with that."
+- **Limits:** one answer at a time per user; `aiDailyLimit` answers per
+  rolling 24 h (429, failed answers don't count); `aiLimiter` 30 requests
+  per 10 minutes per user; answers capped at 8192 output tokens (a cut-off
+  answer gets a note).
+- **Privacy:** the chat shows that it is powered by Google Gemini, that what
+  is sent goes to Google (which may use it to improve its products on the
+  free plan) and that it can make mistakes. PingMe AI sees nothing from
+  other chats unless the user forwards it. No web search (paid-only).
+- **Answers are Markdown**, shown by `components/ai/Markdown.jsx` - our own
+  small renderer that builds React elements only (no HTML string, no
+  `dangerouslySetInnerHTML`), links only for `http(s)`.
+- **Client:** the `ai` slice in the store (`available`, `imageGeneration`,
+  `dailyLimit`, `usedToday`, `latest`, `items`, `hasMore`, `status`);
+  questions are optimistic (pending by `clientId`, Retry/Remove on failure);
+  the same message arriving twice keeps the newest `updatedAt`. Composer:
+  📎, 🎤 (voice question), "Think deeper" and "Imagine" chips, Send → Stop
+  while answering, "N messages left today" near the limit. A finished
+  answer notifies ("PingMe AI") unless the chat is open in a visible tab.
+
+---
+
 ## Socket events contract
 
 | Event | Direction | Payload |
@@ -812,6 +932,10 @@ Chats list, where admins announce new features and news.
 | `update:new` | server → client (everyone) | `{ update }` - a new post in the "PingMe" updates channel |
 | `update:deleted` | server → client (everyone) | `{ id }` |
 | `updates:read` | server → client (my own tabs) | `{ upToId }` - I read the channel on another tab |
+| `ai:new` | server → client (my own tabs) | `{ messages: [AiMessage] }` - a question and its empty answer, or an answer being retried |
+| `ai:delta` | server → client (my own tabs) | `{ id, text, reasoning }` - the WHOLE answer so far |
+| `ai:done` | server → client (my own tabs) | `{ message }` - the final answer (`done`, `stopped` or `error`) |
+| `ai:cleared` | server → client (my own tabs) | `{}` - I cleared my PingMe AI chat |
 
 ---
 
@@ -859,13 +983,21 @@ All responses are JSON (except the two file downloads). Errors use the shape `{ 
 | PATCH | `/api/admin/users/:userId/suspend` | admin | `{ user }` |
 | PATCH | `/api/admin/users/:userId/unsuspend` | admin | `{ user }` |
 | DELETE | `/api/admin/users/:userId` | admin | 204 - hard delete, see Admin panel |
-| GET | `/api/admin/stats` | admin | `{ totalUsers, totalMessages, onlineNow }` |
+| GET | `/api/admin/stats` | admin | `{ totalUsers, totalMessages, onlineNow, aiAnswersToday }` |
 | GET | `/api/updates/summary` | yes | `{ latest, unreadCount }` - for the pinned "PingMe" row |
 | GET | `/api/updates?before=&limit=20` | yes | `{ updates, hasMore }`, oldest → newest, keyset pagination (max 50) |
 | POST | `/api/updates/read` | yes | `{ upToId }` → 204 (404 if not a real post); the pointer only moves forward |
 | GET | `/api/updates/:id/image` | yes | The post's photo (cached for a year) |
 | POST | `/api/admin/updates` | admin | multipart `text?` + `image?` (or JSON `{ text }`) → 201 `{ update }` |
 | DELETE | `/api/admin/updates/:id` | admin | 204 - deletes the post and its photo for everyone |
+| GET | `/api/ai/summary` | yes | `{ available, imageGeneration, dailyLimit, usedToday, latest }` |
+| GET | `/api/ai/messages?before=&limit=30` | yes | `{ messages, hasMore }` - my AI chat, oldest → newest (max 50) |
+| POST | `/api/ai/messages` | yes | multipart `text`, `clientId`, `mode`, `file?`, `durationMs?`, `waveform?` → 202 `{ question, answer }` |
+| POST | `/api/ai/forward` | yes | `{ messageId, clientId }` → 202 `{ question, answer }` |
+| POST | `/api/ai/retry` | yes | 202 `{ answer }` - re-answer my latest failed answer |
+| POST | `/api/ai/stop` | yes | 204 - stop the answer being written |
+| DELETE | `/api/ai/messages` | yes | 204 - clear my AI chat (and its own files) |
+| GET | `/api/ai/files/:id` | yes | The file of one of MY AI messages (Range supported) |
 
 ---
 
@@ -886,13 +1018,15 @@ All responses are JSON (except the two file downloads). Errors use the shape `{ 
   - Socket messages: as described above.
   - `message:delete` / `message:forward`: share one limit, 20 per 5 seconds per socket (user-initiated clicks, not automatic events, so they get `message:send`'s own budget rather than a separate counter).
   - Admin mutation routes (settings, suspend/unsuspend, delete): 200 per hour per user - `requireAdmin` is the real gate, this just stops a runaway script.
+  - PingMe AI questions, forwards and retries: 30 per 10 minutes per user (on top of one answer at a time and the admin's daily limit); clearing the AI chat uses the profile budget.
 - **Uploads:** type checked by magic bytes against an allowlist (no SVG/HTML); size limited while streaming; never written to the server's disk; every download permission-checked; documents never rendered inline; `nosniff` (helmet).
 - `passwordHash` never appears in any response. Other users only ever receive the PublicUser shape.
 - `isAdmin` and `suspended` never appear about anyone but yourself (SelfUser) or in the admin panel's own AdminUser list - never in PublicUser.
 - Every `/api/admin/*` route requires BOTH `requireAuth` and `requireAdmin` (403 "Admins only" for a logged-in non-admin) - there is no read-only or partial admin tier.
 - Suspending a user invalidates their session immediately on every channel: `userFromToken` rejects a suspended user's token (REST and socket handshake alike), and `disconnectUser` force-closes any ALREADY-open socket at the same moment.
 - A password-reset token is never stored or logged in its raw form, only its SHA-256 hash - the same reasoning as `passwordHash`. Forgot-password never reveals whether an email has an account.
-- No `dangerouslySetInnerHTML` anywhere. Render message text as plain text with `white-space: pre-wrap`.
+- No `dangerouslySetInnerHTML` anywhere. Render message text as plain text with `white-space: pre-wrap`. PingMe AI's Markdown answers go through `Markdown.jsx`, which only builds React elements (links only for `http(s)`).
+- PingMe AI: `GEMINI_API_KEY` is never logged or sent to the browser; every AI route only reads/writes the logged-in user's own messages; a file Gemini created is checked by its bytes like any upload; the tests never call Google (`geminiClient.js` is faked in `npm test`, `fetch` in the e2e server).
 - Secrets only in environment variables. Never log passwords, tokens or cookies.
 - In production: `trust proxy` is set and cookies are `secure`.
 - `npm audit` has no high or critical issues.
@@ -999,7 +1133,7 @@ All responses are JSON (except the two file downloads). Errors use the shape `{ 
 
 ### Home page (`/` when logged out, `pages/LandingPage.jsx`)
 
-- A static page - no API calls or state of its own (only the shared `AnnouncementBanner`): sticky header (logo, links to Features / How it works / Privacy / FAQ from `md` up, Log in, Sign up), hero ("Get started" → `/register`, "Log in" → `/login`) with `landing/ChatPreview.jsx`, three highlights, a features grid, three "how it works" steps, privacy and security, an FAQ (native `<details>`), a final call to action and a footer (project credit, GitHub, "built with").
+- A static page - no API calls or state of its own (only the shared `AnnouncementBanner`): sticky header (logo, links to Features / How it works / Privacy / FAQ from `md` up, Log in, Sign up), hero ("Get started" → `/register`, "Log in" → `/login`) with `landing/ChatPreview.jsx`, three highlights, a features grid (led by one wide "PingMe AI" card), three "how it works" steps, privacy and security, an FAQ (native `<details>`), a final call to action and a footer (project credit, GitHub, "built with").
 - **Only real features are advertised** - never calls, end-to-end encryption or anything else PingMe does not do (an e2e test checks for "video call" / "voice call" / "end-to-end").
 - `ChatPreview` is a picture of the app built from the app's own classes and components (Avatar, TypingDots, bubble tails), not a screenshot, so it follows dark mode; it is `aria-hidden` with an `sr-only` description, and contains nothing focusable.
 - Motion is CSS only, in `index.css`'s reduced-motion block: bubbles appear in turn (`landing-pop` with a per-bubble `--delay`), the preview's ticks turn blue (`landing-tick`), the phone floats, cards fade in on scroll (`reveal`, `animation-timeline: view()` inside `@supports` - browsers without it just show the cards), and header links scroll smoothly (`html:has(.landing-page)` only).

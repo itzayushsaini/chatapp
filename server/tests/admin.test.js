@@ -204,7 +204,7 @@ describe('stats', () => {
 
     const res = await agent.get('/api/admin/stats')
     expect(res.status).toBe(200)
-    expect(res.body).toEqual({ totalUsers: 2, totalMessages: 0, onlineNow: 0 })
+    expect(res.body).toEqual({ totalUsers: 2, totalMessages: 0, aiAnswersToday: 0, onlineNow: 0 })
   })
 })
 

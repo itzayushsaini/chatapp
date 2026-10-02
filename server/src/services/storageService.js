@@ -9,7 +9,7 @@ import mongoose from 'mongoose'
 // document (16 MB), by splitting them into 255 kB chunks in two collections,
 // uploads.files (name, size, type) and uploads.chunks (the bytes).
 //
-// Keeping it behind these four functions means that moving to cloud storage
+// Keeping it behind these few functions means that moving to cloud storage
 // later (S3, Cloudinary...) would only change this one file.
 
 function bucket() {
@@ -37,6 +37,14 @@ export async function getFileInfo(fileId) {
 export function openFile(fileId, range) {
   const options = range ? { start: range.start, end: range.end + 1 } : undefined
   return bucket().openDownloadStream(toObjectId(fileId), options)
+}
+
+// The whole file as one Buffer - for handing a (small, size-checked) file to
+// PingMe AI, which needs the bytes themselves rather than a stream.
+export async function readFile(fileId) {
+  const chunks = []
+  for await (const chunk of openFile(fileId)) chunks.push(chunk)
+  return Buffer.concat(chunks)
 }
 
 // Deleting something that is already gone is not an error - the result is

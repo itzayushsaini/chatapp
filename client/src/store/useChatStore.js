@@ -1,13 +1,16 @@
 import { create } from 'zustand'
 
+import { getAiMessages, getAiSummary } from '../api/ai.js'
 import { getMessages } from '../api/conversations.js'
 import { getFriends, getRequests } from '../api/friends.js'
 import { errorMessage } from '../api/http.js'
 import { getUpdates, getUpdatesSummary } from '../api/updates.js'
 
-// activeConversationId for the pinned "PingMe" updates channel. Never a real
-// conversation id (those are 24 hex characters), so it can't clash.
+// activeConversationId for the pinned "PingMe" updates channel and the
+// PingMe AI chat. Never a real conversation id (those are 24 hex
+// characters), so they can't clash.
 export const UPDATES_CHAT_ID = 'pingme-updates'
+export const AI_CHAT_ID = 'pingme-ai'
 
 // All chat state lives here, in one zustand store. Any component can read
 // just the slice it needs, e.g. useChatStore((s) => s.friends), and only
@@ -45,6 +48,19 @@ const initialState = {
   // summary (loaded at start, for the pinned row); `items` only once the
   // channel is opened.
   updates: { items: [], hasMore: false, status: 'idle', latest: null, unreadCount: 0 },
+  // PingMe AI. The first five come from the summary (loaded at start, for
+  // the pinned row); `items` only once the chat is opened. `latest` is the
+  // newest message, which also tells whether an answer is being written.
+  ai: {
+    available: false,
+    imageGeneration: false,
+    dailyLimit: 0,
+    usedToday: 0,
+    latest: null,
+    items: [],
+    hasMore: false,
+    status: 'idle',
+  },
 }
 
 // ---------------------------------------------------------------------------
@@ -109,6 +125,46 @@ function mergeUpdates(existing, incoming) {
   const byId = new Map(existing.map((u) => [u.id, u]))
   for (const u of incoming) byId.set(u.id, u)
   return [...byId.values()].sort((a, b) => (a.id < b.id ? -1 : 1))
+}
+
+// The same PingMe AI message can arrive more than once - in the HTTP
+// response, in ai:new / ai:done, in a refetch - and not always in that
+// order. Keep the copy the server saved LAST (updatedAt). For the same saved
+// version, an answer still being written may already have more text here,
+// from ai:delta, so that one wins.
+function isNewerAiCopy(current, incoming) {
+  if (!current) return true
+  const diff = new Date(incoming.updatedAt) - new Date(current.updatedAt)
+  if (diff !== 0) return diff > 0
+  if (current.status !== 'streaming') return true
+  return incoming.text.length + incoming.reasoning.length > current.text.length + current.reasoning.length
+}
+
+// Saved messages by id, in id order; a question still being sent (no id yet)
+// by its clientId, at the end - replaced by the saved copy once it is back.
+function mergeAiMessages(existing, incoming) {
+  const byKey = new Map(existing.map((m) => [m.id ?? `pending:${m.clientId}`, m]))
+  for (const m of incoming) {
+    if (!m.id) {
+      byKey.set(`pending:${m.clientId}`, m)
+      continue
+    }
+    if (m.clientId) byKey.delete(`pending:${m.clientId}`)
+    if (isNewerAiCopy(byKey.get(m.id), m)) byKey.set(m.id, m)
+  }
+  const all = [...byKey.values()]
+  const saved = all.filter((m) => m.id).sort((a, b) => (a.id < b.id ? -1 : 1))
+  return [...saved, ...all.filter((m) => !m.id)]
+}
+
+// The newest saved message, given what arrived.
+function latestAiMessage(current, incoming) {
+  let latest = current
+  for (const m of incoming) {
+    if (!m.id) continue
+    if (!latest || m.id > latest.id || (m.id === latest.id && isNewerAiCopy(latest, m))) latest = m
+  }
+  return latest
 }
 
 function patchConversation(state, conversationId, patch) {
@@ -555,4 +611,102 @@ export const useChatStore = create((set, get) => ({
     if (latest && upToId >= latest.id) get().clearUpdatesUnread()
     else get().fetchUpdatesSummary()
   },
+
+  // ----- PingMe AI ----------------------------------------------------------
+
+  // Whether PingMe AI is on, my daily limit, and the latest message for the
+  // pinned row. A failure is quiet: the row just stays hidden until the
+  // next try (on reconnect).
+  fetchAiSummary: async () => {
+    try {
+      const { available, imageGeneration, dailyLimit, usedToday, latest } = await getAiSummary()
+      set((s) => ({
+        ai: {
+          ...s.ai,
+          available,
+          imageGeneration,
+          dailyLimit,
+          usedToday,
+          latest: latestAiMessage(s.ai.latest, latest ? [latest] : []) ?? null,
+        },
+      }))
+    } catch {
+      // Nothing to do - see above.
+    }
+  },
+
+  // The latest page, when the chat is opened (and again after a reconnect).
+  fetchAiMessages: async () => {
+    set((s) => (s.ai.status === 'ready' ? {} : { ai: { ...s.ai, status: 'loading' } }))
+    try {
+      const page = await getAiMessages()
+      set((s) => {
+        const firstLoad = s.ai.status !== 'ready'
+        return {
+          ai: {
+            ...s.ai,
+            items: mergeAiMessages(s.ai.items, page.messages),
+            latest: latestAiMessage(s.ai.latest, page.messages),
+            hasMore: firstLoad ? page.hasMore : s.ai.hasMore,
+            status: 'ready',
+          },
+        }
+      })
+    } catch (err) {
+      set((s) => (s.ai.status === 'ready' ? {} : { ai: { ...s.ai, status: 'error' } }))
+      get().addToast(errorMessage(err), 'error')
+    }
+  },
+
+  // Resolves to true if older messages were added (to keep the scroll steady).
+  fetchOlderAiMessages: async () => {
+    const { items, hasMore } = get().ai
+    const oldest = items.find((m) => m.id)
+    if (!hasMore || !oldest) return false
+    try {
+      const page = await getAiMessages(oldest.id)
+      set((s) => ({ ai: { ...s.ai, items: mergeAiMessages(s.ai.items, page.messages), hasMore: page.hasMore } }))
+      return page.messages.length > 0
+    } catch (err) {
+      get().addToast(errorMessage(err), 'error')
+      return false
+    }
+  },
+
+  // Saved messages from anywhere: the HTTP response, ai:new, ai:done.
+  addAiMessages: (messages) =>
+    set((s) => ({
+      ai: {
+        ...s.ai,
+        items: s.ai.status === 'ready' ? mergeAiMessages(s.ai.items, messages) : s.ai.items,
+        latest: latestAiMessage(s.ai.latest, messages),
+      },
+    })),
+
+  // ai:delta - the WHOLE answer so far (not just the new piece), so it
+  // simply replaces the text. Ignored once the answer has finished.
+  applyAiDelta: ({ id, text, reasoning }) =>
+    set((s) => {
+      const patch = (m) => (m.id === id && m.status === 'streaming' ? { ...m, text, reasoning } : m)
+      return { ai: { ...s.ai, items: s.ai.items.map(patch), latest: s.ai.latest && patch(s.ai.latest) } }
+    }),
+
+  // A question still on its way (it has no id yet) - see AiChat.
+  addPendingAiMessage: (message) =>
+    set((s) => ({ ai: { ...s.ai, items: mergeAiMessages(s.ai.items, [message]) } })),
+  updatePendingAiMessage: (clientId, changes) =>
+    set((s) => ({
+      ai: {
+        ...s.ai,
+        items: s.ai.items.map((m) => (!m.id && m.clientId === clientId ? { ...m, ...changes } : m)),
+      },
+    })),
+  removePendingAiMessage: (clientId) =>
+    set((s) => ({ ai: { ...s.ai, items: s.ai.items.filter((m) => m.id || m.clientId !== clientId) } })),
+
+  // One more answer used up today (a failed one does not count).
+  countAiAnswer: () => set((s) => ({ ai: { ...s.ai, usedToday: s.ai.usedToday + 1 } })),
+
+  // "Clear chat", from this tab or another (ai:cleared).
+  clearAiChat: () => set((s) => ({ ai: { ...s.ai, items: [], hasMore: false, latest: null } })),
 }))

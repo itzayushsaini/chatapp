@@ -4,7 +4,7 @@ import { z } from 'zod'
 import * as conversations from '../controllers/conversations.controller.js'
 import { profileLimiter, uploadLimiter } from '../middleware/rateLimits.js'
 import { requireAuth } from '../middleware/requireAuth.js'
-import { singleFile } from '../middleware/upload.js'
+import { singleFile, voiceNoteFields } from '../middleware/upload.js'
 import { objectId, validate } from '../middleware/validate.js'
 import { UPLOAD_MAX_BYTES } from '../services/attachmentService.js'
 
@@ -17,24 +17,8 @@ const historyQuery = z.object({
 
 const conversationParams = validate({ params: z.object({ id: objectId }) })
 
-// The text fields a voice note is uploaded with (multipart fields always
-// arrive as strings). Both optional, both display-only - see Attachment.js.
-const uploadFields = z.object({
-  durationMs: z.coerce.number().int().min(0).max(5 * 60 * 1000).optional(),
-  waveform: z
-    .string()
-    .max(1000)
-    .transform((text, ctx) => {
-      try {
-        return JSON.parse(text)
-      } catch {
-        ctx.addIssue({ code: z.ZodIssueCode.custom, message: 'must be a JSON array' })
-        return z.NEVER
-      }
-    })
-    .pipe(z.array(z.number().int().min(0).max(100)).max(64))
-    .optional(),
-})
+// The text fields a voice note is uploaded with - see middleware/upload.js.
+const uploadFields = z.object(voiceNoteFields)
 
 const router = Router()
 

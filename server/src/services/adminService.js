@@ -4,6 +4,7 @@ import { Message } from '../models/Message.js'
 import { User } from '../models/User.js'
 import { disconnectUser, emitToUser } from '../socket/emitter.js'
 import { AppError } from '../utils/AppError.js'
+import { clearHistory as clearAiHistory, countAllAnswersToday } from './aiService.js'
 import { isOnline } from './presenceService.js'
 
 const sameId = (a, b) => String(a) === String(b)
@@ -80,7 +81,8 @@ export async function unsuspendUser(userId) {
 // here rather than inventing a new event. Their past MESSAGES and
 // CONVERSATIONS are deliberately left alone: the other participant's history
 // is not destroyed, the same principle as an ordinary unfriend keeping the
-// conversation (see friendService.unfriend).
+// conversation (see friendService.unfriend). Their PingMe AI chat, on the
+// other hand, is private to them alone, so it goes with the account.
 export async function deleteUser(meId, userId) {
   if (sameId(meId, userId)) throw new AppError(400, "You can't delete your own account")
 
@@ -90,6 +92,7 @@ export async function deleteUser(meId, userId) {
   const friendships = await Friendship.find({ $or: [{ requester: userId }, { recipient: userId }] })
   await Friendship.deleteMany({ _id: { $in: friendships.map((f) => f._id) } })
   await Block.deleteMany({ $or: [{ blocker: userId }, { blocked: userId }] })
+  await clearAiHistory(userId)
   await User.deleteOne({ _id: userId })
 
   for (const f of friendships) {
@@ -109,12 +112,13 @@ export async function deleteUser(meId, userId) {
 }
 
 export async function getStats() {
-  const [totalUsers, totalMessages, onlineNow] = await Promise.all([
+  const [totalUsers, totalMessages, onlineNow, aiAnswersToday] = await Promise.all([
     User.countDocuments(),
     Message.countDocuments(),
     countOnlineUsers(),
+    countAllAnswersToday(),
   ])
-  return { totalUsers, totalMessages, onlineNow }
+  return { totalUsers, totalMessages, onlineNow, aiAnswersToday }
 }
 
 // There is no single "list everyone online" call in presenceService (it only

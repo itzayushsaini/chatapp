@@ -33,6 +33,17 @@ const envSchema = z.object({
   // Google's redirect URI to register is `${APP_URL}/api/auth/google/callback`.
   GOOGLE_CLIENT_ID: z.string().optional(),
   GOOGLE_CLIENT_SECRET: z.string().optional(),
+  // PingMe AI (Google Gemini). Optional - without a key the AI chat is simply
+  // not offered. The model names are settings rather than code, because
+  // Google renames and retires models every few months.
+  GEMINI_API_KEY: z.string().optional(),
+  GEMINI_MODEL: z.string().min(1).default('gemini-3.8-flash'),
+  // Tried automatically when the main model answers "overloaded" (503) -
+  // common on Gemini's free tier at busy times. A different model has its
+  // own capacity, so the question usually still gets an answer.
+  GEMINI_FALLBACK_MODEL: z.string().default('gemini-3.5-flash'),
+  // Only used when an admin switches on image creation (paid plans only).
+  GEMINI_IMAGE_MODEL: z.string().min(1).default('gemini-3.1-flash-image'),
 })
 
 const result = envSchema.safeParse(process.env)

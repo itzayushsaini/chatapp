@@ -3,6 +3,7 @@ import http from 'node:http'
 import app from './app.js'
 import { connectDb, disconnectDb } from './config/db.js'
 import { env } from './config/env.js'
+import { recoverInterrupted } from './services/aiService.js'
 import { deleteUnsentUploads } from './services/attachmentService.js'
 import { initSocket } from './socket/index.js'
 
@@ -16,6 +17,11 @@ async function start() {
   // Connect first: if the database is unreachable, fail loudly at startup
   // instead of accepting requests that are certain to fail.
   await connectDb()
+
+  // A PingMe AI answer that was being written when the server last stopped
+  // can never finish now - mark it failed, so its "Try again" button shows.
+  const interrupted = await recoverInterrupted()
+  if (interrupted > 0) console.log(`Marked ${interrupted} interrupted PingMe AI answer(s) as failed`)
 
   server.listen(env.PORT, () => {
     console.log(`Server listening on http://localhost:${env.PORT}  [${env.NODE_ENV}]`)

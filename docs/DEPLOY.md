@@ -112,6 +112,34 @@ The redirect URI is built from `APP_URL`, so `APP_URL` must be right, or
 Google answers "redirect_uri_mismatch". Skipping this section is fine: the
 Google button is simply not shown.
 
+### 1.7 PingMe AI - a Gemini API key (optional, free)
+
+1. Open <https://aistudio.google.com/apikey> and sign in with a Google
+   account (any - it does not have to be the one used in 1.6).
+2. **Create API key** (Google creates a project for it if you have none) and
+   copy it. Treat it like a password: anyone with it can use your quota.
+3. Put it in `server/.env` as `GEMINI_API_KEY` for local development, and in
+   Render → Environment for the live site. Nothing else is needed - the
+   model names have defaults (`GEMINI_MODEL=gemini-3.8-flash`, fallback
+   `gemini-3.5-flash`).
+
+Good to know:
+
+- **The free tier is enough for the chat**, with a daily request limit for
+  the WHOLE app. That is why the Admin panel has "Messages per person per
+  day" (default 50) - so one person cannot use it all.
+- **On the free tier Google may use what people send to improve its
+  products.** PingMe AI says so to every user, under the chat. A paid plan
+  (with billing) does not use the data that way.
+- **Creating pictures ("Imagine") needs a paid plan** - it stays switched off
+  (Admin → Settings → PingMe AI) until you have one.
+- **"PingMe AI is busy right now"** at busy times is normal on the free tier:
+  the server already tries a second model and a third time before showing
+  it. Each failure is in the Render log as `Gemini request to ... failed
+  (503)`.
+
+Skipping this section is fine: PingMe AI is simply not shown.
+
 ---
 
 ## 2. Create the web service (Render)
@@ -152,6 +180,7 @@ What `render.yaml` sets for you:
 | `EMAIL_FROM_NAME` | `PingMe` | Shown as the email's sender name |
 | `APP_URL` | you paste it, after the first deploy | So reset links point at your real site, not `localhost` |
 | `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` | you paste them | "Continue with Google" (optional - see section 1.6) |
+| `GEMINI_API_KEY` | you paste it | PingMe AI (optional - see section 1.7) |
 | `PORT` | set by Render | `config/env.js` reads it |
 
 ### Without the Blueprint (manual setup)
@@ -196,7 +225,8 @@ Run through this list on the live URL:
 - **Free-tier sleep.** Render's free service sleeps after ~15 minutes without
   traffic; the first request after that takes up to a minute while it wakes.
   Open the site a minute before a demo.
-- **One instance only.** Online/offline status is kept in the server's memory,
+- **One instance only.** Online/offline status (and which PingMe AI answers
+  are being written right now) is kept in the server's memory,
   so do **not** scale the service to more than one instance. See "Scaling
   note" in the README for what that would require (Redis adapter + shared
   presence store).
@@ -228,3 +258,6 @@ Run through this list on the live URL:
 | Login seems to work but you are logged out on refresh | The site was opened over plain `http://`. In production the cookie is `Secure`, so the browser only keeps it over `https://`. Use the `https://` URL |
 | Forgot-password email link points to `localhost` | `APP_URL` is not set (or wrong) on Render - set it to your real live URL and redeploy (section 2, step 6) |
 | Forgot-password shows the success message, but no email ever arrives | Either `BREVO_API_KEY` / `EMAIL_FROM_ADDRESS` are not set, or `EMAIL_FROM_ADDRESS` is not a **verified** sender in Brevo - check the server logs for a warning, and check spam |
+| No "PingMe AI" row in Chats | `GEMINI_API_KEY` is not set on Render (Admin → Settings → PingMe AI says so), or an admin switched PingMe AI off |
+| PingMe AI answers "isn't set up correctly" | The key is wrong or was deleted - the log shows `Gemini request ... failed (400): API key not valid`. Create a new key (section 1.7) |
+| PingMe AI often says "busy right now" | Gemini's free tier is overloaded or the app's daily quota is used up - the log shows `(503)` or `(429)`. Wait, or move to a paid plan |

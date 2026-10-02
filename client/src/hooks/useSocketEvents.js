@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router'
 
 import { useAuth } from '../context/AuthContext.jsx'
 import { useSocket } from '../context/SocketContext.jsx'
-import { UPDATES_CHAT_ID, useChatStore } from '../store/useChatStore.js'
+import { AI_CHAT_ID, UPDATES_CHAT_ID, useChatStore } from '../store/useChatStore.js'
 import { attachmentLabel } from '../utils/files.js'
 import { onNotificationClick, showMessageNotification } from '../utils/notifications.js'
 
@@ -65,9 +65,12 @@ export function useSocketEvents() {
         store().fetchRequests()
         store().fetchUpdatesSummary()
         if (store().updates.status === 'ready') store().fetchUpdates()
+        store().fetchAiSummary()
+        if (store().ai.status === 'ready') store().fetchAiMessages()
         const open = store().activeConversationId
-        // The updates channel is not a conversation - it refreshed above.
-        if (open && open !== UPDATES_CHAT_ID) {
+        // The updates channel and PingMe AI are not conversations - they
+        // refreshed above.
+        if (open && open !== UPDATES_CHAT_ID && open !== AI_CHAT_ID) {
           await store().fetchLatest(open)
           markRead(open) // catches up on anything that arrived while offline
         }
@@ -225,6 +228,40 @@ export function useSocketEvents() {
       store().applyUpdatesRead(upToId)
     }
 
+    // ----- PingMe AI. Only ever from the server to MY OWN tabs. -----
+
+    // A question and its (still empty) answer - from this tab or another.
+    function onAiNew({ messages }) {
+      store().addAiMessages(messages)
+    }
+
+    // The whole answer so far, as it is being written.
+    function onAiDelta(delta) {
+      store().applyAiDelta(delta)
+    }
+
+    // The answer is finished (or stopped, or failed). Notify unless the
+    // PingMe AI chat is open in a visible tab - someone who asked and
+    // switched to another chat gets told when the answer is ready.
+    function onAiDone({ message }) {
+      store().addAiMessages([message])
+      if (message.status === 'error') return
+      store().countAiAnswer()
+      const isOpen = store().activeConversationId === AI_CHAT_ID
+      if (message.status === 'done' && (!isOpen || document.hidden)) {
+        showMessageNotification({
+          title: 'PingMe AI',
+          body: message.text.replace(/[*_`#>|~]/g, '').slice(0, 120) || '📷 Picture',
+          icon: '/favicon.svg',
+          conversationId: AI_CHAT_ID,
+        })
+      }
+    }
+
+    function onAiCleared() {
+      store().clearAiChat()
+    }
+
     socket.on('connect', onConnect)
     socket.on('disconnect', onDisconnect)
     socket.on('message:new', onMessage)
@@ -244,6 +281,10 @@ export function useSocketEvents() {
     socket.on('update:new', onUpdateNew)
     socket.on('update:deleted', onUpdateDeleted)
     socket.on('updates:read', onUpdatesRead)
+    socket.on('ai:new', onAiNew)
+    socket.on('ai:delta', onAiDelta)
+    socket.on('ai:done', onAiDone)
+    socket.on('ai:cleared', onAiCleared)
 
     // The socket may have connected before this effect ran.
     if (socket.connected) onConnect()
@@ -270,6 +311,10 @@ export function useSocketEvents() {
       socket.off('update:new', onUpdateNew)
       socket.off('update:deleted', onUpdateDeleted)
       socket.off('updates:read', onUpdatesRead)
+      socket.off('ai:new', onAiNew)
+      socket.off('ai:delta', onAiDelta)
+      socket.off('ai:done', onAiDone)
+      socket.off('ai:cleared', onAiCleared)
     }
   }, [socket, myId, updateUser])
 }

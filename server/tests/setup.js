@@ -12,6 +12,10 @@ import { env } from '../src/config/env.js'
 // actually need them.
 delete env.GOOGLE_CLIENT_ID
 delete env.GOOGLE_CLIENT_SECRET
+// The same for PingMe AI - and here it matters even more: with the real key,
+// a test could send real requests to Google. tests/ai.test.js replaces
+// services/geminiClient.js with a fake instead, so nothing ever leaves.
+delete env.GEMINI_API_KEY
 
 // Every test run gets a real MongoDB, started in memory and thrown away
 // afterwards. Nothing touches the development database.

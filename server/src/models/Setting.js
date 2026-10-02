@@ -24,6 +24,15 @@ const settingSchema = new mongoose.Schema(
       ),
       default: () => ({}),
     },
+    // PingMe AI. It is also hidden when the server has no GEMINI_API_KEY,
+    // whatever this says (see aiService.isAvailable).
+    aiEnabled: { type: Boolean, default: true },
+    // Answers per user in any rolling 24 hours - the free Gemini tier has a
+    // daily cap for the WHOLE app, so one person must not be able to use it up.
+    aiDailyLimit: { type: Number, default: 50, min: 1, max: 1000 },
+    // Off by default: Gemini's image models are not on the free tier, so with
+    // a free key every attempt would only fail.
+    aiImageGenerationEnabled: { type: Boolean, default: false },
   },
   { timestamps: true },
 )

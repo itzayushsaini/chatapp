@@ -2227,3 +2227,190 @@ messages.
 - **Testing a real admin in the browser:** the end-to-end test server (test
   code only) promotes accounts named `admin_e2e…` to admin, because the
   browser has - deliberately - no way to make itself an admin.
+
+---
+
+# Phase 21 - PingMe AI (Google Gemini)
+
+**Goal of this phase:** WhatsApp has Meta AI - an assistant you can chat
+with like a friend. PingMe now has **PingMe AI**: a private chat pinned at
+the top of your Chats list, powered by Google's **Gemini** model. It answers
+as it writes, can show how it reasoned, reads photos, PDFs and voice notes,
+and you can forward it any message from a chat.
+
+## 1. The big picture - who talks to whom
+
+```
+Browser ──REST (question + file)──▶ Express ──▶ aiService ──▶ geminiClient ──▶ Google Gemini
+   ▲                                                │                               │
+   └──────── socket: ai:new, ai:delta, ai:done ◀────┴──────── the answer, piece by piece
+```
+
+- The **browser never talks to Google**. It only talks to our server, like
+  everything else in PingMe. The secret key (`GEMINI_API_KEY`) stays on the
+  server and is never sent to the browser or written to the log.
+- **One file talks to Google:** `services/geminiClient.js`. It knows the
+  model names, the SDK and Google's error format. `aiService.js` (our rules)
+  only hands it plain objects. Two benefits: the tests can swap that one file
+  for a fake, so **no test ever calls Google**; and moving to another AI
+  provider later would mean rewriting only that file.
+
+> **Likely question: is the AI "trained" by you?**
+> No. We use Google's ready-made model through its API, the same way the
+> app uses Brevo for email. Our work is everything around it: who may ask,
+> how often, what history it sees, streaming, files, safety, storage.
+
+## 2. Asking a question, step by step
+
+1. The browser shows my question at once (optimistic, like a chat message)
+   and sends it with `POST /api/ai/messages` - as a form, because it may
+   carry a file of up to 10 MB.
+2. **Before the file is even read**, the server checks: is PingMe AI on, is
+   it not already answering me, am I under today's limit? If not, the
+   request is refused and the file never reaches the server's memory.
+3. `aiService.ask` takes my **one "answer in progress" slot** (a `Map` in
+   memory, like presence). It is taken *before* any `await`, so two requests
+   at the same moment can never both get it - the second gets 409.
+4. It saves **two** documents: my question, and an EMPTY answer with
+   `status: 'streaming'`. It tells my tabs (`ai:new`) and replies **202
+   Accepted** - "saved, the answer is on its way".
+5. In the background, `writeAnswer` sends the conversation to Gemini. Every
+   time more of the answer arrives, `ai:delta` goes to my room with the
+   **whole answer so far**. At the end the answer is saved and `ai:done`
+   carries the final copy.
+
+> **Likely question: why REST for the question but sockets for the answer?**
+> Our rule: REST for things you *send or fetch*, sockets for things that
+> *happen*. A question with a 10 MB photo is an upload (REST, exactly like
+> chat files). The answer happens over the next few seconds - that is what
+> the socket is for, and it reaches every tab I have open.
+
+> **Likely question: why does each `ai:delta` send the whole text, not just
+> the new words?**
+> If a tab misses one event (a hiccup in the connection), the next event
+> still has everything, so it is correct again immediately. With "just the
+> new piece" we would need offsets and repair logic. Answers are small
+> (a few kB), so the extra bytes cost nothing.
+
+## 3. How does it "remember" the conversation?
+
+Gemini remembers **nothing** between requests. So every request carries the
+conversation: the last **20 messages** from MongoDB, oldest first, in
+Gemini's format - `{ role: 'user' | 'model', parts: [...] }`. Failed answers
+are left out, and the list always starts with a question.
+
+Files are sent as their real bytes (`inlineData`, base64) - but only for the
+**newest 3** questions that have one, within 12 MB (Gemini accepts about
+20 MB per request, and base64 makes files a third bigger). Older files
+become a short note: "[The user sent a photo here. It is no longer
+attached.]".
+
+> **Likely question: why not let Google store the conversation?**
+> Gemini has a way to keep history on Google's side, but then MongoDB would
+> no longer be the single source of truth - "Clear chat", deleting an
+> account or an admin's rules would have to be repeated at Google. Sending
+> 20 messages each time is simple and keeps our database in charge.
+
+## 4. Reasoning and "Think deeper"
+
+Gemini can **think before it answers**. We ask for a **thought summary**
+(`includeThoughts: true`): the stream then contains parts marked
+`thought: true`, which we save as `reasoning` and show behind **"Show
+reasoning"** - and, while it works, as "Thinking: <its current heading>".
+
+**Think deeper** sets `thinkingLevel` to HIGH instead of LOW: slower, but
+better for maths, code and planning. A simple "hi" may have no reasoning at
+all - the model decides how much thinking a question needs.
+
+## 5. Files, voice notes and pictures
+
+- **What it can read:** JPEG, PNG and WebP photos, PDFs, text files, videos
+  and **voice notes** - a voice note on its own is a question too ("reply to
+  what was said in it"). The type is checked by the file's **bytes**, the
+  same `detectFileType` as chat uploads. GIFs and Office files are refused,
+  because Gemini cannot read them.
+- **Downloads** (`/api/ai/files/:id`) are for the owner only - anyone else
+  gets 404, as if it did not exist.
+- **Imagine** (create or change a picture) uses a separate image model that
+  is **not free**. So it is built, tested with fakes, and switched **off** by
+  default - an admin can switch it on with a paid key. Even a picture that
+  comes from Google is checked by its bytes before we store and serve it.
+
+## 6. Forwarding a chat message to PingMe AI
+
+The Forward dialog lists **PingMe AI** first. `POST /api/ai/forward` checks
+that I am really in the chat the message came from (`assertParticipant` -
+404 otherwise), that it is not deleted, and the admin's forwarding switch.
+The message becomes my question, with a note to Gemini that it was
+forwarded. A file is **not copied**: the AI message points at the same
+GridFS bytes, marked `shared`, so clearing the AI chat never deletes a photo
+my friend's chat still shows.
+
+## 7. When things go wrong
+
+| What happens | What the user sees |
+|---|---|
+| Gemini overloaded (503) or out of quota (429), or the stream is cut off | The server quietly tries the **fallback model**, then the main one again after 2 s. Only then: "PingMe AI is busy right now - please try again in a minute." + **Try again** |
+| The question or answer is blocked by Google's safety filters | "Sorry, PingMe AI can't help with that." |
+| The key is wrong | "PingMe AI isn't set up correctly. Please let the admin know." |
+| I press **Stop** | The request is aborted (`AbortController`) and what had arrived is kept: "You stopped this answer." |
+| The server restarts mid-answer | At startup `recoverInterrupted()` marks it failed, so Try again appears |
+| A real bug in our code | Logged on the server; the user gets a polite generic message |
+
+Every failure writes one line to the server log - which model, which HTTP
+status - but never the question or the key.
+
+> **Likely question: what did you find when you tried it for real?**
+> Testing with our real key showed Gemini's free tier is often busy (503
+> "high demand"), and that Google sometimes cuts a stream off half-way.
+> That is why the server retries on a second model and then once more, and
+> why a cut-off answer starts again instead of failing.
+
+## 8. Limits - sharing one free key fairly
+
+The free tier has a daily limit for the **whole app**. So:
+
+- **One answer at a time** per user (409 if you ask again while it writes).
+- **A daily limit per person** (admin-set, default 50, in any rolling 24
+  hours) - and **failed answers don't count**, so a busy Gemini never costs
+  you. Someone over the limit cannot even upload a file.
+- A request rate limit (30 per 10 minutes) against scripts.
+- Answers are capped at 8192 tokens; a cut-off answer gets a note.
+
+## 9. Showing answers safely - our own Markdown renderer
+
+Gemini writes **Markdown** (`**bold**`, lists, tables, code). Turning that
+into HTML and inserting it with `dangerouslySetInnerHTML` would be the easy
+way - and dangerous: text from the AI (or from someone tricking it) could
+inject a script. `components/ai/Markdown.jsx` reads the text line by line
+into blocks (paragraphs, headings, lists, tables, code, quotes), then finds
+inline styles, and builds **React elements only**. React escapes all text,
+so nothing can ever run. Links are made only for `http(s)` addresses, never
+`javascript:`. Code blocks get a "Copy code" button.
+
+## 10. Privacy - telling users the truth
+
+On Gemini's free tier, Google may use what is sent to improve its products.
+So the chat says plainly, at the top of every conversation: it is powered by
+Google Gemini, what you send goes to Google, don't share passwords or
+private details, and it can make mistakes. PingMe AI sees **nothing** from
+your other chats unless you forward a message to it, and each person's AI
+chat is visible only to them.
+
+## 11. Small pieces worth knowing
+
+- **Same message twice:** the HTTP response and a socket event can bring the
+  same answer, in either order. Each copy has `updatedAt` (when the server
+  saved it), and the browser keeps the newest - so a late "still streaming"
+  copy can never overwrite a finished answer.
+- **The pinned row** shows only while PingMe AI is available (a key on the
+  server AND the admin switch on), above the "PingMe" updates row. It shows
+  "thinking…" while an answer is being written.
+- **Notification:** a finished answer notifies "PingMe AI" unless the chat
+  is open in a visible tab - you can ask, go to another chat, and be told.
+- **Clear chat** deletes my AI messages and their own files; an admin
+  deleting an account does the same.
+- **Testing without Google:** `npm test` replaces `geminiClient.js` with a
+  fake (and a second test file fakes Google's SDK to test `geminiClient.js`
+  itself); the browser tests run against `e2e/fakeGemini.js`, which answers
+  in Google's own streaming format.

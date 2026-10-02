@@ -1,5 +1,6 @@
 import { Attachment } from '../models/Attachment.js'
 import { AppError } from '../utils/AppError.js'
+import { cleanFileName } from '../utils/fileName.js'
 import { detectFileType } from '../utils/fileType.js'
 import { assertFriends, assertParticipant } from './friendService.js'
 import { getSettings } from './settingsService.js'
@@ -59,15 +60,8 @@ export async function createAttachment(meId, conversationId, file, voice = {}) {
   if (!type) throw new AppError(400, 'This file type is not supported')
   if (file.size > MAX_BYTES[type.kind]) throw new AppError(413, 'File is too large')
 
-  // Only the base name, and only printable characters: the name is shown to
-  // the other person and sent back in a download header.
-  const name =
-    file.originalname
-      .split(/[\\/]/)
-      .pop()
-      // eslint-disable-next-line no-control-regex -- stripping control characters is the point
-      .replace(/[\u0000-\u001f\u007f]/g, '')
-      .slice(0, 200) || 'file'
+  // The name is shown to the other person and sent back in a download header.
+  const name = cleanFileName(file.originalname)
 
   const fileId = await saveFile(file.buffer, {
     filename: name,

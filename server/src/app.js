@@ -10,6 +10,7 @@ import { isProduction, isTest } from './config/env.js'
 import { errorHandler } from './middleware/errorHandler.js'
 import { notFound } from './middleware/notFound.js'
 import adminRoutes from './routes/admin.routes.js'
+import aiRoutes from './routes/ai.routes.js'
 import attachmentsRoutes from './routes/attachments.routes.js'
 import authRoutes from './routes/auth.routes.js'
 import conversationsRoutes from './routes/conversations.routes.js'
@@ -64,6 +65,7 @@ app.use('/api/conversations', conversationsRoutes)
 app.use('/api/attachments', attachmentsRoutes)
 app.use('/api/settings', settingsRoutes)
 app.use('/api/updates', updatesRoutes)
+app.use('/api/ai', aiRoutes)
 app.use('/api/admin', adminRoutes)
 
 // In production one Node process serves both the API and the built React app,

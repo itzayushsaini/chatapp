@@ -8,6 +8,7 @@ const CARDS = [
   { key: 'totalUsers', label: 'Total users' },
   { key: 'totalMessages', label: 'Messages sent' },
   { key: 'onlineNow', label: 'Online right now' },
+  { key: 'aiAnswersToday', label: 'PingMe AI answers (24 h)' },
 ]
 
 export default function OverviewTab() {
@@ -28,7 +29,7 @@ export default function OverviewTab() {
   }
 
   return (
-    <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+    <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
       {CARDS.map((c) => (
         <div key={c.key} className="rounded-xl border border-slate-200 bg-surface p-5 text-center">
           <p className="text-3xl font-semibold text-brand-700">{stats[c.key]}</p>

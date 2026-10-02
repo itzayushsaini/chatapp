@@ -19,6 +19,7 @@ import {
   SearchIcon,
   ShieldIcon,
   SmartphoneIcon,
+  SparklesIcon,
   UserIcon,
   UserPlusIcon,
   ZapIcon,
@@ -65,6 +66,14 @@ const HIGHLIGHTS = [
     text: 'Hashed passwords, a session cookie scripts cannot read, and rate limits on every action.',
   },
 ]
+
+// The newest, headline feature - one wide card above the other twelve, so
+// the grid below stays even at every screen width.
+const AI_FEATURE = {
+  icon: SparklesIcon,
+  title: 'PingMe AI, built in',
+  text: 'Your own assistant, powered by Google Gemini. Ask it anything, get help with studies and code, and send it photos, PDFs or voice notes. Watch it reason, tap "Think deeper" for hard questions, or forward it any message to ask about it.',
+}
 
 const FEATURES = [
   {
@@ -174,6 +183,10 @@ const FAQS = [
   {
     q: 'What can I send?',
     a: 'Text messages up to 2,000 characters, photos (JPEG, PNG, GIF, WebP), videos (MP4, WebM, MOV), documents (PDF, Word, Excel, PowerPoint, ZIP, text) and voice notes up to 5 minutes.',
+  },
+  {
+    q: 'What is PingMe AI?',
+    a: 'An assistant you can chat with, pinned at the top of your chats and powered by Google Gemini. Only you can see your chat with it, and it sees nothing from your other chats unless you forward a message to it. What you send it goes to Google to get an answer, so do not share passwords or private details - and like any AI, it can make mistakes.',
   },
   {
     q: 'Can I delete a message I sent by mistake?',
@@ -342,6 +355,18 @@ function Features() {
           text="All the things you expect from a modern messenger - built from scratch, and all of it live."
         />
         <ul className="mt-12 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+          <li className="reveal flex flex-col gap-4 rounded-2xl bg-linear-135 from-brand-600 via-teal-600 to-violet-600 p-6 text-white shadow-sm sm:col-span-2 sm:flex-row sm:items-center lg:col-span-3">
+            <span className="inline-flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-white/20">
+              <AI_FEATURE.icon className="h-6 w-6" />
+            </span>
+            <div>
+              <div className="flex items-center gap-2">
+                <h3 className="text-lg font-semibold">{AI_FEATURE.title}</h3>
+                <span className="rounded-full bg-white/25 px-2 py-0.5 text-xs font-semibold">New</span>
+              </div>
+              <p className="mt-1.5 text-sm leading-relaxed text-white/90">{AI_FEATURE.text}</p>
+            </div>
+          </li>
           {FEATURES.map((feature) => {
             const FeatureIcon = feature.icon
             return (

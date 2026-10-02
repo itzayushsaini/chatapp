@@ -47,4 +47,9 @@ services:
         sync: false
       - key: GOOGLE_CLIENT_SECRET
         sync: false
+      # Optional PingMe AI - a Google Gemini API key from
+      # https://aistudio.google.com/apikey (see docs/DEPLOY.md section 1.7).
+      # Left blank, PingMe AI is not shown.
+      - key: GEMINI_API_KEY
+        sync: false
       # PORT is set by Render automatically; config/env.js reads it.

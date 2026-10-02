@@ -21,6 +21,7 @@ test('the home page explains PingMe and leads to sign up and log in', async ({ p
 
   // It only claims what PingMe really does.
   await expect(page.getByText(/video call|voice call|end-to-end/i)).toHaveCount(0)
+  await expect(page.getByRole('heading', { name: 'PingMe AI, built in' })).toBeAttached()
 
   // The header links jump to their section.
   await page.getByRole('navigation', { name: 'Sections' }).getByRole('link', { name: 'Privacy' }).click()

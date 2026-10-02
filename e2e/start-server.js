@@ -22,6 +22,12 @@ process.env.E2E_DISABLE_RATE_LIMITS = 'true'
 // on the Google button, breaking specs that assume it is off.
 process.env.GOOGLE_CLIENT_ID = ''
 process.env.GOOGLE_CLIENT_SECRET = ''
+// PingMe AI talks to a FAKE Gemini here (see fakeGemini.js) - and this
+// placeholder key also means a real GEMINI_API_KEY in server/.env can never
+// be picked up by the tests.
+process.env.GEMINI_API_KEY = 'e2e-fake-key'
+const { installFakeGemini } = await import('./fakeGemini.js')
+installFakeGemini()
 
 // Imported only now, because config/env.js validates process.env on load.
 await import('../server/src/server.js')

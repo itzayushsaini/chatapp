@@ -297,7 +297,7 @@ function ReplyPreview({ target, myId, friendName, onCancel }) {
 }
 
 // The file waiting to be sent, shown above the input with a Remove button.
-function ChosenFile({ file, onRemove }) {
+export function ChosenFile({ file, onRemove }) {
   const kind = kindOf(file)
   const [previewUrl, setPreviewUrl] = useState(null)
 

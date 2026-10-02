@@ -46,12 +46,22 @@ they **accept**. Privacy is enforced on the server, not just hidden in the UI.
   open/closed, allowed sign-up email domains, attachments, forwarding, the
   delete-for-everyone time limit, and a site-wide announcement banner - all
   editable without a code change or a redeploy
+- **PingMe AI** (like Meta AI in WhatsApp), powered by Google Gemini: a
+  private assistant chat pinned at the top of Chats. Answers stream in as
+  they are written, with formatting (lists, tables, code) and a "Show
+  reasoning" view; "Think deeper" for harder questions; it reads photos,
+  PDFs, text files, videos and voice notes; forward it any message from a
+  chat; Stop, Try again and Clear chat; picture creation ("Imagine") for
+  servers on a paid Gemini plan. A daily limit per person, set by the admin
+- A pinned, read-only **"PingMe" updates channel** where admins announce new
+  features
 
 ## Tech stack
 
 | Layer | Choice |
 |---|---|
 | Server | Node.js, Express 5, Mongoose, Socket.IO 4, zod, multer |
+| AI | Google Gemini (`gemini-3.8-flash`) via the official `@google/genai` SDK |
 | Database | MongoDB (files in GridFS) |
 | Client | React 19, Vite, Tailwind CSS 4, React Router, zustand, axios |
 | Auth | JWT in an httpOnly cookie, bcryptjs password hashing |
@@ -146,7 +156,9 @@ process. Running two or more instances behind a load balancer would need:
 1. the **Socket.IO Redis adapter**, so an event emitted on one instance reaches
    clients connected to another, and
 2. a **shared presence store** (Redis), because each instance would otherwise
-   only know about its own connections.
+   only know about its own connections - and the same for PingMe AI's "one
+   answer at a time per user" lock and its Stop button, which are kept in
+   the same process's memory.
 
 Neither is needed for this project, which runs as one service.
 

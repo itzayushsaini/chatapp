@@ -76,6 +76,15 @@ export const uploadLimiter = limiter({
   perUser: true,
 })
 
+// Per user: questions to PingMe AI. The admin's daily limit is the real cap;
+// this only stops a script from firing a burst of questions.
+export const aiLimiter = limiter({
+  windowMs: 10 * 60 * 1000,
+  limit: 30,
+  message: 'Too many PingMe AI requests, please slow down',
+  perUser: true,
+})
+
 // Per user: admin actions (settings changes, suspend/unsuspend/delete).
 // requireAdmin is the real gate - this just stops a mis-click loop or a
 // runaway script from hammering the database, generous since there is

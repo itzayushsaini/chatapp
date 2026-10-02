@@ -1,4 +1,5 @@
 import { Setting } from '../models/Setting.js'
+import { isConfigured as isAiConfigured } from './geminiClient.js'
 import { emitToAll } from '../socket/emitter.js'
 
 const SINGLETON_KEY = 'singleton'
@@ -34,6 +35,12 @@ export function adminSettingsView(settings) {
     forwardingEnabled: settings.forwardingEnabled,
     deleteForEveryoneWindowMinutes: settings.deleteForEveryoneWindowMinutes,
     announcement: { enabled: settings.announcement.enabled, text: settings.announcement.text },
+    aiEnabled: settings.aiEnabled,
+    aiDailyLimit: settings.aiDailyLimit,
+    aiImageGenerationEnabled: settings.aiImageGenerationEnabled,
+    // Read-only: whether the server has a GEMINI_API_KEY at all. Without
+    // one, PingMe AI stays hidden whatever the switch above says.
+    aiConfigured: isAiConfigured(),
   }
 }
 
@@ -55,6 +62,11 @@ export async function updateSettings(patch) {
       settings.announcement.enabled = patch.announcement.enabled
     }
     if (typeof patch.announcement.text === 'string') settings.announcement.text = patch.announcement.text
+  }
+  if (typeof patch.aiEnabled === 'boolean') settings.aiEnabled = patch.aiEnabled
+  if (patch.aiDailyLimit) settings.aiDailyLimit = patch.aiDailyLimit
+  if (typeof patch.aiImageGenerationEnabled === 'boolean') {
+    settings.aiImageGenerationEnabled = patch.aiImageGenerationEnabled
   }
 
   await settings.save()

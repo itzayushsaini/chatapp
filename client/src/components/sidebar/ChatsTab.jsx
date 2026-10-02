@@ -9,14 +9,18 @@ import Button from '../common/Button.jsx'
 import { AlertIcon, BellOffIcon, CheckIcon, CopyIcon, UserPlusIcon } from '../common/Icons.jsx'
 import Skeleton from '../common/Skeleton.jsx'
 import TypingDots from '../common/TypingDots.jsx'
+import AiRow from '../ai/AiRow.jsx'
 import UpdatesRow from '../updates/UpdatesRow.jsx'
 
-// The pinned "PingMe" updates row always comes first - even while friends
-// are loading, and even when you have none yet.
+// The two pinned rows always come first - PingMe AI (while it is available)
+// and the "PingMe" updates channel - even while friends are loading, and
+// even when you have none yet.
 export default function ChatsTab() {
+  const aiAvailable = useChatStore((s) => s.ai.available)
   return (
     <>
-      <div className="border-b border-slate-100">
+      <div className="divide-y divide-slate-100 border-b border-slate-100">
+        {aiAvailable && <AiRow />}
         <UpdatesRow />
       </div>
       <FriendsList />

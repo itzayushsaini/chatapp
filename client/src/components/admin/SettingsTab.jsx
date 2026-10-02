@@ -143,6 +143,41 @@ export default function SettingsTab() {
       </section>
 
       <section className="space-y-3 rounded-xl border border-slate-200 bg-surface p-5">
+        <h2 className="font-semibold text-slate-900">PingMe AI</h2>
+        {!form.aiConfigured && (
+          <p className="rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-800">
+            This server has no GEMINI_API_KEY, so PingMe AI is hidden from everyone until one is added.
+          </p>
+        )}
+        <Toggle label="PingMe AI chat" checked={form.aiEnabled} onChange={(v) => set({ aiEnabled: v })} />
+        <div>
+          <label htmlFor="aiDailyLimit" className="mb-1.5 block text-sm font-medium text-slate-700">
+            Messages per person per day
+          </label>
+          <input
+            id="aiDailyLimit"
+            type="number"
+            min={1}
+            max={1000}
+            value={form.aiDailyLimit}
+            onChange={(e) => set({ aiDailyLimit: Number(e.target.value) })}
+            className="block w-32 rounded-lg border border-slate-300 bg-surface px-3 py-2 text-sm text-slate-900 focus:border-brand-500 focus:ring-2 focus:ring-brand-500/30 focus:outline-none"
+          />
+          <p className="mt-1 text-xs text-slate-500">
+            Gemini's free plan has a daily limit for the whole app, so one person must not use it all up.
+          </p>
+        </div>
+        <Toggle
+          label='Creating pictures ("Imagine")'
+          checked={form.aiImageGenerationEnabled}
+          onChange={(v) => set({ aiImageGenerationEnabled: v })}
+        />
+        <p className="-mt-1 text-xs text-slate-500">
+          Needs a paid Gemini plan - on the free plan every attempt fails with a message saying so.
+        </p>
+      </section>
+
+      <section className="space-y-3 rounded-xl border border-slate-200 bg-surface p-5">
         <h2 className="font-semibold text-slate-900">Announcement banner</h2>
         <Toggle
           label="Show a banner to everyone"

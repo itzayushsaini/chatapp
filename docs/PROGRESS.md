@@ -2,7 +2,7 @@
 
 A new session should be able to read this file and carry on from it.
 
-Last updated: 2026-10-02 (Phase 20: PingMe updates channel - done and committed. Next: Phase 21, PingMe AI with Google Gemini - agreed in principle: `gemini-3.8-flash` free tier, `@google/genai`, key in `GEMINI_API_KEY`; plan to be shown before coding)
+Last updated: 2026-10-02 (Phase 21: PingMe AI with Google Gemini - built and tested, waiting for the team's manual check before it is committed)
 
 ---
 
@@ -31,7 +31,32 @@ Last updated: 2026-10-02 (Phase 20: PingMe updates channel - done and committed.
 | 18 | Voice notes: record (tap to start, swipe left / trash / Escape to cancel, 5-minute limit), send as an `audio` attachment, waveform player with seeking and 1× / 1.5× / 2× speed, "Voice messages" in Contact info | **Done** |
 | 19 | Public home page at `/` for logged-out visitors: hero with an animated chat preview, highlights, 12 features, how it works, privacy and security, FAQ, call to action, footer - CSS-only motion, dark mode, phone to desktop | **Done** |
 | 20 | "PingMe" updates channel (like WhatsApp's own chat): a pinned, read-only chat at the top of everyone's Chats list; admins post text and/or a photo from a new Admin "Updates" tab; live delivery, unread badge, notification; forward-only read pointer per user | **Done** |
-| 21 | PingMe AI (like Meta AI) with Google Gemini | **Next** - planned, not started |
+| 21 | PingMe AI (like Meta AI) with Google Gemini: a private assistant chat pinned at the top of Chats - streamed answers with Markdown, reasoning summaries ("Show reasoning"), "Think deeper", photo / PDF / text / video / voice-note questions, forwarding a chat message to it, Stop, Try again, Clear chat; picture creation ("Imagine") built but off by default (paid plans only); admin switch, daily limit per person and a stat | **Done** (code + tests) - not committed yet |
+
+**Verification (2026-10-02, after Phase 21):** `npm test` 364/364 (46 new in
+`ai.test.js` with `geminiClient.js` replaced by a fake: availability without
+a key / switched off, the 202 + background answer, memory of the last 20
+messages, "Think deeper", truncated answers, validation, idempotent
+`clientId`, one answer at a time (409), paging, privacy between users,
+files sent as real bytes and owner-only downloads, voice notes, refused
+types, the 10 MB limit, only the newest 3 files as bytes, Stop, every error
+reason, a bug logged, Try again, startup recovery, the daily limit (and
+failed answers not counting, and no upload when over it), Clear chat,
+forwarding (text, a shared photo kept on clear, 404 / 400 / 403), Imagine
+(off by default, a created picture, changing a photo, free-plan message),
+admin settings / stats / account delete, and the live `ai:*` events reaching
+only my own tabs; 15 new in `geminiClient.test.js` with Google's SDK faked:
+streaming with reasoning, LOW / HIGH thinking, falling back to the second
+model, the third try after a pause, a stream cut off half-way starting
+again, error mapping (key, bad request, network, busy), blocked, empty,
+truncated, Stop, and `createImage`), `npm run test:e2e` 33/33 (4 new in
+`ai.spec.js` against a fake Gemini - `e2e/fakeGemini.js`), lint clean, build
+succeeds. Also run for real against Gemini with the team's key on an
+isolated server (in-memory database, never the live one): text with "Think
+deeper" (answer with a table and reasoning in 5-25 s), a photo question,
+dark mode on a phone (no sideways overflow). That run found two things that
+were then fixed: a stream Google cuts off half-way is now retried too, and
+table columns no longer break words in half.
 
 **Verification (2026-10-02, after Phase 20):** `npm test` 303/303 (20 new in
 `updates.test.js`: admin-only posting with no file received from anyone
@@ -518,6 +543,38 @@ cleanly, so one commit "Phases 1-9: complete ChatApp (later renamed PingMe)" is 
   `e2e/start-server.js` promotes accounts named `admin_e2e...` to admin (test
   server only - production has no such path).
 
+### Phase 21 additions (PingMe AI)
+- Dependency: `@google/genai` (server workspace) - Google's official SDK.
+- Server: `models/AiMessage.js`; `services/geminiClient.js` (the only file
+  that talks to Google: streaming, thinking levels, the fallback model and
+  retry, `AiError` reasons, `createImage`); `services/aiService.js` (limits,
+  the one-answer-at-a-time slot, saving, background answering, history for
+  Gemini, files, forward, retry, stop, clear, startup recovery);
+  `controllers/ai.controller.js`, `routes/ai.routes.js` (`/api/ai/...`);
+  `aiLimiter`; three `Setting` fields + admin validation + `aiConfigured`;
+  `aiAnswersToday` stat; account delete clears the AI chat;
+  `storageService.readFile`; `utils/fileName.js` (shared with chat uploads);
+  `voiceNoteFields` moved to `middleware/upload.js` (shared);
+  `server.js` runs `recoverInterrupted()` at startup; four `GEMINI_*`
+  variables in `config/env.js`.
+- Client: `api/ai.js`; the `ai` slice and `AI_CHAT_ID` in the store;
+  `components/ai/` (`AiRow`, `AiChat`, `AiBubble`, `AiComposer`, `AiAvatar`,
+  `Markdown`); `ChatsTab` pins PingMe AI first; `ChatPage` opens it; four
+  listeners in `useSocketEvents` (+ reconnect refetch, notification);
+  `LoggedInLayout` loads the summary; `ForwardDialog` offers PingMe AI;
+  admin Settings "PingMe AI" section and an Overview card; `checkAiFile` /
+  `AI_ACCEPT` in `utils/files.js`; `Attachment`, `UploadProgress` and
+  `ChosenFile` exported for reuse; icons `SparklesIcon`, `LightbulbIcon`,
+  `StopIcon`, `RefreshIcon`.
+- Tests: `server/tests/ai.test.js`, `server/tests/geminiClient.test.js`
+  (`tests/setup.js` now also deletes `GEMINI_API_KEY`); `e2e/ai.spec.js`,
+  `e2e/fakeGemini.js` (installed by `e2e/start-server.js`, which also sets a
+  placeholder key so a real one in `server/.env` is never used).
+- Home page: a wide "PingMe AI, built in" card leads the features grid, and
+  a "What is PingMe AI?" FAQ (`landing.spec.js` checks the card).
+- Docs/config: `server/.env.example`, `render.yaml`, `docs/DEPLOY.md`
+  section 1.7, README.
+
 ### Tests and deployment
 - `server/tests/` - `health`, `auth`, `rateLimits`, `friends`,
   `conversations`, `socket` + `setup.js`, `helpers.js`
@@ -731,6 +788,30 @@ cleanly, so one commit "Phases 1-9: complete ChatApp (later renamed PingMe)" is 
 45. **Enter-to-send and notifications are per-device settings** (this
     browser only), because they depend on the keyboard/device, while theme is
     per-account.
+46. **PingMe AI uses Google's SDK (`@google/genai`)** - unlike Brevo and
+    Google sign-in, which use plain `fetch`. Streaming, thought summaries and
+    file input have enough detail that the official SDK is the safer choice;
+    it is kept behind one file (`geminiClient.js`) so it is still easy to
+    explain and to replace.
+47. **Stateless requests with the history from MongoDB**, not Gemini's
+    server-side "interactions" memory: our database stays the single source
+    of truth (clear chat, account delete and admin rules all just work), at
+    the cost of sending the last 20 messages each time.
+48. **A question goes over REST, the answer over the socket.** A question can
+    carry a 10 MB file (like chat uploads); the answer *happens* over time.
+    Socket events go to the user's own room, so every open tab sees the
+    answer being written.
+49. **Each `ai:delta` carries the whole answer so far**, not just the new
+    piece: a tab that missed one event is correct again at the next, with no
+    "offset" bookkeeping. Answers are at most a few tens of kB, so the extra
+    bytes do not matter.
+50. **Defaults chosen with the team (2026-10-02):** picture creation built
+    but switched off (paid-only), no web search (paid-only), forwarding a
+    chat message to PingMe AI included, 50 answers per person per day.
+51. **A failed answer does not use up the daily limit** - the limit counts
+    answers that are not `error`, so a busy Gemini never costs the user.
+52. **"Think deeper" stays on until switched off** (like a mode), and so
+    does "Imagine" - they are chips above the box, not per-message buttons.
 
 ---
 
@@ -827,6 +908,31 @@ cleanly, so one commit "Phases 1-9: complete ChatApp (later renamed PingMe)" is 
 24. **Updates are text and one photo only** - no links that open, no video,
     no reactions or replies (it is read-only, like WhatsApp's own chat).
     A URL in a post is shown as plain text.
+25. **Gemini's free tier is often overloaded.** During testing on 2026-10-02
+    the main model answered 503 "high demand" several times (once only
+    after 35 s). The app tries the fallback model, then the main one again
+    after 2 s, and only then shows "PingMe AI is busy right now" with Try
+    again - so an answer can take up to about a minute and a half in the
+    worst case. A paid plan, or a less busy `GEMINI_MODEL`, would help.
+26. **On the free tier Google may use what people send to PingMe AI to
+    improve its products.** Every user is told so under the chat. Fine for
+    a college project; a real product would use a paid plan.
+27. **Picture creation ("Imagine") has only been tested against fakes** - the
+    team's free key has no image quota (Google answers 429 "limit: 0", which
+    the app turns into a clear message). Try it once on a paid key before
+    switching it on.
+28. **One answer at a time, and Stop, rely on the server's memory** (like
+    presence) - another reason the app runs as one instance. A restart in
+    the middle of an answer marks it failed, with Try again.
+29. **The client-side "messages left today" can be off by one or two** until
+    the summary is fetched again (opening the chat, or a reconnect) - the
+    server's count is the real limit.
+30. **Gemini can be wrong** (it says so under the chat) and does not know
+    about very recent events - there is no web search (a paid feature).
+31. **The Markdown renderer covers what Gemini writes** (headings, bold,
+    italic, strikethrough, inline code, code blocks, lists with nesting,
+    tables, quotes, links, rules) - not every corner of Markdown; anything
+    else simply shows as typed. Maths formulas (LaTeX) are not rendered.
 
 ---
 
@@ -964,9 +1070,9 @@ really is Reply. Confirmed it fails on the pre-fix code and passes after.
 ## How to verify everything
 
 1. `npm install`
-2. `npm test` - 261 pass
+2. `npm test` - 364 pass
 3. `npm run lint` - no errors
-4. `npx playwright install chromium` (once), then `npm run test:e2e` - 16 pass
+4. `npx playwright install chromium` (once), then `npm run test:e2e` - 33 pass
 5. `cp server/.env.example server/.env`, fill in `MONGO_URI` and `JWT_SECRET`
 6. `npm run seed`, then `npm run dev`, open <http://localhost:5173>
 7. `npm run make-admin -- aman` to try the admin panel, then log in as `aman`

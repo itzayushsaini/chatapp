@@ -42,6 +42,24 @@ export function checkFile(file) {
   return null
 }
 
+// PingMe AI reads fewer kinds of file than a chat accepts (Gemini cannot
+// read GIFs or Office documents), all up to 10 MB. Again only a quick check
+// - the server looks at the real bytes.
+const AI_EXTENSIONS = ['jpg', 'jpeg', 'png', 'webp', 'pdf', 'txt', 'mp4', 'webm', 'mov']
+const AI_MAX_BYTES = 10 * MB
+
+export const AI_ACCEPT = AI_EXTENSIONS.map((ext) => `.${ext}`).join(',')
+export const AI_IMAGE_ACCEPT = '.jpg,.jpeg,.png,.webp'
+
+export function checkAiFile(file) {
+  if (!AI_EXTENSIONS.includes(extensionOf(file.name))) {
+    return 'PingMe AI can read photos (JPEG, PNG, WebP), PDFs, text files and videos'
+  }
+  if (file.size > AI_MAX_BYTES) return 'Files for PingMe AI can be at most 10 MB'
+  if (file.size === 0) return 'This file is empty'
+  return null
+}
+
 // 1536 -> "1.5 KB", 5242880 -> "5.0 MB"
 export function formatBytes(bytes) {
   if (bytes < 1024) return `${bytes} B`

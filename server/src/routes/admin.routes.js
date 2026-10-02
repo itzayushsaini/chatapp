@@ -29,6 +29,9 @@ const settingsSchema = z.object({
       text: z.string().trim().max(200, 'must be at most 200 characters').optional(),
     })
     .optional(),
+  aiEnabled: z.boolean().optional(),
+  aiDailyLimit: z.coerce.number().int().min(1).max(1000).optional(),
+  aiImageGenerationEnabled: z.boolean().optional(),
 })
 
 const userIdParams = validate({ params: z.object({ userId: objectId }) })

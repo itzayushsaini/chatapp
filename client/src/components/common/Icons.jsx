@@ -271,6 +271,31 @@ export const ImageIcon = (p) => (
     <path d="m21 15-5-5L5 21" />
   </Icon>
 )
+export const SparklesIcon = (p) => (
+  <Icon {...p}>
+    <path d="M9.9 15.5a2 2 0 0 0-1.4-1.4l-6.1-1.6a.5.5 0 0 1 0-1l6.1-1.6a2 2 0 0 0 1.4-1.4l1.6-6.1a.5.5 0 0 1 1 0l1.6 6.1a2 2 0 0 0 1.4 1.4l6.1 1.6a.5.5 0 0 1 0 1l-6.1 1.6a2 2 0 0 0-1.4 1.4l-1.6 6.1a.5.5 0 0 1-1 0Z" />
+    <path d="M20 3v4" />
+    <path d="M22 5h-4" />
+  </Icon>
+)
+export const LightbulbIcon = (p) => (
+  <Icon {...p}>
+    <path d="M15 14c.2-1 .7-1.7 1.5-2.5 1-.9 1.5-2.2 1.5-3.5A6 6 0 0 0 6 8c0 1 .2 2.2 1.5 3.5.7.7 1.3 1.5 1.5 2.5" />
+    <path d="M9 18h6" />
+    <path d="M10 22h4" />
+  </Icon>
+)
+export const StopIcon = (p) => (
+  <Icon {...p}>
+    <rect x="6" y="6" width="12" height="12" rx="2" fill="currentColor" />
+  </Icon>
+)
+export const RefreshIcon = (p) => (
+  <Icon {...p}>
+    <path d="M21 12a9 9 0 1 1-2.6-6.4L21 8" />
+    <path d="M21 3v5h-5" />
+  </Icon>
+)
 export const SmartphoneIcon = (p) => (
   <Icon {...p}>
     <rect x="6" y="2" width="12" height="20" rx="2" />

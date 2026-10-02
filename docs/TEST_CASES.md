@@ -7,9 +7,10 @@ Kept up to date at the end of every phase.
 - **Manual** cases are the ones a person checks in the browser. Fill in the
   Actual and Result columns when you run them.
 
-Last full run: 2026-10-02 (after Phase 20 - PingMe updates channel) - **303/303
-server tests pass, 29/29 end-to-end tests pass, lint clean in both workspaces, `npm run build`
-succeeds.**
+Last full run: 2026-10-02 (after Phase 21 - PingMe AI) - **364/364
+server tests pass, 33/33 end-to-end tests pass, lint clean in both workspaces, `npm run build`
+succeeds.** No automated test ever calls Google: `npm test` fakes
+`geminiClient.js` (or Google's SDK), and the e2e server uses `e2e/fakeGemini.js`.
 
 ---
 
@@ -346,6 +347,71 @@ that answers the token and profile requests.
 | A20.18 | Non-admin deletes | 403, the post is kept |
 | A20.19 | Two connected users; admin posts, then deletes | Both get `update:new { update }`, then `update:deleted { id }` |
 | A20.20 | I mark read (twice) with another user connected | My other tab gets `updates:read { upToId }` once; the other user gets nothing; the repeat sends nothing |
+
+### Phase 21 - PingMe AI (`ai.test.js`, with `geminiClient.js` faked)
+
+| ID | Case | Expected |
+|---|---|---|
+| A21.1 | Summary / ask with no session | 401 |
+| A21.2 | Summary for a new user | `{ available: true, imageGeneration: false, dailyLimit: 50, usedToday: 0, latest: null }` |
+| A21.3 | No API key on the server | `available: false`; asking → 503; Gemini never called |
+| A21.4 | Admin switched PingMe AI off | `available: false`; asking → 503 |
+| A21.5 | Ask `"  Hi PingMe AI  "` | 202 `{ question (trimmed, done), answer (empty, streaming) }`; the answer becomes `done` with the text and reasoning; Gemini got exactly that one question, the PingMe AI system instruction, LOW thinking |
+| A21.6 | Two questions in a row | The second request carries question 1, answer 1, question 2 |
+| A21.7 | 24 old messages, then a new question | 19 messages sent: the last 20 minus a leading answer, starting with a question |
+| A21.8 | `mode: 'think'` | The question is labelled `think`; Gemini asked to think deeper |
+| A21.9 | Gemini stops at the length limit | The answer is kept, with "*(The answer was cut short…)*" |
+| A21.10 | Empty text and no file / 4001 characters / bad clientId / unknown mode / `{ $gt: '' }` | 400 each; Gemini never called |
+| A21.11 | The same clientId twice | Same question and answer back (202); Gemini called once; 2 documents |
+| A21.12 | Ask while it is still answering | 409 "still answering"; works again once done |
+| A21.13 | History `limit=2`, then `before=` | Newest page oldest → newest with `hasMore: true`, then the older one with `hasMore: false` |
+| A21.14 | Another user's history / summary | Empty / `latest: null` - never someone else's chat |
+| A21.15 | A photo with a question | `attachment { name, mimeType: image/png, kind: image, url: /api/ai/files/:id }`; Gemini got the real bytes (`inlineData`) then the text; owner downloads it (`image/png`, inline); another user 404 |
+| A21.16 | A voice note on its own (`durationMs`, `waveform`) | 202, `kind: audio` with length and waveform; sent to Gemini as `audio/webm` |
+| A21.17 | A PDF and a .txt | 202; the PDF downloads (`Content-Disposition: attachment`) |
+| A21.18 | A GIF, a .docx, an HTML file | 400 "PingMe AI can read…"; nothing saved |
+| A21.19 | A file of 10 MB + 1 byte | 413 |
+| A21.20 | Four photo questions | Only the newest 3 go in as bytes; the oldest becomes "[The user sent a photo here…]" |
+| A21.21 | Stop while it is answering | 204; the answer is `stopped` with the text that had arrived; stopping again is harmless |
+| A21.22 | Gemini fails: busy / blocked / config / bad_request / empty | The answer is `error` with "busy right now" / "can't help with that" / "isn't set up correctly" / "couldn't read that" / "didn't come up with an answer"; text empty |
+| A21.23 | A bug in our own code | Logged; the answer says "Something went wrong…" |
+| A21.24 | Try again after a failed answer | 202; the SAME answer id goes streaming → done; Gemini asked the same question |
+| A21.25 | Try again with nothing failed | 400 |
+| A21.26 | An answer left `streaming` (server restart) | `recoverInterrupted()` → 1; it is now `error` "…interrupted…" |
+| A21.27 | Daily limit 2: three questions | Third → 429 "today's 2 PingMe AI messages"; `usedToday: 2` |
+| A21.28 | Daily limit 1, the first answer failed | A second question is still allowed |
+| A21.29 | An answer from 25 hours ago, limit 1 | Allowed - only the last 24 hours count |
+| A21.30 | Over the limit, with a file | 429, and no file is stored |
+| A21.31 | Clear chat | 204; my messages and my files are gone; another user's AI chat is untouched |
+| A21.32 | Forward a friend's text message | 202, `forwarded: true`; Gemini told it was forwarded |
+| A21.33 | Forward a friend's photo, then clear the AI chat | The photo is shared (downloadable from the AI chat); after clearing, the chat's own file still exists and downloads |
+| A21.34 | Forward from a chat I am not in / a message deleted for everyone | 404 / 400 |
+| A21.35 | Forward a .zip / with forwarding switched off | 400 / 403 |
+| A21.36 | "Imagine" with the switch off (default) | 403; summary `imageGeneration: false` |
+| A21.37 | "Imagine" switched on | The answer has the created picture (`image/png`, downloadable) and its text; the image model got the prompt |
+| A21.38 | "Imagine" with no description / with a PDF / changing my photo | 400 / 400 / the image model gets my photo's bytes |
+| A21.39 | "Imagine" on a free plan | "isn't available on this server's Gemini plan" |
+| A21.40 | Admin settings | Include `aiEnabled`, `aiDailyLimit`, `aiImageGenerationEnabled`, `aiConfigured`; can be changed; limit 0 or 1001 → 400 |
+| A21.41 | Admin stats, then deleting an account | `aiAnswersToday: 1`; after the delete, its AI messages and files are gone |
+| A21.42 | Live events, two users connected | My tab gets `ai:new` (question + answer), two `ai:delta` (each with the WHOLE text so far), `ai:done`, then `ai:cleared` after a clear; the other user gets none |
+
+### Phase 21 - talking to Google (`geminiClient.test.js`, Google's SDK faked)
+
+| ID | Case | Expected |
+|---|---|---|
+| A21.43 | A streamed answer with a thought part | `{ text, reasoning, truncated: false }`; every update has the WHOLE text and reasoning so far |
+| A21.44 | Normal vs "Think deeper" | `thinkingLevel` LOW / HIGH, `includeThoughts: true`, the system instruction passed |
+| A21.45 | Main model 503 | The fallback model answers; a warning with `(503)` is logged |
+| A21.46 | Main 503, fallback 429 | After the 2 s pause the main model is tried a third time and answers |
+| A21.47 | Always 503 | AiError `busy` after the third try |
+| A21.48 | 400 "API key not valid" / 403 / 400 other | `config` / `config` / `bad_request`, with no retry |
+| A21.49 | The stream is cut off half-way | The fallback starts the answer again: updates go "Half an ans" → empty → the whole answer |
+| A21.50 | A network error (no HTTP status) every time | Tried 3 times, then `busy` |
+| A21.51 | `blockReason`, or finish reason SAFETY | `blocked` |
+| A21.52 | Only thoughts (MAX_TOKENS) / text cut at MAX_TOKENS | `empty` / `truncated: true` |
+| A21.53 | Stop (aborted signal) | The abort error is passed on as-is, not an AiError |
+| A21.54 | `createImage` with a photo | The image model gets the photo then the prompt, `responseModalities: [TEXT, IMAGE]`; returns the picture and text |
+| A21.55 | `createImage` on a free plan / with no picture back | `unavailable` / `no_image` |
 ---
 
 ## Automated - end-to-end (`npm run test:e2e`)
@@ -390,6 +456,10 @@ email provider configured.
 | E27 | Home page in dark mode | `data-theme="dark"` and the page background is the dark theme's `#0b141a` |
 | E28 | Updates channel end to end (`e2e/updates.spec.js`) | The pinned "PingMe" row is there for a brand-new user with no friends. A real admin (`admin_e2e…`, promoted by the test server) posts text + a photo from Admin → Updates; the other user, already online, sees the preview and "1 unread" live and the tab title `(1) PingMe`; opening the channel shows the post and its decoded photo, "Only PingMe can send messages here", no message box; the badge and title clear and stay cleared after a reload; the admin deletes it and the row falls back to its default text live |
 | E29 | Non-admin and the admin API | No Admin link; `POST /api/admin/updates` → 403 |
+| E30 | PingMe AI: ask, stream, reasoning, memory (`e2e/ai.spec.js`, fake Gemini) | The "PingMe AI" row is pinned; the welcome screen and the privacy note show; a suggestion asks it; the answer shows real bold, a numbered list and a table; "Show reasoning" / "Hide reasoning"; a second question gets "I remember 2 earlier messages."; "Think deeper" is pressed and the question is labelled; after a reload the chat is still there and the row previews it; at 375 px nothing scrolls sideways |
+| E31 | Stop, Try again, Clear chat | Stop keeps "Once upon…" and "You stopped this answer."; a 503 on every model shows "busy right now" and Try again then answers; Clear chat (confirmed) brings back the welcome screen, also after a reload |
+| E32 | A photo, and a forwarded chat message | A photo question gets "I can see your file: image/png." and the photo shows; a friend's message forwarded to PingMe AI (Forward dialog → PingMe AI) appears labelled "Forwarded" and is answered |
+| E33 | "Imagine" | Hidden by default; an admin switches "Creating pictures" on; the user sees the chip, the placeholder changes, and the created picture appears and loads; switched off again afterwards |
 ---
 
 ## Manual
@@ -639,6 +709,31 @@ Google cases need `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` set (see
 | M20.6 | Photo full size | Click a post's photo | Opens in a dialog; Escape closes it | | |
 | M20.7 | Delete | Admin deletes a post (confirm) | It disappears for everyone, live | Automated (E28) | Pass |
 | M20.8 | Phone and dark mode | Open the channel on a phone, and with the Dark theme | Fits the screen, back button returns to the list; dark colours | Checked visually | Pass |
+
+### Phase 21 - PingMe AI (needs `GEMINI_API_KEY` in `server/.env`)
+
+| ID | Scenario | Steps | Expected | Actual | Result |
+|---|---|---|---|---|---|
+| M21.1 | Pinned row | Log in | "PingMe AI" is the first row in Chats, above "PingMe ✓" | Checked on an isolated server with the real key | Pass |
+| M21.2 | A real answer | Open PingMe AI → ask "Make a 3-day study plan for DBMS, OS and DSA as a table" | "Thinking…", then the answer streams in with a real table; the row shows "thinking…" meanwhile | Real Gemini: table + reasoning, 5-25 s | Pass |
+| M21.3 | Show reasoning | On an answer with reasoning, click "Show reasoning" | The thought summary opens in grey; "Hide reasoning" closes it | Real Gemini | Pass |
+| M21.4 | Think deeper | Switch on "Think deeper", ask a maths or planning question | The question is labelled "Think deeper"; the answer takes longer and usually has reasoning | Real Gemini | Pass |
+| M21.5 | Memory | Say "My name is Riya", then ask "What is my name?" | It answers "Riya" | | |
+| M21.6 | Photo | 📎 a photo of notes or a board → "What is written here?" | It reads the photo | Real Gemini (a poster) | Pass |
+| M21.7 | Voice question | With nothing typed, tap 🎤, ask a question aloud, Send | A voice bubble; the answer replies to what you said | | |
+| M21.8 | PDF | 📎 a PDF → "Summarise this" | A summary of the PDF | | |
+| M21.9 | Forward to PingMe AI | In a friend chat: message actions → Forward → tick PingMe AI → Forward | "Message forwarded"; in PingMe AI it is labelled Forwarded and answered | Automated (E32, fake) | Pass |
+| M21.10 | Stop | Ask "Write a long story", press the square Stop button | It stops; what was written stays; "You stopped this answer." | Automated (E31, fake) | |
+| M21.11 | Busy / Try again | (Happens by itself at busy times) | "PingMe AI is busy right now…" with Try again, which answers | Seen with the real key at a busy time | Pass |
+| M21.12 | Copy | Click the copy icon under an answer / "Copy code" on a code block | "Copied" | | |
+| M21.13 | Another tab | Have PingMe AI open in two tabs; ask in one | The other tab shows the same answer being written | | |
+| M21.14 | Notification | Ask, then open a friend chat before it finishes | A "PingMe AI" notification when the answer is ready; clicking it opens PingMe AI | | |
+| M21.15 | Daily limit | Admin → Settings → Messages per person per day = 2; ask 3 questions | "2 PingMe AI messages left today" etc.; the third → "You have used today's 2 PingMe AI messages…" | Automated (A21.27) | |
+| M21.16 | Switched off | Admin → Settings → untick "PingMe AI chat" → Save; reload as a user | The row is gone; an open chat says "PingMe AI is turned off right now" | | |
+| M21.17 | No key | Remove `GEMINI_API_KEY`, restart | The row is gone; Admin → Settings warns "This server has no GEMINI_API_KEY…" | Automated (A21.3) | |
+| M21.18 | Clear chat | 🗑 in the PingMe AI header → Clear chat | Everything gone, on all your tabs; the welcome screen is back | Automated (E31, fake) | |
+| M21.19 | Phone and dark mode | Open PingMe AI on a phone with the Dark theme | Fits the screen; code blocks and tables readable; wide tables scroll inside the bubble | Real Gemini, iPhone size, dark | Pass |
+| M21.20 | Admin stat | Admin → Overview | "PingMe AI answers (24 h)" counts today's answers | Automated (A21.41) | |
 
 ### Phase 9 - deployment
 
