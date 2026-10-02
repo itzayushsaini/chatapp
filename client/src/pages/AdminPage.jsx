@@ -3,12 +3,14 @@ import { Link } from 'react-router'
 
 import OverviewTab from '../components/admin/OverviewTab.jsx'
 import SettingsTab from '../components/admin/SettingsTab.jsx'
+import UpdatesTab from '../components/admin/UpdatesTab.jsx'
 import UsersTab from '../components/admin/UsersTab.jsx'
 import { BackIcon } from '../components/common/Icons.jsx'
 
 const TABS = [
   { id: 'overview', label: 'Overview' },
   { id: 'users', label: 'Users' },
+  { id: 'updates', label: 'Updates' },
   { id: 'settings', label: 'Settings' },
 ]
 
@@ -62,6 +64,7 @@ export default function AdminPage() {
         <div className="mx-auto max-w-4xl px-4 py-6 sm:px-6">
           {tab === 'overview' && <OverviewTab />}
           {tab === 'users' && <UsersTab />}
+          {tab === 'updates' && <UpdatesTab />}
           {tab === 'settings' && <SettingsTab />}
         </div>
       </main>

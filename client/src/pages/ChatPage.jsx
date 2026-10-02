@@ -1,7 +1,8 @@
 import ChatWindow from '../components/chat/ChatWindow.jsx'
 import EmptyChat from '../components/chat/EmptyChat.jsx'
 import Sidebar from '../components/sidebar/Sidebar.jsx'
-import { useChatStore } from '../store/useChatStore.js'
+import UpdatesChannel from '../components/updates/UpdatesChannel.jsx'
+import { UPDATES_CHAT_ID, useChatStore } from '../store/useChatStore.js'
 
 // The sidebar and the open chat. The socket, its listeners, the banners and
 // the toasts live one level up, in LoggedInLayout.
@@ -16,7 +17,13 @@ export default function ChatPage() {
     <>
       <Sidebar className={`w-full md:flex md:w-80 lg:w-96 ${chatOpen ? 'hidden' : 'flex'}`} />
       <main className={`min-w-0 flex-1 md:flex ${chatOpen ? 'flex' : 'hidden'}`}>
-        {chatOpen ? <ChatWindow conversationId={activeConversationId} /> : <EmptyChat />}
+        {activeConversationId === UPDATES_CHAT_ID ? (
+          <UpdatesChannel />
+        ) : chatOpen ? (
+          <ChatWindow conversationId={activeConversationId} />
+        ) : (
+          <EmptyChat />
+        )}
       </main>
     </>
   )

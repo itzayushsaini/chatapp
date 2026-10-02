@@ -24,8 +24,8 @@ export default function LoggedInLayout() {
 // exists inside SocketProvider.
 function LiveShell() {
   const connection = useChatStore((s) => s.connection)
-  const totalUnread = useChatStore((s) =>
-    Object.values(s.unreadCounts).reduce((sum, count) => sum + count, 0),
+  const totalUnread = useChatStore(
+    (s) => Object.values(s.unreadCounts).reduce((sum, count) => sum + count, 0) + s.updates.unreadCount,
   )
 
   // All real-time listeners, registered once for the whole logged-in app.
@@ -33,9 +33,10 @@ function LiveShell() {
 
   // Initial data comes over REST; sockets then keep it up to date.
   useEffect(() => {
-    const { fetchFriends, fetchRequests } = useChatStore.getState()
+    const { fetchFriends, fetchRequests, fetchUpdatesSummary } = useChatStore.getState()
     fetchFriends()
     fetchRequests()
+    fetchUpdatesSummary() // the pinned "PingMe" row's preview and badge
   }, [])
 
   // "(3) PingMe" in the browser tab, so unread messages are visible even

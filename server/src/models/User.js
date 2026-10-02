@@ -57,6 +57,10 @@ const userSchema = new mongoose.Schema(
     resetPasswordTokenHash: { type: String, select: false, default: null },
     resetPasswordExpires: { type: Date, select: false, default: null },
     lastSeen: { type: Date },
+    // How far I have read the "PingMe" updates channel (an Update id), or
+    // null for nothing yet. One forward-only pointer instead of a flag on
+    // every post - the same idea as Conversation.lastRead.
+    updatesReadUpTo: { type: mongoose.Schema.Types.ObjectId, default: null },
     // Grants access to the admin panel. Never sent about anyone but myself
     // (see utils/publicUser.js) - other users have no reason to know it.
     isAdmin: { type: Boolean, default: false },

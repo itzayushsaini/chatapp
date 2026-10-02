@@ -26,6 +26,15 @@ process.env.GOOGLE_CLIENT_SECRET = ''
 // Imported only now, because config/env.js validates process.env on load.
 await import('../server/src/server.js')
 
+// Admin-only screens need a REAL admin, and the browser has no way to make
+// one (that is `npm run make-admin`, on purpose). So, in THIS test server
+// only, any account whose username starts with "admin_e2e" is promoted
+// shortly after it registers. Production code has nothing like this.
+const { User } = await import('../server/src/models/User.js')
+setInterval(() => {
+  User.updateMany({ username: /^admin_e2e/, isAdmin: false }, { isAdmin: true }).catch(() => {})
+}, 200)
+
 // server.js exits on SIGINT/SIGTERM; stop MongoDB along with it.
 process.on('exit', () => {
   mongod.stop().catch(() => {})

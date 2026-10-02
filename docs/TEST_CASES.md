@@ -7,8 +7,8 @@ Kept up to date at the end of every phase.
 - **Manual** cases are the ones a person checks in the browser. Fill in the
   Actual and Result columns when you run them.
 
-Last full run: 2026-09-28 (after Phase 19 - public home page) - **283/283
-server tests pass, 27/27 end-to-end tests pass, lint clean in both workspaces, `npm run build`
+Last full run: 2026-10-02 (after Phase 20 - PingMe updates channel) - **303/303
+server tests pass, 29/29 end-to-end tests pass, lint clean in both workspaces, `npm run build`
 succeeds.**
 
 ---
@@ -321,6 +321,31 @@ that answers the token and profile requests.
 | A18.13 | Voice note over 10 MB | 413, nothing stored |
 | A18.14 | Download a voice note | `Content-Type: audio/webm`, `Content-Disposition: inline` |
 | A18.15 | Forward a voice note | The copy keeps `durationMs` and `waveform` |
+
+### Phase 20 - PingMe updates channel (`updates.test.js`)
+
+| ID | Case | Expected |
+|---|---|---|
+| A20.1 | Post with no session / as a non-admin (with a photo attached) | 401 / 403, and no file is stored |
+| A20.2 | Admin posts text (with spaces around it) | 201 `{ update: { id, text, imageUrl: null, createdAt } }`, text trimmed, no `author` field |
+| A20.3 | Admin posts a JSON body `{ text }` | 201 - text-only posts need no multipart |
+| A20.4 | Admin posts text + photo, and photo only | 201 each; `imageUrl` = `/api/updates/:id/image`; two files stored |
+| A20.5 | Empty post (only spaces) | 400 `Write something or add a photo` |
+| A20.6 | Text of 1001 characters | 400 `text: must be at most 1000 characters` |
+| A20.7 | An SVG, and a PDF named photo.png | 400 `The photo must be a JPEG, PNG, WebP or GIF image`; nothing stored |
+| A20.8 | List / summary with no session | 401 |
+| A20.9 | 25 posts, then the page before the oldest | 20 newest, oldest → newest, `hasMore: true`; then the other 5, `hasMore: false` |
+| A20.10 | `before=nope` | 400 |
+| A20.11 | Another user downloads a post's photo | 200, `image/png`, `inline`, `private, max-age=31536000, immutable`, identical bytes; 401 with no session |
+| A20.12 | Photo of a text-only post | 404 |
+| A20.13 | New user's summary, then marking the latest read, then a new post | `{ latest, unreadCount: 2 }` → 0 → 1 |
+| A20.14 | Mark read the newest, then an older post | The pointer stays at the newest - it only moves forward |
+| A20.15 | Summary when nothing was ever posted | `{ latest: null, unreadCount: 0 }` |
+| A20.16 | Mark read an unknown id / `{ $gt: '' }` | 404 / 400 |
+| A20.17 | Admin deletes a post with a photo | 204; post and photo gone; photo URL 404; summary's latest is the previous post; deleting again 404 |
+| A20.18 | Non-admin deletes | 403, the post is kept |
+| A20.19 | Two connected users; admin posts, then deletes | Both get `update:new { update }`, then `update:deleted { id }` |
+| A20.20 | I mark read (twice) with another user connected | My other tab gets `updates:read { upToId }` once; the other user gets nothing; the repeat sends nothing |
 ---
 
 ## Automated - end-to-end (`npm run test:e2e`)
@@ -328,7 +353,7 @@ that answers the token and profile requests.
 Files: `e2e/chat.spec.js`, `e2e/profile-attachments.spec.js`, `e2e/password.spec.js`,
 `e2e/readReceipts.spec.js`, `e2e/settings.spec.js`, `e2e/pageScroll.spec.js`,
 `e2e/voiceNotes.spec.js`, `e2e/adminNavigation.spec.js`, `e2e/mobileLayout.spec.js`,
-`e2e/landing.spec.js`. Run against the production build and server with
+`e2e/landing.spec.js`, `e2e/updates.spec.js`. Run against the production build and server with
 an in-memory database.
 Forgot/reset password's email-dependent half (does the link actually work) is
 covered at the server level instead - see A12.1-A12.8 - since e2e has no real
@@ -363,6 +388,8 @@ email provider configured.
 | E25 | Logged-in user at `/` | Still the chat, never the home page |
 | E26 | Home page on a 320px phone (touch) | No element outside the decorative parts reaches past either screen edge; Sign up is fully on screen |
 | E27 | Home page in dark mode | `data-theme="dark"` and the page background is the dark theme's `#0b141a` |
+| E28 | Updates channel end to end (`e2e/updates.spec.js`) | The pinned "PingMe" row is there for a brand-new user with no friends. A real admin (`admin_e2e…`, promoted by the test server) posts text + a photo from Admin → Updates; the other user, already online, sees the preview and "1 unread" live and the tab title `(1) PingMe`; opening the channel shows the post and its decoded photo, "Only PingMe can send messages here", no message box; the badge and title clear and stay cleared after a reload; the admin deletes it and the row falls back to its default text live |
+| E29 | Non-admin and the admin API | No Admin link; `POST /api/admin/updates` → 403 |
 ---
 
 ## Manual
@@ -599,6 +626,19 @@ Google cases need `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` set (see
 | M19.8 | Dark mode | Choose Dark in Settings, log out, open `/` | The home page is dark too (it uses the theme this browser remembers) | Checked visually | Pass |
 | M19.9 | Reduce motion | Turn on "Reduce motion" in the OS, reload | The same page, with no animation at all | | |
 | M19.10 | Link preview | Paste the live URL into WhatsApp/Telegram | Shows "PingMe - private real-time chat" and the description | | |
+
+### Phase 20 - PingMe updates channel
+
+| ID | Scenario | Steps | Expected | Actual | Result |
+|---|---|---|---|---|---|
+| M20.1 | Pinned row | Log in (any account, even with no friends) | "PingMe ✓" is the first row in Chats | Checked visually (isolated server) | Pass |
+| M20.2 | Post from the admin panel | Admin → Updates → write a text, add a photo → Post | "Posted - everyone can see it now."; it appears under Past updates | Automated (E28) | Pass |
+| M20.3 | Live arrival + notification | Another user has PingMe open in a background tab with notifications allowed; admin posts | Badge on the PingMe row, `(1) PingMe` in the tab title, a "PingMe" notification; clicking it opens the channel | | |
+| M20.4 | Reading clears the badge everywhere | Same user with two tabs open; open the channel in one | Both tabs' badges clear | | |
+| M20.5 | Read-only | Open the channel | No message box - "Only PingMe can send messages here" | Automated (E28) | Pass |
+| M20.6 | Photo full size | Click a post's photo | Opens in a dialog; Escape closes it | | |
+| M20.7 | Delete | Admin deletes a post (confirm) | It disappears for everyone, live | Automated (E28) | Pass |
+| M20.8 | Phone and dark mode | Open the channel on a phone, and with the Dark theme | Fits the screen, back button returns to the list; dark colours | Checked visually | Pass |
 
 ### Phase 9 - deployment
 

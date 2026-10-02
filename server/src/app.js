@@ -15,6 +15,7 @@ import authRoutes from './routes/auth.routes.js'
 import conversationsRoutes from './routes/conversations.routes.js'
 import friendsRoutes from './routes/friends.routes.js'
 import settingsRoutes from './routes/settings.routes.js'
+import updatesRoutes from './routes/updates.routes.js'
 import usersRoutes from './routes/users.routes.js'
 
 const thisDir = path.dirname(fileURLToPath(import.meta.url))
@@ -62,6 +63,7 @@ app.use('/api/friends', friendsRoutes)
 app.use('/api/conversations', conversationsRoutes)
 app.use('/api/attachments', attachmentsRoutes)
 app.use('/api/settings', settingsRoutes)
+app.use('/api/updates', updatesRoutes)
 app.use('/api/admin', adminRoutes)
 
 // In production one Node process serves both the API and the built React app,

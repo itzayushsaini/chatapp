@@ -2146,3 +2146,84 @@ calls or end-to-end encryption (which PingMe does not claim either).
   it, with keyboard support, and no React state at all.
 - **Open Graph tags** in `index.html` decide what a shared link shows in
   WhatsApp or Telegram.
+
+---
+
+# Phase 20 - the "PingMe" updates channel
+
+**Goal of this phase:** WhatsApp has its own official "WhatsApp" chat in
+everyone's list, where it announces new features. PingMe now has the same:
+a pinned, read-only **"PingMe ✓"** chat, and admins post to it from the
+Admin panel.
+
+## 1. Why posts are not messages from a fake "PingMe" user
+
+The quickest-looking way would be a real account called "PingMe" that
+sends ordinary messages. But PingMe's main rule is that you can only talk to
+people you found by exact username and who accepted your friend request -
+and `assertFriends` guards every message. A "PingMe" account would need an
+exception in search, in friend requests, in sending, in the friends list...
+every exception is a place a bug could let a stranger through.
+
+So posts live in their own small collection, **`Update`** (`text`, an
+optional photo, the admin who posted). The friend system is not touched at
+all.
+
+> **Likely question: then how does it look like a normal chat?**
+> The client draws it with the same pieces - an avatar, bubbles, date
+> separators, the doodle background - but from its own data. The open
+> "conversation" id is a fixed placeholder, `'pingme-updates'`, which can
+> never be a real id (those are 24 hex characters), and the chat page shows
+> the channel instead of a normal chat window when it sees it.
+
+## 2. Unread badges with one pointer per person
+
+Each user has one field, `updatesReadUpTo`: the id of the last post they
+have read. "Unread" is simply *posts with a bigger id than that* - MongoDB
+ids grow over time, so this is a single count query. Reading the channel
+moves the pointer with ONE atomic update whose filter says "only if it
+moves forward", so two tabs racing can never move it back. It is exactly
+the idea already used for read receipts (`Conversation.lastRead`), which
+makes it easy to explain: one number per person, never a flag on every post.
+
+A brand-new account starts with no pointer, so every earlier post counts as
+unread - new users discover what PingMe can do, like WhatsApp's welcome
+messages.
+
+## 3. Live, to everyone
+
+- An admin posts → the server saves it and calls `emitToAll('update:new')`:
+  every connected browser adds it, bumps the badge, includes it in the
+  `(1) PingMe` tab title, and shows a notification - unless the channel is
+  open in a visible tab.
+- An admin deletes → `update:deleted` removes it everywhere, and the client
+  asks the server again for the latest post and the unread count (the server
+  is the source of truth).
+- I read it on one tab → `updates:read` goes to *my own* room only, so my
+  other tabs clear their badge. Nobody else is told anything.
+
+## 4. Security, the same rules as everywhere else
+
+- **Only admins can post or delete:** every `/api/admin/*` route runs
+  `requireAuth` then `requireAdmin` **before** the upload is read, so a
+  non-admin can never make the server even receive a file.
+- **The photo is checked by its bytes** (JPEG, PNG, WebP or GIF only - never
+  SVG, which can contain scripts), stored in GridFS, and served only to
+  logged-in users.
+- **The text is plain text:** React shows it as text with its line breaks,
+  never as HTML.
+- **The author is never sent** to users - to them every post is from PingMe.
+
+## 5. Small pieces worth knowing
+
+- **Optional upload:** `singleFile()` gained `{ optional: true }` - a post
+  can be text only. Validation runs twice on that route: the id and admin
+  checks before the file, the text after multer has parsed it.
+- **Keyset paging again:** posts load 20 at a time with `_id < before`,
+  exactly like chat history - never skip/offset.
+- **The banner stays:** the announcement banner (Phase 15) is for urgent,
+  temporary notices ("maintenance tonight"); the channel is the permanent
+  news feed.
+- **Testing a real admin in the browser:** the end-to-end test server (test
+  code only) promotes accounts named `admin_e2e…` to admin, because the
+  browser has - deliberately - no way to make itself an admin.

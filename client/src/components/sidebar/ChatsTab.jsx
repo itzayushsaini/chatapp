@@ -9,8 +9,22 @@ import Button from '../common/Button.jsx'
 import { AlertIcon, BellOffIcon, CheckIcon, CopyIcon, UserPlusIcon } from '../common/Icons.jsx'
 import Skeleton from '../common/Skeleton.jsx'
 import TypingDots from '../common/TypingDots.jsx'
+import UpdatesRow from '../updates/UpdatesRow.jsx'
 
+// The pinned "PingMe" updates row always comes first - even while friends
+// are loading, and even when you have none yet.
 export default function ChatsTab() {
+  return (
+    <>
+      <div className="border-b border-slate-100">
+        <UpdatesRow />
+      </div>
+      <FriendsList />
+    </>
+  )
+}
+
+function FriendsList() {
   const friends = useChatStore((s) => s.friends)
   const status = useChatStore((s) => s.friendsStatus)
   const fetchFriends = useChatStore((s) => s.fetchFriends)

@@ -11,7 +11,10 @@ import { AppError } from '../utils/AppError.js'
 //
 // `maxBytes` is enforced WHILE the upload streams in, so an oversized file is
 // cut off early instead of being read completely first.
-export function singleFile(field, maxBytes) {
+//
+// `optional: true` lets the request through with no file at all (req.file
+// stays undefined) - an update post, for example, may be text only.
+export function singleFile(field, maxBytes, { optional = false } = {}) {
   const parse = multer({
     storage: multer.memoryStorage(),
     limits: { fileSize: maxBytes, files: 1, fields: 5 },
@@ -23,7 +26,7 @@ export function singleFile(field, maxBytes) {
   return (req, res, next) => {
     parse(req, res, (err) => {
       if (!err) {
-        if (!req.file) return next(new AppError(400, 'No file uploaded'))
+        if (!req.file && !optional) return next(new AppError(400, 'No file uploaded'))
         return next()
       }
       // Turn multer's errors into our { message } shape.

@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router'
 
 import { useAuth } from '../context/AuthContext.jsx'
 import { useSocket } from '../context/SocketContext.jsx'
-import { useChatStore } from '../store/useChatStore.js'
+import { UPDATES_CHAT_ID, useChatStore } from '../store/useChatStore.js'
 import { attachmentLabel } from '../utils/files.js'
 import { onNotificationClick, showMessageNotification } from '../utils/notifications.js'
 
@@ -63,8 +63,11 @@ export function useSocketEvents() {
       if (hasConnectedBefore) {
         store().fetchFriends()
         store().fetchRequests()
+        store().fetchUpdatesSummary()
+        if (store().updates.status === 'ready') store().fetchUpdates()
         const open = store().activeConversationId
-        if (open) {
+        // The updates channel is not a conversation - it refreshed above.
+        if (open && open !== UPDATES_CHAT_ID) {
           await store().fetchLatest(open)
           markRead(open) // catches up on anything that arrived while offline
         }
@@ -198,6 +201,30 @@ export function useSocketEvents() {
       else store().updateUser(changed)
     }
 
+    // A new post in the "PingMe" updates channel. Notify unless the channel
+    // is open in a visible tab - the same rule as a chat message.
+    function onUpdateNew({ update }) {
+      store().receiveUpdate(update)
+      const isOpen = store().activeConversationId === UPDATES_CHAT_ID
+      if (!isOpen || document.hidden) {
+        showMessageNotification({
+          title: 'PingMe',
+          body: update.text || '📷 Photo',
+          icon: '/favicon.svg',
+          conversationId: UPDATES_CHAT_ID,
+        })
+      }
+    }
+
+    function onUpdateDeleted({ id }) {
+      store().removeUpdate(id)
+    }
+
+    // I read the channel on another tab - clear the badge here too.
+    function onUpdatesRead({ upToId }) {
+      store().applyUpdatesRead(upToId)
+    }
+
     socket.on('connect', onConnect)
     socket.on('disconnect', onDisconnect)
     socket.on('message:new', onMessage)
@@ -214,6 +241,9 @@ export function useSocketEvents() {
     socket.on('friend:request:cancelled', onRequestCancelled)
     socket.on('friend:removed', onFriendRemoved)
     socket.on('user:updated', onUserUpdated)
+    socket.on('update:new', onUpdateNew)
+    socket.on('update:deleted', onUpdateDeleted)
+    socket.on('updates:read', onUpdatesRead)
 
     // The socket may have connected before this effect ran.
     if (socket.connected) onConnect()
@@ -237,6 +267,9 @@ export function useSocketEvents() {
       socket.off('friend:request:cancelled', onRequestCancelled)
       socket.off('friend:removed', onFriendRemoved)
       socket.off('user:updated', onUserUpdated)
+      socket.off('update:new', onUpdateNew)
+      socket.off('update:deleted', onUpdateDeleted)
+      socket.off('updates:read', onUpdatesRead)
     }
   }, [socket, myId, updateUser])
 }

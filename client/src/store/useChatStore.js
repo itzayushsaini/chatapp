@@ -3,6 +3,11 @@ import { create } from 'zustand'
 import { getMessages } from '../api/conversations.js'
 import { getFriends, getRequests } from '../api/friends.js'
 import { errorMessage } from '../api/http.js'
+import { getUpdates, getUpdatesSummary } from '../api/updates.js'
+
+// activeConversationId for the pinned "PingMe" updates channel. Never a real
+// conversation id (those are 24 hex characters), so it can't clash.
+export const UPDATES_CHAT_ID = 'pingme-updates'
 
 // All chat state lives here, in one zustand store. Any component can read
 // just the slice it needs, e.g. useChatStore((s) => s.friends), and only
@@ -36,6 +41,10 @@ const initialState = {
   sidebarTab: 'chats', // 'chats' | 'requests' | 'add'
   connection: 'connecting', // 'connecting' | 'connected' | 'reconnecting'
   toasts: [],
+  // The "PingMe" updates channel. `latest` and `unreadCount` come from the
+  // summary (loaded at start, for the pinned row); `items` only once the
+  // channel is opened.
+  updates: { items: [], hasMore: false, status: 'idle', latest: null, unreadCount: 0 },
 }
 
 // ---------------------------------------------------------------------------
@@ -92,6 +101,14 @@ function withLastMessage(friends, message) {
     }
   })
   return sortFriends(updated)
+}
+
+// Update posts merged by id and kept oldest -> newest - ids grow over time
+// and compare correctly as strings, the same as messages.
+function mergeUpdates(existing, incoming) {
+  const byId = new Map(existing.map((u) => [u.id, u]))
+  for (const u of incoming) byId.set(u.id, u)
+  return [...byId.values()].sort((a, b) => (a.id < b.id ? -1 : 1))
 }
 
 function patchConversation(state, conversationId, patch) {
@@ -450,4 +467,92 @@ export const useChatStore = create((set, get) => ({
         s.friends.map((f) => (f.conversationId === conversationId ? { ...f, lastMessage } : f)),
       ),
     })),
+
+  // ----- The "PingMe" updates channel ------------------------------------
+
+  // For the pinned row: the latest post and my unread count. A failure is
+  // quiet - the row just shows its default text until the next try.
+  fetchUpdatesSummary: async () => {
+    try {
+      const { latest, unreadCount } = await getUpdatesSummary()
+      set((s) => ({ updates: { ...s.updates, latest, unreadCount } }))
+    } catch {
+      // Nothing to do - see above.
+    }
+  },
+
+  // The latest page, when the channel is opened (and again after a
+  // reconnect) - merged into what is already loaded, like chat history.
+  fetchUpdates: async () => {
+    set((s) => (s.updates.status === 'ready' ? {} : { updates: { ...s.updates, status: 'loading' } }))
+    try {
+      const page = await getUpdates()
+      set((s) => {
+        const firstLoad = s.updates.status !== 'ready'
+        return {
+          updates: {
+            ...s.updates,
+            items: mergeUpdates(s.updates.items, page.updates),
+            hasMore: firstLoad ? page.hasMore : s.updates.hasMore,
+            status: 'ready',
+          },
+        }
+      })
+    } catch (err) {
+      set((s) => (s.updates.status === 'ready' ? {} : { updates: { ...s.updates, status: 'error' } }))
+      get().addToast(errorMessage(err), 'error')
+    }
+  },
+
+  // The page before the oldest post shown. Resolves to true if posts were
+  // added, so the channel knows to keep the scroll position steady.
+  fetchOlderUpdates: async () => {
+    const { items, hasMore } = get().updates
+    if (!hasMore || items.length === 0) return false
+    try {
+      const page = await getUpdates(items[0].id)
+      set((s) => ({
+        updates: { ...s.updates, items: mergeUpdates(s.updates.items, page.updates), hasMore: page.hasMore },
+      }))
+      return page.updates.length > 0
+    } catch (err) {
+      get().addToast(errorMessage(err), 'error')
+      return false
+    }
+  },
+
+  // An update:new event. Counted as unread here; the channel itself marks
+  // it read at once if it is open and actually on screen.
+  receiveUpdate: (update) =>
+    set((s) => {
+      const known = s.updates.latest?.id === update.id || s.updates.items.some((u) => u.id === update.id)
+      if (known) return {}
+      const isNewest = !s.updates.latest || update.id > s.updates.latest.id
+      return {
+        updates: {
+          ...s.updates,
+          items: s.updates.status === 'ready' ? mergeUpdates(s.updates.items, [update]) : s.updates.items,
+          latest: isNewest ? update : s.updates.latest,
+          unreadCount: s.updates.unreadCount + 1,
+        },
+      }
+    }),
+
+  // An update:deleted event. Which post is now the latest, and how many are
+  // still unread, is the server's to say - so ask it again.
+  removeUpdate: (id) => {
+    set((s) => ({ updates: { ...s.updates, items: s.updates.items.filter((u) => u.id !== id) } }))
+    get().fetchUpdatesSummary()
+  },
+
+  // I have just read the channel up to its latest post (this tab).
+  clearUpdatesUnread: () => set((s) => ({ updates: { ...s.updates, unreadCount: 0 } })),
+
+  // An updates:read event from my OTHER tab. If it read up to the latest
+  // post I know of, nothing is unread; otherwise let the server count.
+  applyUpdatesRead: (upToId) => {
+    const { latest } = get().updates
+    if (latest && upToId >= latest.id) get().clearUpdatesUnread()
+    else get().fetchUpdatesSummary()
+  },
 }))

@@ -2,7 +2,7 @@
 
 ## What this project is
 
-A web-based, one-to-one, real-time text chat app. It is a B.Tech CSE final-year project built by a team of 4 at COER University.
+A web-based, one-to-one, real-time text chat app. It is a B.Tech CSE 2nd-year project built by a team of 4 at COER University.
 
 The key feature: **users cannot see everyone who has an account.** A user finds another person by searching their **exact username**, sends a **friend request**, and the two can chat only after the request is **accepted**.
 
@@ -51,13 +51,14 @@ pingme/
     .env.example
     src/
       config/        env.js (zod-validated env), db.js
-      models/        User.js, Friendship.js, Conversation.js, Message.js, Attachment.js, Setting.js, Block.js
+      models/        User.js, Friendship.js, Conversation.js, Message.js, Attachment.js, Setting.js, Block.js,
+                     Update.js
       services/      authService.js, friendService.js, messageService.js, presenceService.js,
                      profileService.js, attachmentService.js, storageService.js, emailService.js,
-                     settingsService.js, adminService.js, googleAuthService.js
-      controllers/   auth, users, friends, conversations, attachments, admin
+                     settingsService.js, adminService.js, googleAuthService.js, updateService.js
+      controllers/   auth, users, friends, conversations, attachments, admin, updates
       routes/        auth.routes.js, users.routes.js, friends.routes.js, conversations.routes.js,
-                     attachments.routes.js, settings.routes.js, admin.routes.js
+                     attachments.routes.js, settings.routes.js, admin.routes.js, updates.routes.js
       middleware/    requireAuth.js, requireAdmin.js, validate.js, rateLimits.js, upload.js,
                      errorHandler.js, notFound.js
       socket/        index.js, socketAuth.js, emitter.js, handlers/
@@ -71,12 +72,13 @@ pingme/
     vite.config.js
     src/
       api/           http.js (axios instance), auth.js, friends.js, conversations.js, profile.js,
-                     settings.js, admin.js
+                     settings.js, admin.js, updates.js
       store/         useChatStore.js (zustand)
       context/       AuthContext.jsx, SocketContext.jsx
       hooks/         useSocketEvents.js, useFriendStatus.js, useVoiceRecorder.js
       pages/         LandingPage.jsx, LoginPage.jsx, RegisterPage.jsx, ChatPage.jsx, SettingsPage.jsx, AdminPage.jsx
       components/    layout/, sidebar/, chat/, profile/, admin/, landing/ (ChatPreview.jsx),
+                     updates/ (UpdatesRow.jsx, UpdatesChannel.jsx, PingMeAvatar.jsx),
                      common/ (incl. AnnouncementBanner.jsx, buttonClass.js)
       utils/         time.js, avatar.js, files.js, image.js, notifications.js, theme.js, preferences.js
     public/          favicon.svg, sw.js (service worker - notifications only),
@@ -172,6 +174,7 @@ Validate them at startup with zod in `config/env.js`. If one is missing or inval
 | `resetPasswordTokenHash` | String, `select: false`, default null. SHA-256 hash of the one-time reset token - never the raw token. |
 | `resetPasswordExpires` | Date, `select: false`, default null |
 | `lastSeen` | Date |
+| `updatesReadUpTo` | ObjectId → Update, or null. How far I have read the "PingMe" updates channel - one forward-only pointer, like `Conversation.lastRead`. Never sent to other users. |
 | `isAdmin` | Boolean, default false. Grants access to the admin panel. Sent to the client only in **SelfUser** (never PublicUser - other users have no reason to know it). |
 | `suspended` | Boolean, default false. Set by an admin. Blocks login (403) and invalidates any EXISTING session the instant it is set - see `userFromToken` and the Admin panel section below. |
 | timestamps | |
@@ -256,6 +259,17 @@ Read status is **not** stored per message - see "Read receipts" below.
 | timestamps | |
 
 Index: `{ message: 1, createdAt: 1 }` (cleanup of unsent uploads).
+
+### Update (a post in the "PingMe" updates channel)
+
+| Field | Rules |
+|---|---|
+| `text` | String, trimmed, 0-1000 characters. May be empty only if there is a photo. |
+| `imageFileId` | ObjectId of the photo in GridFS (bucket `uploads`), or null. JPEG/PNG/WebP/GIF by magic bytes, max 10 MB. |
+| `author` | ObjectId → User (the admin who posted). Kept for the record, **never sent to clients** - to users every post comes from "PingMe". |
+| timestamps | |
+
+Update payload sent to clients: `{ id, text, imageUrl, createdAt }`, where `imageUrl` is `/api/updates/:id/image` or null. Deliberately NOT a Message from a fake "PingMe" user - see "Updates channel".
 
 ### Setting (exactly one document ever exists)
 
@@ -706,10 +720,12 @@ runaway script.
   live updates; refreshing is enough). Reached only via a small shield icon
   next to Log out in the sidebar, shown only when `user.isAdmin`; the route
   itself redirects anyone else straight back to `/`.
-- Three tabs: **Overview** (the three stats), **Users** (search, suspend/
+- Four tabs: **Overview** (the three stats), **Users** (search, suspend/
   unsuspend, delete - delete asks for confirmation with a native
   `window.confirm`, the same pattern the chat header's "Remove friend" already
-  uses), **Settings** (every toggle above, plus the announcement banner).
+  uses), **Updates** (post to / delete from the "PingMe" updates channel -
+  see "Updates channel"), **Settings** (every toggle above, plus the
+  announcement banner).
 - **`AnnouncementBanner.jsx`** is rendered in TWO places - inside `AuthLayout`
   (login/register/forgot/reset pages) and inside `ChatPage` - because
   `useSocket()` only returns a real socket inside the logged-in part of the
@@ -721,6 +737,51 @@ runaway script.
   form, and hints which email domains are accepted) - the server enforces
   both regardless, so a stale or failed fetch here can never let through
   something the server would otherwise refuse.
+
+---
+
+## Updates channel ("PingMe", like WhatsApp's own official chat)
+
+A read-only chat from PingMe itself, pinned at the very top of every user's
+Chats list, where admins announce new features and news.
+
+- **Why its own `Update` collection, not a fake "PingMe" user:** a fake
+  account would need exceptions in search, friend requests and
+  `assertFriends`. A separate collection leaves every friend rule untouched.
+- **Posting** (`POST /api/admin/updates`): `requireAuth` + `requireAdmin` run
+  BEFORE multer (a non-admin can never make the server receive a file), then
+  `singleFile('image', 10 MB, { optional: true })`, then zod on `text` (max
+  1000). Text and/or one photo, never neither (400 "Write something or add a
+  photo"); the photo's type from its bytes (400 for anything but
+  JPEG/PNG/WebP/GIF - never SVG). Admin mutation rate limit. Then
+  `emitToAll('update:new', { update })`.
+- **Deleting** (`DELETE /api/admin/updates/:id`): removes the post and its
+  GridFS photo, then `emitToAll('update:deleted', { id })`.
+- **Reading** is for any logged-in user: summary, keyset-paged list (the same
+  rules as chat history), photo (inline, cached a year - a post's photo never
+  changes).
+- **Unread** = posts with an id after my `User.updatesReadUpTo`; a new
+  account starts at null, so every earlier post counts as unread (they
+  discover what PingMe can do). `POST /api/updates/read` is ONE atomic update
+  whose filter is the "only moves forward" rule; when it actually moves,
+  `updates:read` goes to my own room so my other tabs clear the badge.
+- **Client:** `components/updates/UpdatesRow.jsx` is the pinned row (avatar,
+  "PingMe" + verified tick, latest preview, unread badge) - always first in
+  Chats, even with no friends. Opening it sets `activeConversationId` to the
+  sentinel `UPDATES_CHAT_ID` (`'pingme-updates'`, never a real 24-hex id),
+  and `ChatPage` renders `UpdatesChannel.jsx` instead of `ChatWindow`: posts
+  as incoming bubbles with date separators, photos open full size, older
+  posts load on scrolling up, and in place of the composer a bar saying
+  "Only PingMe can send messages here". It marks the channel read only
+  while the tab is visible (same rule as a chat). Anything that would treat
+  the sentinel as a conversation (e.g. the reconnect refetch) must skip it.
+- **Live:** `update:new` adds the post, bumps the badge and shows a browser
+  notification (title "PingMe", tag per channel) unless the channel is open
+  in a visible tab; the tab-title count includes it. `update:deleted`
+  removes it and refetches the summary. After a reconnect, the summary (and
+  the loaded page) are refetched.
+- The admin's **announcement banner** stays: it is for urgent, temporary
+  notices; the channel is the permanent news feed.
 
 ---
 
@@ -748,6 +809,9 @@ runaway script.
 | `conversation:cleared` | server → client (my own tabs) | `{ conversationId }` |
 | `conversation:muted` | server → client (my own tabs) | `{ conversationId, muted }` |
 | `settings:updated` | server → client (everyone, not just one room) | `{ registrationOpen, allowedEmailDomains, announcement }` - the PUBLIC subset only |
+| `update:new` | server → client (everyone) | `{ update }` - a new post in the "PingMe" updates channel |
+| `update:deleted` | server → client (everyone) | `{ id }` |
+| `updates:read` | server → client (my own tabs) | `{ upToId }` - I read the channel on another tab |
 
 ---
 
@@ -796,6 +860,12 @@ All responses are JSON (except the two file downloads). Errors use the shape `{ 
 | PATCH | `/api/admin/users/:userId/unsuspend` | admin | `{ user }` |
 | DELETE | `/api/admin/users/:userId` | admin | 204 - hard delete, see Admin panel |
 | GET | `/api/admin/stats` | admin | `{ totalUsers, totalMessages, onlineNow }` |
+| GET | `/api/updates/summary` | yes | `{ latest, unreadCount }` - for the pinned "PingMe" row |
+| GET | `/api/updates?before=&limit=20` | yes | `{ updates, hasMore }`, oldest → newest, keyset pagination (max 50) |
+| POST | `/api/updates/read` | yes | `{ upToId }` → 204 (404 if not a real post); the pointer only moves forward |
+| GET | `/api/updates/:id/image` | yes | The post's photo (cached for a year) |
+| POST | `/api/admin/updates` | admin | multipart `text?` + `image?` (or JSON `{ text }`) → 201 `{ update }` |
+| DELETE | `/api/admin/updates/:id` | admin | 204 - deletes the post and its photo for everyone |
 
 ---
 

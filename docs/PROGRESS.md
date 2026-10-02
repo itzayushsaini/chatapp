@@ -2,7 +2,7 @@
 
 A new session should be able to read this file and carry on from it.
 
-Last updated: 2026-09-28 (Phase 19: public home page - done and committed)
+Last updated: 2026-10-02 (Phase 20: PingMe updates channel - done and committed. Next: Phase 21, PingMe AI with Google Gemini - agreed in principle: `gemini-3.8-flash` free tier, `@google/genai`, key in `GEMINI_API_KEY`; plan to be shown before coding)
 
 ---
 
@@ -30,6 +30,24 @@ Last updated: 2026-09-28 (Phase 19: public home page - done and committed)
 | 17 | Visual polish: entrance/hover/press animations (message bubbles, dialogs, toasts, banners, buttons), an animated typing indicator, and tuned responsive breakpoints - CSS only, no new dependency | **Done** |
 | 18 | Voice notes: record (tap to start, swipe left / trash / Escape to cancel, 5-minute limit), send as an `audio` attachment, waveform player with seeking and 1× / 1.5× / 2× speed, "Voice messages" in Contact info | **Done** |
 | 19 | Public home page at `/` for logged-out visitors: hero with an animated chat preview, highlights, 12 features, how it works, privacy and security, FAQ, call to action, footer - CSS-only motion, dark mode, phone to desktop | **Done** |
+| 20 | "PingMe" updates channel (like WhatsApp's own chat): a pinned, read-only chat at the top of everyone's Chats list; admins post text and/or a photo from a new Admin "Updates" tab; live delivery, unread badge, notification; forward-only read pointer per user | **Done** |
+| 21 | PingMe AI (like Meta AI) with Google Gemini | **Next** - planned, not started |
+
+**Verification (2026-10-02, after Phase 20):** `npm test` 303/303 (20 new in
+`updates.test.js`: admin-only posting with no file received from anyone
+else, text / photo / both, empty and over-long posts, a photo checked by its
+bytes (SVG and a PDF named .png refused, nothing stored), keyset paging,
+photo download (auth, real type, inline, cached), the summary's unread
+count, the forward-only read pointer, delete removing the photo, and the
+live `update:new` / `update:deleted` / `updates:read` events reaching the
+right people), `npm run test:e2e` 29/29 (2 new in `updates.spec.js`: a real
+admin posts from the Admin panel, an already-online user sees the badge and
+preview live, opens the channel, has no message box, the badge clears and
+stays cleared after a reload, and a delete disappears live; a non-admin gets
+403), lint clean, build succeeds. Checked visually on an isolated server:
+the pinned row with an unread badge, the channel with a photo post and a
+post arriving live, the admin tab, dark mode, and an iPhone-sized screen
+(no sideways overflow).
 
 **Verification (2026-09-28, after Phase 19):** `npm test` 283/283 (no server
 change), `npm run test:e2e` 27/27 (4 new in `landing.spec.js`; the
@@ -482,6 +500,24 @@ cleanly, so one commit "Phases 1-9: complete ChatApp (later renamed PingMe)" is 
   chat, fits 320px, dark mode); `chat.spec.js` and `password.spec.js`
   updated.
 
+### Phase 20 additions (PingMe updates channel)
+- Server: `models/Update.js` (`text`, `imageFileId`, `author`), `User.updatesReadUpTo`,
+  `services/updateService.js`, `controllers/updates.controller.js`,
+  `routes/updates.routes.js` (summary, list, read, image) and two admin
+  routes in `admin.routes.js` (post, delete); `singleFile` gained
+  `{ optional: true }` so a post can be text only.
+- Client: `api/updates.js`, `postUpdate` / `deleteUpdate` in `api/admin.js`;
+  an `updates` section and `UPDATES_CHAT_ID` in the store;
+  `components/updates/` (`UpdatesRow`, `UpdatesChannel`, `PingMeAvatar`);
+  `ChatsTab` pins the row first; `ChatPage` opens the channel; three new
+  listeners in `useSocketEvents` (and the reconnect refetch skips the
+  sentinel id); `LoggedInLayout` loads the summary and counts it in the tab
+  title; `components/admin/UpdatesTab.jsx` + an "Updates" tab in
+  `AdminPage`; `VerifiedIcon`.
+- Tests: `server/tests/updates.test.js`, `e2e/updates.spec.js`;
+  `e2e/start-server.js` promotes accounts named `admin_e2e...` to admin (test
+  server only - production has no such path).
+
 ### Tests and deployment
 - `server/tests/` - `health`, `auth`, `rateLimits`, `friends`,
   `conversations`, `socket` + `setup.js`, `helpers.js`
@@ -785,6 +821,12 @@ cleanly, so one commit "Phases 1-9: complete ChatApp (later renamed PingMe)" is 
     156 kB gzipped; it was 484 kB before the home page). Only a warning - the
     build succeeds. Splitting the logged-in app from the home page with
     `React.lazy` would fix it if it ever matters.
+23. **The Admin "Updates" tab is not live** - like the rest of the admin
+    panel it has no socket (by design), so it refreshes its own list after
+    each post or delete; another admin's post shows after reopening the tab.
+24. **Updates are text and one photo only** - no links that open, no video,
+    no reactions or replies (it is read-only, like WhatsApp's own chat).
+    A URL in a post is shown as plain text.
 
 ---
 

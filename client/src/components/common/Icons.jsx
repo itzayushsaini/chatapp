@@ -244,6 +244,14 @@ export const ShieldIcon = (p) => (
     <path d="m9 12 2 2 4-4" />
   </Icon>
 )
+// The "verified" tick next to PingMe's own name in the updates channel - a
+// filled circle, so it is drawn directly rather than with <Icon>'s strokes.
+export const VerifiedIcon = ({ className = 'h-4 w-4' }) => (
+  <svg viewBox="0 0 24 24" className={className} aria-hidden="true">
+    <circle cx="12" cy="12" r="10" fill="currentColor" />
+    <path d="m7.5 12.2 3 3 6-6.4" fill="none" stroke="white" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" />
+  </svg>
+)
 // The icons below are used by the public home page (LandingPage).
 export const ZapIcon = (p) => (
   <Icon {...p}>
