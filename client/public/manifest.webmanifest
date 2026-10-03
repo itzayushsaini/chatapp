@@ -1,0 +1,19 @@
+{
+  "id": "/",
+  "name": "PingMe",
+  "short_name": "PingMe",
+  "description": "Private one-to-one chat: find friends by their exact username, then chat in real time - with PingMe AI built in.",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#ffffff",
+  "theme_color": "#00a884",
+  "lang": "en",
+  "dir": "ltr",
+  "categories": ["social", "communication"],
+  "icons": [
+    { "src": "/icons/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "/icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "/icons/icon-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}

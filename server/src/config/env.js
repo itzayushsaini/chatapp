@@ -44,6 +44,17 @@ const envSchema = z.object({
   GEMINI_FALLBACK_MODEL: z.string().default('gemini-3.5-flash'),
   // Only used when an admin switches on image creation (paid plans only).
   GEMINI_IMAGE_MODEL: z.string().min(1).default('gemini-3.1-flash-image'),
+  // Web Push: notifications that arrive even when PingMe is closed.
+  // Optional - without both keys, notifications only arrive while the app is
+  // open (as before). Make a pair once with: npx web-push generate-vapid-keys
+  VAPID_PUBLIC_KEY: z.string().optional(),
+  VAPID_PRIVATE_KEY: z.string().optional(),
+  // Who the push services can contact about our pushes: an https: or
+  // mailto: address. Defaults to APP_URL when that is https (it is on Render).
+  VAPID_SUBJECT: z
+    .string()
+    .regex(/^(https:|mailto:)/, 'must start with https: or mailto:')
+    .optional(),
 })
 
 const result = envSchema.safeParse(process.env)

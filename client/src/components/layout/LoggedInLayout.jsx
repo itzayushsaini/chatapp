@@ -1,9 +1,10 @@
 import { useEffect } from 'react'
-import { Outlet } from 'react-router'
+import { Outlet, useSearchParams } from 'react-router'
 
 import { SocketProvider } from '../../context/SocketContext.jsx'
 import { useSocketEvents } from '../../hooks/useSocketEvents.js'
 import { useChatStore } from '../../store/useChatStore.js'
+import { ensurePushSubscription } from '../../utils/push.js'
 import AnnouncementBanner from '../common/AnnouncementBanner.jsx'
 import Toasts from '../common/Toasts.jsx'
 
@@ -38,7 +39,21 @@ function LiveShell() {
     fetchRequests()
     fetchUpdatesSummary() // the pinned "PingMe" row's preview and badge
     fetchAiSummary() // whether to show the pinned PingMe AI row
+    // If notifications are allowed here, make sure this device also gets
+    // them while PingMe is closed (Web Push) - quietly; it only adds to the
+    // notifications the open app already shows.
+    ensurePushSubscription().catch(() => {})
   }, [])
+
+  // PingMe was CLOSED and a push notification was tapped: the service
+  // worker opened /?open=<what to show>. Show it, then tidy the address.
+  const [searchParams, setSearchParams] = useSearchParams()
+  const openParam = searchParams.get('open')
+  useEffect(() => {
+    if (!openParam) return
+    useChatStore.getState().openTarget(openParam)
+    setSearchParams({}, { replace: true })
+  }, [openParam, setSearchParams])
 
   // "(3) PingMe" in the browser tab, so unread messages are visible even
   // while looking at another tab.

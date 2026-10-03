@@ -6,6 +6,9 @@ import App from './App.jsx'
 import { ErrorBoundary } from './components/common/ErrorScreen.jsx'
 import { AuthProvider } from './context/AuthContext.jsx'
 import './index.css'
+// Loaded with the app (not when a component first needs it): the browser's
+// "can be installed" event fires only once, early on, and must not be missed.
+import './utils/install.js'
 import { registerServiceWorker } from './utils/notifications.js'
 
 // StrictMode deliberately runs effects twice in development to expose effects
@@ -23,5 +26,6 @@ createRoot(document.getElementById('root')).render(
   </StrictMode>,
 )
 
-// Only used to show message notifications (see utils/notifications.js).
+// The service worker shows notifications (also push ones while PingMe is
+// closed) and the offline page - see public/sw.js.
 registerServiceWorker()

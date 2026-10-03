@@ -9,6 +9,7 @@ import LogoutDialog from '../common/LogoutDialog.jsx'
 import ProfileDialog from '../profile/ProfileDialog.jsx'
 import AddFriendTab from './AddFriendTab.jsx'
 import ChatsTab from './ChatsTab.jsx'
+import InstallPrompt from './InstallPrompt.jsx'
 import NotificationPrompt from './NotificationPrompt.jsx'
 import RequestsTab from './RequestsTab.jsx'
 
@@ -88,6 +89,7 @@ export default function Sidebar({ className = '' }) {
       </div>
 
       <NotificationPrompt />
+      <InstallPrompt />
 
       <div role="tablist" aria-label="Sidebar" className="flex gap-1 px-3 pt-2 pb-1.5" onKeyDown={handleTabKey}>
         {TABS.map((t) => {

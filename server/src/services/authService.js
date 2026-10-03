@@ -7,6 +7,7 @@ import { env, isProduction } from '../config/env.js'
 import { User } from '../models/User.js'
 import { AppError } from '../utils/AppError.js'
 import { sendPasswordResetEmail } from './emailService.js'
+import { removeAllFor } from './pushService.js'
 import { getSettings } from './settingsService.js'
 
 const BCRYPT_COST = 12
@@ -194,6 +195,9 @@ export async function resetPassword({ email, token, password }) {
   user.resetPasswordTokenHash = null
   user.resetPasswordExpires = null
   await user.save()
+  // Every device is signed out, so none may keep receiving push
+  // notifications either (it subscribes again when it logs in).
+  await removeAllFor(user._id)
 }
 
 // ---------------------------------------------------------------------------
@@ -220,5 +224,9 @@ export async function changePassword(meId, { currentPassword, newPassword }) {
   user.passwordHash = await bcrypt.hash(newPassword, BCRYPT_COST)
   user.passwordChangedAt = new Date()
   await user.save()
+  // The other devices are signed out, so they must stop receiving push
+  // notifications too - e.g. a phone that was stolen. This device
+  // subscribes again straight after (the client does that).
+  await removeAllFor(user._id)
   return user
 }

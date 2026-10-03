@@ -140,6 +140,40 @@ Good to know:
 
 Skipping this section is fine: PingMe AI is simply not shown.
 
+### 1.8 Push notifications while PingMe is closed (optional, free)
+
+Notifications that arrive even when PingMe is closed use **Web Push**. It
+needs one pair of keys (called VAPID keys) that identifies YOUR server to
+the browsers' push services. No account or sign-up is needed.
+
+1. On your computer, in the repo folder, run once:
+
+   ```bash
+   npx web-push generate-vapid-keys
+   ```
+
+   It prints a **Public Key** and a **Private Key**.
+2. Put them in `server/.env` as `VAPID_PUBLIC_KEY` / `VAPID_PRIVATE_KEY`, and
+   the SAME two in Render → Environment. Treat the private key like a
+   password. Don't make new ones later unless you have to: every device
+   would then have to switch notifications on again (the app does this by
+   itself on its next start).
+3. Redeploy. In Settings → Notifications, a logged-in user with
+   notifications on now sees "They arrive even while PingMe is closed".
+
+Good to know:
+
+- **Android (Chrome) and computers (Chrome, Edge, Firefox):** works as soon
+  as notifications are allowed. On a computer, the browser itself must be
+  running (it can be in the background).
+- **iPhone / iPad:** only once PingMe is **installed to the Home Screen**
+  (iOS 16.4 or newer) - Apple's rule. Settings → App shows the steps.
+- PingMe only pushes while someone has PingMe open **nowhere**; an open app
+  shows its own notification instead, so nobody gets two.
+
+Skipping this section is fine: notifications then only arrive while PingMe
+is open.
+
 ---
 
 ## 2. Create the web service (Render)
@@ -181,6 +215,7 @@ What `render.yaml` sets for you:
 | `APP_URL` | you paste it, after the first deploy | So reset links point at your real site, not `localhost` |
 | `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` | you paste them | "Continue with Google" (optional - see section 1.6) |
 | `GEMINI_API_KEY` | you paste it | PingMe AI (optional - see section 1.7) |
+| `VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY` | you paste them | Notifications while PingMe is closed (optional - see section 1.8) |
 | `PORT` | set by Render | `config/env.js` reads it |
 
 ### Without the Blueprint (manual setup)
@@ -260,4 +295,6 @@ Run through this list on the live URL:
 | Forgot-password shows the success message, but no email ever arrives | Either `BREVO_API_KEY` / `EMAIL_FROM_ADDRESS` are not set, or `EMAIL_FROM_ADDRESS` is not a **verified** sender in Brevo - check the server logs for a warning, and check spam |
 | No "PingMe AI" row in Chats | `GEMINI_API_KEY` is not set on Render (Admin → Settings → PingMe AI says so), or an admin switched PingMe AI off |
 | PingMe AI answers "isn't set up correctly" | The key is wrong or was deleted - the log shows `Gemini request ... failed (400): API key not valid`. Create a new key (section 1.7) |
+| Settings says notifications only arrive "while PingMe is open" | `VAPID_PUBLIC_KEY` / `VAPID_PRIVATE_KEY` are not set on Render (section 1.8) - or, on an iPhone, PingMe is not installed to the Home Screen |
+| No "Install" offer in Chrome | Chrome only offers it over `https://` (Render) or on `localhost`, and not if PingMe is already installed - Settings → App says which. On iPhone it is always Share → Add to Home Screen |
 | PingMe AI often says "busy right now" | Gemini's free tier is overloaded or the app's daily quota is used up - the log shows `(503)` or `(429)`. Wait, or move to a paid plan |

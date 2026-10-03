@@ -6,6 +6,7 @@ import { removeAvatar, updateProfile, uploadAvatar } from '../../api/profile.js'
 import { useAuth } from '../../context/AuthContext.jsx'
 import { useChatStore } from '../../store/useChatStore.js'
 import { cropToSquare } from '../../utils/image.js'
+import { ensurePushSubscription } from '../../utils/push.js'
 import Avatar from '../common/Avatar.jsx'
 import Button from '../common/Button.jsx'
 import Dialog from '../common/Dialog.jsx'
@@ -163,6 +164,10 @@ function ChangePasswordSection() {
       const message = await authApi.changePassword(currentPassword, newPassword)
       addToast(message)
       clear()
+      // The server stopped push notifications to EVERY device (the others
+      // were just signed out) - this one is still logged in, so sign it up
+      // again.
+      ensurePushSubscription().catch(() => {})
     } catch (err) {
       setError(errorMessage(err))
     } finally {

@@ -7,10 +7,11 @@ Kept up to date at the end of every phase.
 - **Manual** cases are the ones a person checks in the browser. Fill in the
   Actual and Result columns when you run them.
 
-Last full run: 2026-10-02 (after Phase 21 - PingMe AI) - **364/364
-server tests pass, 34/34 end-to-end tests pass (E34 added afterwards, with the banner restyle), lint clean in both workspaces, `npm run build`
-succeeds.** No automated test ever calls Google: `npm test` fakes
-`geminiClient.js` (or Google's SDK), and the e2e server uses `e2e/fakeGemini.js`.
+Last full run: 2026-10-03 (after Phase 22 - installable app + push) - **379/379
+server tests pass, 39/39 end-to-end tests pass, lint clean in both workspaces, `npm run build`
+succeeds.** No automated test ever calls Google or a push service: `npm test` fakes
+`geminiClient.js` (or Google's SDK) and `web-push`'s sender, and the e2e server uses
+`e2e/fakeGemini.js` with push switched off.
 
 ---
 
@@ -412,6 +413,26 @@ that answers the token and profile requests.
 | A21.53 | Stop (aborted signal) | The abort error is passed on as-is, not an AiError |
 | A21.54 | `createImage` with a photo | The image model gets the photo then the prompt, `responseModalities: [TEXT, IMAGE]`; returns the picture and text |
 | A21.55 | `createImage` on a free plan / with no picture back | `unavailable` / `no_image` |
+
+### Phase 22 - push notifications (`push.test.js`, web-push's sender faked)
+
+| ID | Case | Expected |
+|---|---|---|
+| A22.1 | Key / subscribe with no session | 401 |
+| A22.2 | `GET /api/push/key` with keys, then without the private key | `{ publicKey }`, then `{ publicKey: null }` |
+| A22.3 | Subscribe the same device twice | 204 twice, stored once |
+| A22.4 | Endpoint `http://`, `https://evil.example.com`, a look-alike `fcm.googleapis.com.evil...` host, `https://169.254.169.254/...`; keys that are not base64url / an object | 400 each |
+| A22.5 | Mozilla, Apple and Windows push service endpoints | 204 each |
+| A22.6 | The same browser subscribed by Riya, then Aman | It now belongs to Aman; Riya cannot delete it; Aman can |
+| A22.7 | Riya sends Aman (PingMe closed) a friend request, Aman accepts | Aman's device gets "New friend request" / "Riya Sharma (@riya) wants to chat with you", `open: 'requests'`; Riya's gets "Aman accepted your friend request", `open` = the conversation |
+| A22.8 | The recipient has PingMe open / push not set up | Nothing is pushed |
+| A22.9 | A message over the socket to a friend with PingMe closed | One push: title = sender, body = the trimmed text, `tag: chat-<id>`, `open` = the conversation |
+| A22.10 | A photo with no caption; a 500-character text | "📷 Photo"; the text cut to 120 characters (…) |
+| A22.11 | A muted chat; the recipient online | Nothing is pushed |
+| A22.12 | The push service answers 410 for one device and 500 for another | The 410 one is deleted, the 500 one kept and a warning logged |
+| A22.13 | An admin posts an update; one subscriber online, one not | Only the offline one gets `{ title: 'PingMe', body, open: 'pingme-updates' }` |
+| A22.14 | A finished PingMe AI answer with Markdown | `{ title: 'PingMe AI', body without **/` symbols, open: 'pingme-ai' }` |
+| A22.15 | Change password; admin suspends one account and deletes another | Every device of those accounts is removed |
 ---
 
 ## Automated - end-to-end (`npm run test:e2e`)
@@ -460,6 +481,11 @@ email provider configured.
 | E31 | Stop, Try again, Clear chat | Stop keeps "Once upon…" and "You stopped this answer."; a 503 on every model shows "busy right now" and Try again then answers; Clear chat (confirmed) brings back the welcome screen, also after a reload |
 | E32 | A photo, and a forwarded chat message | A photo question gets "I can see your file: image/png." and the photo shows; a friend's message forwarded to PingMe AI (Forward dialog → PingMe AI) appears labelled "Forwarded" and is answered |
 | E33 | "Imagine" | Hidden by default; an admin switches "Creating pictures" on; the user sees the chip, the placeholder changes, and the created picture appears and loads; switched off again afterwards |
+| E35 | Installable (`e2e/pwa.spec.js`) | The manifest is linked and served as `application/manifest+json` with the right name, start page, `standalone` and colour; every icon (incl. the maskable, iPhone and badge ones) loads as PNG at exactly its stated size; the service worker runs; Chrome's own installability check (`Page.getInstallabilityErrors`) finds nothing missing |
+| E36 | Offline page | With the connection cut, a page load shows "You're offline" with the saved icon; back online, Try again loads the home page |
+| E37 | Install offer | Nothing until Chrome offers it; then "Install PingMe as an app" → Install calls the browser's prompt and the offer goes; × is remembered after a reload; Settings → App shows Install PingMe, then "installed" after `appinstalled` |
+| E38 | iPhone | "Install the app" on the home page and Install in the chat list open "Install PingMe on your iPhone" with the Add to Home Screen steps |
+| E39 | A push and a tap | A push handed to the service worker produces the notification (title, body, app icon, badge, tag, `open`); `/?open=requests` opens the Requests tab and clears the address; `/?open=pingme-ai` opens PingMe AI; junk is ignored |
 | E34 | Announcement banner (`e2e/announcement.spec.js`) | An admin turns it on: a logged-out visitor sees it on the login page as one status labelled "Announcement", and the logged-in admin sees it in the chat; turned off, it disappears live for the admin and after a reload for the visitor |
 ---
 
@@ -735,6 +761,25 @@ Google cases need `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` set (see
 | M21.18 | Clear chat | 🗑 in the PingMe AI header → Clear chat | Everything gone, on all your tabs; the welcome screen is back | Automated (E31, fake) | |
 | M21.19 | Phone and dark mode | Open PingMe AI on a phone with the Dark theme | Fits the screen; code blocks and tables readable; wide tables scroll inside the bubble | Real Gemini, iPhone size, dark | Pass |
 | M21.20 | Admin stat | Admin → Overview | "PingMe AI answers (24 h)" counts today's answers | Automated (A21.41) | |
+
+### Phase 22 - installable app and push (on the live site, after setting the VAPID keys on Render)
+
+| ID | Scenario | Steps | Expected | Actual | Result |
+|---|---|---|---|---|---|
+| M22.1 | Install on Android | Chrome on an Android phone → open the site → log in → "Install PingMe as an app" → Install | Chrome's install dialog; PingMe appears with the green icon in the app drawer | | |
+| M22.2 | Opens like an app | Open PingMe from its icon | Green splash, then full screen with no address bar; the top bar is green (dark in dark mode) | | |
+| M22.3 | Install on a laptop | Chrome or Edge → Settings → App → Install PingMe (or the install icon in the address bar) | PingMe opens in its own window; Settings → App says "installed" | | |
+| M22.4 | Install on iPhone | Safari → the site → Install → follow the steps | The PingMe icon on the Home Screen; opens full screen | | |
+| M22.5 | Push with the app CLOSED (Android) | Allow notifications in the installed app → close it completely (swipe it away) → from another account, send it a message | A notification with the friend's name and the message, even though PingMe is closed | | |
+| M22.6 | Tap opens the chat | Tap that notification | PingMe opens straight into that chat | | |
+| M22.7 | Push on iPhone | Installed app (iOS 16.4+) → Settings → Notifications on → close it → send a message from another account | A notification arrives | | |
+| M22.8 | Friend request / PingMe AI / update | With PingMe closed: receive a friend request; ask PingMe AI something then close the app; an admin posts an update | A notification for each; tapping opens Requests / PingMe AI / the PingMe channel | | |
+| M22.9 | No double notifications | Keep PingMe open (any tab) and receive a message | Exactly one notification (from the open app) | | |
+| M22.10 | Muted chat | Mute a chat → close PingMe → receive a message there | No notification | | |
+| M22.11 | Notifications off | Settings → Notifications off → close PingMe → receive a message | No notification | | |
+| M22.12 | Shared computer | Log out → log in as someone else on the same browser → close PingMe → message the FIRST account | Nothing pops up on this computer | | |
+| M22.13 | Offline page | Installed app → airplane mode → open PingMe | "You're offline" with Try again; works again once back online | Automated (E36) | Pass |
+| M22.14 | Settings wording | Settings → Notifications with push working | "They arrive even while PingMe is closed, on this device." | | |
 
 ### Phase 9 - deployment
 

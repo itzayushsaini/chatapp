@@ -15,6 +15,7 @@ import attachmentsRoutes from './routes/attachments.routes.js'
 import authRoutes from './routes/auth.routes.js'
 import conversationsRoutes from './routes/conversations.routes.js'
 import friendsRoutes from './routes/friends.routes.js'
+import pushRoutes from './routes/push.routes.js'
 import settingsRoutes from './routes/settings.routes.js'
 import updatesRoutes from './routes/updates.routes.js'
 import usersRoutes from './routes/users.routes.js'
@@ -66,6 +67,7 @@ app.use('/api/attachments', attachmentsRoutes)
 app.use('/api/settings', settingsRoutes)
 app.use('/api/updates', updatesRoutes)
 app.use('/api/ai', aiRoutes)
+app.use('/api/push', pushRoutes)
 app.use('/api/admin', adminRoutes)
 
 // In production one Node process serves both the API and the built React app,

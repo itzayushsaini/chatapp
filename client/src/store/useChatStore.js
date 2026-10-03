@@ -201,6 +201,16 @@ export const useChatStore = create((set, get) => ({
       unreadCounts: conversationId ? { ...s.unreadCounts, [conversationId]: 0 } : s.unreadCounts,
     })),
 
+  // A notification was tapped (or PingMe was opened from one): show what it
+  // was about. `target` comes from the URL or the service worker, so only
+  // the shapes we ever send are accepted.
+  openTarget: (target) => {
+    if (target === 'requests') set({ sidebarTab: 'requests', activeConversationId: null })
+    else if (/^[a-f0-9]{24}$/.test(target ?? '') || target === AI_CHAT_ID || target === UPDATES_CHAT_ID) {
+      get().setActiveConversation(target)
+    }
+  },
+
   addToast: (text, kind = 'info') => {
     const id = nextToastId++
     set((s) => ({ toasts: [...s.toasts, { id, text, kind }] }))

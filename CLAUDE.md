@@ -20,6 +20,7 @@ Do not add features that are not listed here. If something seems missing, or a r
 - **Server:** Node.js (current LTS), Express 5, Mongoose, Socket.IO 4, zod, bcryptjs, jsonwebtoken, cookie-parser, cookie, helmet, express-rate-limit, morgan, multer (file uploads).
 - **Password-reset email:** sent via the Brevo API using Node's built-in `fetch` - no extra library.
 - **PingMe AI:** Google Gemini through Google's official SDK, `@google/genai` (the one place a vendor SDK is used: streaming, reasoning summaries and file input are what it handles for us). Only `services/geminiClient.js` imports it.
+- **Push notifications (while PingMe is closed):** Web Push with `web-push` (it does the RFC 8291 encryption and VAPID signing - not something to hand-write). Only `services/pushService.js` imports it.
 - **File storage:** MongoDB GridFS (built into the MongoDB driver - no extra service or account).
 - **Client:** React + Vite (JavaScript, not TypeScript), React Router, Tailwind CSS, axios, socket.io-client, zustand.
 - **Tests:** Vitest + Supertest + mongodb-memory-server on the server; Playwright for end-to-end tests.
@@ -53,15 +54,16 @@ pingme/
     src/
       config/        env.js (zod-validated env), db.js
       models/        User.js, Friendship.js, Conversation.js, Message.js, Attachment.js, Setting.js, Block.js,
-                     Update.js, AiMessage.js
+                     Update.js, AiMessage.js, PushSubscription.js
       services/      authService.js, friendService.js, messageService.js, presenceService.js,
                      profileService.js, attachmentService.js, storageService.js, emailService.js,
                      settingsService.js, adminService.js, googleAuthService.js, updateService.js,
-                     aiService.js, geminiClient.js (the ONLY file that talks to Google's Gemini)
-      controllers/   auth, users, friends, conversations, attachments, admin, updates, ai
+                     aiService.js, geminiClient.js (the ONLY file that talks to Google's Gemini),
+                     pushService.js (Web Push - the ONLY file that sends pushes)
+      controllers/   auth, users, friends, conversations, attachments, admin, updates, ai, push
       routes/        auth.routes.js, users.routes.js, friends.routes.js, conversations.routes.js,
                      attachments.routes.js, settings.routes.js, admin.routes.js, updates.routes.js,
-                     ai.routes.js
+                     ai.routes.js, push.routes.js
       middleware/    requireAuth.js, requireAdmin.js, validate.js, rateLimits.js, upload.js,
                      errorHandler.js, notFound.js
       socket/        index.js, socketAuth.js, emitter.js, handlers/
@@ -75,18 +77,21 @@ pingme/
     vite.config.js
     src/
       api/           http.js (axios instance), auth.js, friends.js, conversations.js, profile.js,
-                     settings.js, admin.js, updates.js, ai.js
+                     settings.js, admin.js, updates.js, ai.js, push.js
       store/         useChatStore.js (zustand)
       context/       AuthContext.jsx, SocketContext.jsx
-      hooks/         useSocketEvents.js, useFriendStatus.js, useVoiceRecorder.js
+      hooks/         useSocketEvents.js, useFriendStatus.js, useVoiceRecorder.js, useInstallApp.js
       pages/         LandingPage.jsx, LoginPage.jsx, RegisterPage.jsx, ChatPage.jsx, SettingsPage.jsx, AdminPage.jsx
       components/    layout/, sidebar/, chat/, profile/, admin/, landing/ (ChatPreview.jsx),
                      updates/ (UpdatesRow.jsx, UpdatesChannel.jsx, PingMeAvatar.jsx),
                      ai/ (AiRow.jsx, AiChat.jsx, AiBubble.jsx, AiComposer.jsx, AiAvatar.jsx,
                      Markdown.jsx - the safe Markdown renderer for answers),
-                     common/ (incl. AnnouncementBanner.jsx, buttonClass.js)
-      utils/         time.js, avatar.js, files.js, image.js, notifications.js, theme.js, preferences.js
-    public/          favicon.svg, sw.js (service worker - notifications only),
+                     common/ (incl. AnnouncementBanner.jsx, buttonClass.js, InstallAppDialog.jsx),
+                     sidebar/ (incl. NotificationPrompt.jsx, InstallPrompt.jsx)
+      utils/         time.js, avatar.js, files.js, image.js, notifications.js, theme.js, preferences.js,
+                     install.js (installing as an app), push.js (Web Push subscription)
+    public/          favicon.svg, manifest.webmanifest (the installable app), icons/ (app icons),
+                     sw.js (service worker: notifications, push, the offline page), offline.html,
                      theme-init.js (applies the saved theme before React loads)
     (components/common/TypingDots.jsx - the animated "typing…" dots)
 ```
@@ -138,6 +143,13 @@ GEMINI_API_KEY=
 GEMINI_MODEL=gemini-3.8-flash               # default
 GEMINI_FALLBACK_MODEL=gemini-3.5-flash      # default; tried when the main one is busy
 GEMINI_IMAGE_MODEL=gemini-3.1-flash-image   # default; "Imagine" only (paid plans)
+
+# Push notifications while PingMe is closed (Web Push). Optional - without
+# both keys, notifications only arrive while the app is open.
+# Make the pair once with: npx web-push generate-vapid-keys
+VAPID_PUBLIC_KEY=
+VAPID_PRIVATE_KEY=
+VAPID_SUBJECT=        # optional https: or mailto: address; defaults to APP_URL if https
 ```
 
 Validate them at startup with zod in `config/env.js`. If one is missing or invalid, exit with a clear message.
@@ -301,6 +313,17 @@ Update payload sent to clients: `{ id, text, imageUrl, createdAt }`, where `imag
 Indexes: `{ user: 1, _id: -1 }` (history), `{ user: 1, role: 1, createdAt: -1 }` (daily limit), unique `{ user: 1, clientId: 1 }` where `clientId` is a string.
 
 AiMessage payload: `{ id, role, text, reasoning, mode, status, error, attachment, clientId, forwarded, createdAt, updatedAt }`, where `attachment` is null or `{ name, mimeType, size, kind, url }` (+ `durationMs`, `waveform` for audio) and `url` is `/api/ai/files/:messageId`. `updatedAt` lets the client keep the newest copy when the same message arrives twice.
+
+### PushSubscription (one device that gets push notifications)
+
+| Field | Rules |
+|---|---|
+| `user` | ObjectId → User (index) |
+| `endpoint` | String, **unique** - the device's address at its browser maker's push service. Must be `https:` on an allow-listed push service host (FCM, Mozilla, Apple, Windows). If another account subscribes the same endpoint (shared browser), it moves to them. |
+| `keys` | `{ p256dh, auth }` (base64url) - the device's public keys; each push is encrypted with them |
+| timestamps | |
+
+Never sent to clients. Deleted when the device unsubscribes (notifications off / logout), when a push gets 404/410 from the push service, on a password change or reset, a suspension, or an account delete.
 
 ### Setting (exactly one document ever exists)
 
@@ -624,8 +647,10 @@ out on purpose; it was added at the team's request in Phase 16a.
   tab. Title: their display name; body: the text or attachment label; icon:
   their picture. Tag per conversation, so a burst replaces rather than
   stacks. Clicking one focuses PingMe and opens that chat.
-- Only while PingMe is open in some tab (even minimised). Not when the
-  browser is fully closed - that would need Web Push, not used here.
+- While PingMe is open in some tab (even minimised), the open app shows them
+  from socket events. While it is open NOWHERE, the server sends a **Web
+  Push** instead (see "Installable app and push notifications" below) - so
+  a person never gets both.
 - Permission is only requested from a click (a one-line "Enable" offer in the
   sidebar, shown while the browser has not been asked yet, dismissible). A
   per-device on/off preference (`localStorage`) is kept separately, because a
@@ -905,6 +930,58 @@ available: the server has a `GEMINI_API_KEY` AND an admin has not switched
 
 ---
 
+## Installable app and push notifications (Phase 22)
+
+PingMe is a **Progressive Web App**: one codebase that is also installable
+on Android, iPhone, Windows and Mac - no app store, no second app.
+
+- **`public/manifest.webmanifest`:** name, `start_url: '/'`, `display:
+  standalone` (no browser bar), `theme_color` `#00a884`, white splash, and
+  PNG icons in `public/icons/`: 192 and 512 (`any`, rounded, transparent
+  corners), 512 `maskable` (edge to edge, bubble inside the 80% safe zone),
+  `apple-touch-icon.png` 180 (opaque - iOS fills transparency black) and
+  `badge-96.png` (white on transparent, Android's status bar). `index.html`
+  links the manifest and the iPhone icon and sets the `apple-mobile-web-app-*`
+  tags. `theme-init.js` sets the dark top-bar colour before React loads.
+- **Installing** (`utils/install.js`, loaded by `main.jsx` so the event is
+  never missed): Chrome/Edge fire `beforeinstallprompt` once - we
+  `preventDefault()` it, keep it, and our **Install** buttons call
+  `prompt()`. iPhone/iPad have no such event, so they get
+  `InstallAppDialog` (Share → Add to Home Screen → Add). States: `installed`
+  (standalone, or `appinstalled` fired), `prompt`, `ios`, `manual`. Offered in
+  three places: a dismissible one-line offer under the notifications offer
+  in the sidebar (`InstallPrompt`, dismissal remembered per device), Settings
+  → **App**, and an "Install the app" link in the home page hero (+ FAQ).
+- **Service worker** (`public/sw.js`): shows notifications (the open app's
+  and push ones), handles taps, and keeps ONE thing cached - `offline.html`
+  and the icon it shows - served only when a page load fails for lack of a
+  connection. It never touches the API, sockets, files or the app's code,
+  so nothing can go stale. Bump `CACHE` when `offline.html` changes.
+- **Web Push** (`services/pushService.js`, `utils/push.js`): with notifications
+  allowed and on, the browser makes a push subscription with our public
+  VAPID key (`GET /api/push/key`) and the client saves it
+  (`POST /api/push/subscriptions`) - on every app start, after enabling
+  notifications, and after a password change (idempotent). The server pushes
+  only to people who have PingMe open **nowhere** (`isOnline`), for: a new or
+  forwarded message (not for a muted chat), a friend request, an accepted
+  request, a finished PingMe AI answer and a new PingMe update post. Payload
+  `{ title, body, icon?, tag, open }`; `open` is what a tap shows - a
+  conversation id, `'requests'`, `'pingme-ai'` or `'pingme-updates'`. A tap
+  focuses an open PingMe (postMessage) or opens `/?open=<target>`, which
+  `LoggedInLayout` hands to the store's `openTarget()` (only those shapes are
+  accepted) and then removes from the address. Every send is
+  fire-and-forget (never delays or breaks a message); 404/410 deletes the
+  subscription; other failures are logged with the push service's host.
+- **Who gets pushes:** only the device's current account. Logout first
+  deletes this device's subscription (`removePushSubscription`, max 3 s
+  wait); a password change/reset, suspension or account delete deletes all
+  of that account's subscriptions (the device still logged in re-subscribes).
+  Switching notifications off in Settings unsubscribes the device.
+- **iPhone:** push exists only for an installed app (iOS 16.4+), so Settings
+  points iPhone users to App → install.
+
+---
+
 ## Socket events contract
 
 | Event | Direction | Payload |
@@ -998,6 +1075,9 @@ All responses are JSON (except the two file downloads). Errors use the shape `{ 
 | POST | `/api/ai/stop` | yes | 204 - stop the answer being written |
 | DELETE | `/api/ai/messages` | yes | 204 - clear my AI chat (and its own files) |
 | GET | `/api/ai/files/:id` | yes | The file of one of MY AI messages (Range supported) |
+| GET | `/api/push/key` | yes | `{ publicKey }` - the VAPID public key, or null when push is not set up |
+| POST | `/api/push/subscriptions` | yes | `{ endpoint, keys: { p256dh, auth } }` → 204 - this device gets pushes (endpoint must be a known push service) |
+| DELETE | `/api/push/subscriptions` | yes | `{ endpoint }` → 204 - this device stops getting pushes (only my own) |
 
 ---
 
@@ -1019,6 +1099,7 @@ All responses are JSON (except the two file downloads). Errors use the shape `{ 
   - `message:delete` / `message:forward`: share one limit, 20 per 5 seconds per socket (user-initiated clicks, not automatic events, so they get `message:send`'s own budget rather than a separate counter).
   - Admin mutation routes (settings, suspend/unsuspend, delete): 200 per hour per user - `requireAdmin` is the real gate, this just stops a runaway script.
   - PingMe AI questions, forwards and retries: 30 per 10 minutes per user (on top of one answer at a time and the admin's daily limit); clearing the AI chat uses the profile budget.
+  - Push subscribe / unsubscribe: the profile budget (20 per hour per user).
 - **Uploads:** type checked by magic bytes against an allowlist (no SVG/HTML); size limited while streaming; never written to the server's disk; every download permission-checked; documents never rendered inline; `nosniff` (helmet).
 - `passwordHash` never appears in any response. Other users only ever receive the PublicUser shape.
 - `isAdmin` and `suspended` never appear about anyone but yourself (SelfUser) or in the admin panel's own AdminUser list - never in PublicUser.
@@ -1027,6 +1108,7 @@ All responses are JSON (except the two file downloads). Errors use the shape `{ 
 - A password-reset token is never stored or logged in its raw form, only its SHA-256 hash - the same reasoning as `passwordHash`. Forgot-password never reveals whether an email has an account.
 - No `dangerouslySetInnerHTML` anywhere. Render message text as plain text with `white-space: pre-wrap`. PingMe AI's Markdown answers go through `Markdown.jsx`, which only builds React elements (links only for `http(s)`).
 - PingMe AI: `GEMINI_API_KEY` is never logged or sent to the browser; every AI route only reads/writes the logged-in user's own messages; a file Gemini created is checked by its bytes like any upload; the tests never call Google (`geminiClient.js` is faked in `npm test`, `fetch` in the e2e server).
+- Web Push: a subscription endpoint must be `https:` on an allow-listed push service host (no SSRF to arbitrary addresses); payloads are encrypted for the device (the push service cannot read them); `VAPID_PRIVATE_KEY` is never logged or sent; a device stops getting pushes on logout, and every device on a password change/reset, suspension or delete; tests never post to a real push service (`web-push` is faked in `npm test`, push keys are blanked in the e2e server).
 - Secrets only in environment variables. Never log passwords, tokens or cookies.
 - In production: `trust proxy` is set and cookies are `secure`.
 - `npm audit` has no high or critical issues.
@@ -1161,7 +1243,7 @@ All responses are JSON (except the two file downloads). Errors use the shape `{ 
 ### Settings page (`/settings`, gear icon in the sidebar top bar)
 
 - Profile summary + Edit profile (the same Your profile dialog); Account: email, sign-in method ("Password", "Google" or "Password or Google"), Change password.
-- Privacy: blocked contacts with Unblock. Notifications: on/off switch (asks the browser for permission when needed; explains when blocked or unsupported). Chats: Enter to send. Theme: Light / Dark / Same as device. Help & support: link to the GitHub issues page. Log out (the same "Log out?" dialog as the sidebar).
+- Privacy: blocked contacts with Unblock. Notifications: on/off switch (asks the browser for permission when needed; explains when blocked or unsupported; says whether they also arrive while PingMe is closed - off also unsubscribes push). App: install PingMe (Install button / iPhone steps / "installed"). Chats: Enter to send. Theme: Light / Dark / Same as device. Help & support: link to the GitHub issues page. Log out (the same "Log out?" dialog as the sidebar).
 - Notifications and Enter to send are per browser (localStorage); theme is per account.
 
 ### Attachments

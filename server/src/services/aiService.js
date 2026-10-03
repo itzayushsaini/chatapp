@@ -6,6 +6,7 @@ import { cleanFileName } from '../utils/fileName.js'
 import { detectFileType } from '../utils/fileType.js'
 import { assertParticipant } from './friendService.js'
 import { AiError, createImage, isConfigured, streamReply } from './geminiClient.js'
+import { notifyAiAnswer } from './pushService.js'
 import { getSettings } from './settingsService.js'
 import { deleteFile, getFileInfo, readFile, saveFile } from './storageService.js'
 
@@ -449,6 +450,8 @@ async function writeAnswer(meId, answer, signal) {
     return
   }
   emitToUser(meId, 'ai:done', { message: aiMessageView(saved) })
+  // Asked, then closed PingMe: tell them the answer is ready.
+  if (saved.status === 'done') notifyAiAnswer(meId, saved)
 }
 
 // "Imagine": a picture from the question's text - or a change to the photo

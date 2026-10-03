@@ -25,7 +25,9 @@ export default function Dialog({ open, onClose, title, children, wide = false })
       // A click on the dialog element itself (not its content) is a click on
       // the dark backdrop around it.
       onClick={(e) => e.target === ref.current && onClose()}
-      className={`m-auto w-[calc(100%-2rem)] rounded-2xl bg-surface p-0 shadow-xl backdrop:bg-black/50 ${
+      // text-left: a dialog opened from a centred section (the home page's
+      // hero) would otherwise inherit text-align: center.
+      className={`m-auto w-[calc(100%-2rem)] rounded-2xl bg-surface p-0 text-left shadow-xl backdrop:bg-black/50 ${
         wide ? 'max-w-3xl' : 'max-w-md'
       }`}
     >

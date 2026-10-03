@@ -11,7 +11,11 @@ const aiRow = (page) => page.getByRole('button', { name: /^PingMe AI/ })
 const aiChat = (page) => page.getByRole('region', { name: 'PingMe AI', exact: true })
 const aiLog = (page) => page.getByRole('log', { name: 'Chat with PingMe AI' })
 
+// The previous answer must be COMPLETELY finished first (its last words show
+// a moment before the server has saved it) - otherwise the server rightly
+// answers 409 "still answering". The Stop button is there exactly until then.
 async function ask(page, text) {
+  await expect(page.getByRole('button', { name: 'Stop answering' })).toHaveCount(0)
   await page.getByLabel('Ask PingMe AI').fill(text)
   await page.getByLabel('Ask PingMe AI').press('Enter')
 }
@@ -109,6 +113,8 @@ test('a photo, and a message forwarded from a friend chat', async ({ browser }) 
   const log = aiLog(riya)
   await expect(log.getByText('I can see your file: image/png.')).toBeVisible()
   await expect.poll(() => imageLoaded(log.getByRole('button', { name: 'Open photo board.png' }).locator('img'))).toBe(true)
+  // Fully finished before forwarding it another question (see ask()).
+  await expect(riya.getByRole('button', { name: 'Stop answering' })).toHaveCount(0)
 
   // Kabir asks Riya something; Riya forwards it to PingMe AI.
   await kabir.getByRole('button', { name: /Riya/ }).click()

@@ -17,4 +17,8 @@
     theme === 'dark' ||
     (theme === 'system' && window.matchMedia('(prefers-color-scheme: dark)').matches)
   document.documentElement.dataset.theme = dark ? 'dark' : 'light'
+  // The phone's top bar (and, once installed, the app's title bar) matches
+  // from the very first frame too. utils/theme.js keeps it in step after.
+  var meta = document.querySelector('meta[name="theme-color"]')
+  if (meta) meta.setAttribute('content', dark ? '#202c33' : '#00a884')
 })()

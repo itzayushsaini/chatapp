@@ -55,6 +55,21 @@ they **accept**. Privacy is enforced on the server, not just hidden in the UI.
   servers on a paid Gemini plan. A daily limit per person, set by the admin
 - A pinned, read-only **"PingMe" updates channel** where admins announce new
   features
+- **Install it as an app** (a PWA) on Android, iPhone, Windows or Mac: its own
+  icon, full screen with no browser bar, a splash screen, and a friendly
+  offline page - one codebase, no app store
+- **Push notifications even while PingMe is closed** (Web Push) for new
+  messages, friend requests, PingMe AI answers and PingMe updates - encrypted
+  for the device, never for a muted chat
+
+## Install PingMe on your phone or computer
+
+- **Android / Chrome / Edge:** open the site and tap **Install** (in the
+  chat list, in Settings → App, or the browser's own menu → *Install app*).
+- **iPhone / iPad:** in Safari, tap **Share → Add to Home Screen → Add**.
+  Notifications while it is closed need iOS 16.4 or newer.
+- Then allow notifications (the one-line offer in the chat list, or
+  Settings → Notifications).
 
 ## Tech stack
 
@@ -62,6 +77,7 @@ they **accept**. Privacy is enforced on the server, not just hidden in the UI.
 |---|---|
 | Server | Node.js, Express 5, Mongoose, Socket.IO 4, zod, multer |
 | AI | Google Gemini (`gemini-3.8-flash`) via the official `@google/genai` SDK |
+| App + push | Installable PWA (manifest, service worker); Web Push with `web-push` |
 | Database | MongoDB (files in GridFS) |
 | Client | React 19, Vite, Tailwind CSS 4, React Router, zustand, axios |
 | Auth | JWT in an httpOnly cookie, bcryptjs password hashing |

@@ -4,6 +4,7 @@ import { useNavigate } from 'react-router'
 import * as authApi from '../api/auth.js'
 import { setUnauthorizedHandler } from '../api/http.js'
 import { useChatStore } from '../store/useChatStore.js'
+import { removePushSubscription } from '../utils/push.js'
 import { applyTheme } from '../utils/theme.js'
 
 const AuthContext = createContext(null)
@@ -86,6 +87,10 @@ export function AuthProvider({ children }) {
       register: async (fields) => setUser(await authApi.register(fields)),
       logout: async () => {
         try {
+          // First, while still logged in: this device stops getting push
+          // notifications, so the next person on this computer never sees
+          // mine. Never waits more than a few seconds for it.
+          await Promise.race([removePushSubscription(), new Promise((resolve) => setTimeout(resolve, 3000))])
           await authApi.logout()
         } finally {
           clearSession()

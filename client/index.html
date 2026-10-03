@@ -16,6 +16,14 @@
       content="Chat only with people you choose: find friends by their exact username, then message them in real time."
     />
     <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+    <!-- Installable as an app: the manifest (name, icons, full screen) and
+         what iPhones need, since Safari reads some of it from these tags. -->
+    <link rel="manifest" href="/manifest.webmanifest" />
+    <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-title" content="PingMe" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="default" />
     <script src="/theme-init.js"></script>
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />

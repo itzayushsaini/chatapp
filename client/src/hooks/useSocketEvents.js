@@ -142,11 +142,12 @@ export function useSocketEvents() {
       )
     }
 
-    // Clicking a notification opens that chat - leaving the Settings page
-    // first, if that is where I was.
-    onNotificationClick((conversationId) => {
-      if (!conversationId) return
-      store().setActiveConversation(conversationId)
+    // Clicking a notification opens what it was about (a chat, the
+    // Requests tab, PingMe AI or the updates channel) - leaving the
+    // Settings page first, if that is where I was.
+    onNotificationClick((target) => {
+      if (!target) return
+      store().openTarget(target)
       navigateRef.current('/')
     })
 
@@ -213,7 +214,7 @@ export function useSocketEvents() {
         showMessageNotification({
           title: 'PingMe',
           body: update.text || '📷 Photo',
-          icon: '/favicon.svg',
+          icon: '/icons/icon-192.png',
           conversationId: UPDATES_CHAT_ID,
         })
       }
@@ -252,7 +253,7 @@ export function useSocketEvents() {
         showMessageNotification({
           title: 'PingMe AI',
           body: message.text.replace(/[*_`#>|~]/g, '').slice(0, 120) || '📷 Picture',
-          icon: '/favicon.svg',
+          icon: '/icons/icon-192.png',
           conversationId: AI_CHAT_ID,
         })
       }

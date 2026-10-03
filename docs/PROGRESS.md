@@ -2,7 +2,7 @@
 
 A new session should be able to read this file and carry on from it.
 
-Last updated: 2026-10-02 (Phase 21: PingMe AI with Google Gemini - built and tested, waiting for the team's manual check before it is committed)
+Last updated: 2026-10-03 (Phase 22: installable app (PWA) + push notifications while PingMe is closed - done and committed. Push needs VAPID keys on Render - docs/DEPLOY.md 1.8; the real-phone checks are M22 in TEST_CASES.md)
 
 ---
 
@@ -31,7 +31,39 @@ Last updated: 2026-10-02 (Phase 21: PingMe AI with Google Gemini - built and tes
 | 18 | Voice notes: record (tap to start, swipe left / trash / Escape to cancel, 5-minute limit), send as an `audio` attachment, waveform player with seeking and 1× / 1.5× / 2× speed, "Voice messages" in Contact info | **Done** |
 | 19 | Public home page at `/` for logged-out visitors: hero with an animated chat preview, highlights, 12 features, how it works, privacy and security, FAQ, call to action, footer - CSS-only motion, dark mode, phone to desktop | **Done** |
 | 20 | "PingMe" updates channel (like WhatsApp's own chat): a pinned, read-only chat at the top of everyone's Chats list; admins post text and/or a photo from a new Admin "Updates" tab; live delivery, unread badge, notification; forward-only read pointer per user | **Done** |
-| 21 | PingMe AI (like Meta AI) with Google Gemini: a private assistant chat pinned at the top of Chats - streamed answers with Markdown, reasoning summaries ("Show reasoning"), "Think deeper", photo / PDF / text / video / voice-note questions, forwarding a chat message to it, Stop, Try again, Clear chat; picture creation ("Imagine") built but off by default (paid plans only); admin switch, daily limit per person and a stat | **Done** (code + tests) - not committed yet |
+| 21 | PingMe AI (like Meta AI) with Google Gemini: a private assistant chat pinned at the top of Chats - streamed answers with Markdown, reasoning summaries ("Show reasoning"), "Think deeper", photo / PDF / text / video / voice-note questions, forwarding a chat message to it, Stop, Try again, Clear chat; picture creation ("Imagine") built but off by default (paid plans only); admin switch, daily limit per person and a stat | **Done** |
+| 22 | PingMe as an installable app (PWA: manifest, icons, splash, full screen, offline page, Install offers + iPhone steps) and Web Push notifications while PingMe is closed (messages, friend requests, accepted requests, PingMe AI answers, updates posts) | **Done** |
+
+**Verification (2026-10-03, after Phase 22):** `npm test` 379/379 (15 new in
+`push.test.js`, with web-push's sender faked: the key (and null without
+keys), saving a subscription twice, refusing http / non-push-service /
+look-alike / internal-address endpoints and bad keys, accepting FCM,
+Mozilla, Apple and Windows push services, a shared browser moving to the
+new account and nobody removing someone else's; a friend request and an
+accepted request pushed to someone with PingMe closed, nothing while they
+are online or without keys; a message over the socket pushed with the
+sender's name, text and chat, a photo as "📷 Photo", long text shortened,
+nothing for a muted chat or an online recipient; 410 deletes the
+subscription and 500 keeps it (logged); an updates post pushed only to
+people offline; a PingMe AI answer without Markdown symbols; a password
+change, suspension and delete removing devices), `npm run test:e2e` 39/39
+(5 new in `pwa.spec.js`: manifest fields and every icon's real size, the
+service worker running and Chrome's own installability check finding
+nothing missing; the offline page and its saved icon with the connection
+cut; our Install offer calling the browser's prompt, the × remembered,
+Settings → App going from Install to "installed"; an iPhone getting the
+Add to Home Screen steps from the home page and the chat list; a push
+delivered to the service worker producing the right notification, and
+`/?open=requests` / `/?open=pingme-ai` opening the right place while junk
+is ignored), lint clean, build succeeds. Two problems found and fixed while
+testing: the offline page's icon did not load offline (the worker only
+served the page from its cache), and two PingMe AI browser tests could ask
+again before the previous answer was saved (409) - the tests now wait.
+Checked visually on an isolated server: the install offer (light and dark,
+phone), Settings → App, the iPhone steps, the offline page (light and dark).
+Real push delivery needs a real phone and real keys: see M22.
+
+**Verification
 
 **Verification (2026-10-02, after Phase 21):** `npm test` 364/364 (46 new in
 `ai.test.js` with `geminiClient.js` replaced by a fake: availability without
@@ -575,6 +607,37 @@ cleanly, so one commit "Phases 1-9: complete ChatApp (later renamed PingMe)" is 
 - Docs/config: `server/.env.example`, `render.yaml`, `docs/DEPLOY.md`
   section 1.7, README.
 
+### Phase 22 additions (installable app + push notifications)
+- Dependency: `web-push` (server workspace).
+- Server: `models/PushSubscription.js`; `services/pushService.js` (endpoint
+  allowlist, subscribe/unsubscribe/removeAllFor, sending only to people
+  with PingMe open nowhere, notify* for messages, friend requests, accepted
+  requests, PingMe AI answers and updates posts); `controllers/push.controller.js`,
+  `routes/push.routes.js` (`/api/push/key`, `/api/push/subscriptions`);
+  pushes sent from `messageHandlers` (send + forward), `friendService`
+  (request, accept), `updateService` (post) and `aiService` (answer done);
+  devices removed on password change/reset (`authService`) and on
+  suspend/delete (`adminService`); three `VAPID_*` variables in `config/env.js`.
+- Client: `public/manifest.webmanifest`, `public/icons/` (5 PNGs, drawn from
+  the logo), `public/offline.html`; `public/sw.js` (push handler, offline
+  page + icon from a small cache, taps open `/?open=...`); `index.html`
+  (manifest, iPhone icon and tags); `favicon.svg` is now brand green (it was
+  still the old blue); `theme-init.js` sets the dark top-bar colour early;
+  `utils/install.js`, `hooks/useInstallApp.js`, `common/InstallAppDialog.jsx`,
+  `sidebar/InstallPrompt.jsx`; `utils/push.js`, `api/push.js` - subscribed
+  from `LoggedInLayout`, `NotificationPrompt`, Settings and after a password
+  change, removed on logout (`AuthContext`) and when switched off; Settings
+  → Notifications says whether they arrive while closed, new Settings → App
+  card; store `openTarget()` + `LoggedInLayout` reads `?open=`; in-app
+  notifications use the PNG icon and the Android badge; `Dialog` is always
+  left-aligned; home page: "Install the app" link, hero badge, FAQ answer;
+  icons `ShareIcon`, `PlusSquareIcon`.
+- Tests: `server/tests/push.test.js` (`tests/setup.js` deletes the VAPID
+  keys); `e2e/pwa.spec.js`; `e2e/start-server.js` blanks the VAPID keys;
+  `e2e/ai.spec.js`'s `ask()` waits for the previous answer to finish.
+- Docs/config: `server/.env.example`, `render.yaml`, `docs/DEPLOY.md`
+  section 1.8 + troubleshooting, README (features + "Install PingMe").
+
 ### Tests and deployment
 - `server/tests/` - `health`, `auth`, `rateLimits`, `friends`,
   `conversations`, `socket` + `setup.js`, `helpers.js`
@@ -812,6 +875,28 @@ cleanly, so one commit "Phases 1-9: complete ChatApp (later renamed PingMe)" is 
     answers that are not `error`, so a busy Gemini never costs the user.
 52. **"Think deeper" stays on until switched off** (like a mode), and so
     does "Imagine" - they are chips above the box, not per-message buttons.
+53. **A PWA, not a native app** (agreed with the team, 2026-10-03): one
+    codebase, every update instant, no store review; a Play Store APK
+    (Trusted Web Activity) can wrap it later without code changes.
+54. **The service worker caches only the offline page and its icon.**
+    Caching the whole app would start it slightly faster but risks people
+    running an old version after an update; for a chat app, always fresh
+    is safer and simpler to explain.
+55. **Push only when the person has PingMe open nowhere** - an open app
+    already notifies from the socket event, so this avoids doubles without
+    any "who was notified" bookkeeping.
+56. **`web-push` is the one new library** (asked and agreed): the encryption
+    (RFC 8291) and VAPID signing are standards that should not be
+    hand-written.
+57. **Push subscription endpoints are allow-listed** to the browsers' push
+    services - otherwise anyone could make our server post to an address
+    of their choice (SSRF).
+58. **A shared browser's subscription moves to whoever subscribes last**
+    (keyed by endpoint), and logout removes it first - so one person's
+    messages never pop up for the next person on the same computer.
+59. **No `viewport-fit=cover`:** iOS then keeps the installed app clear of
+    the notch and home bar by itself, with no layout changes (at the cost
+    of a thin strip of background colour at the very bottom).
 
 ---
 
@@ -933,6 +1018,27 @@ cleanly, so one commit "Phases 1-9: complete ChatApp (later renamed PingMe)" is 
     italic, strikethrough, inline code, code blocks, lists with nesting,
     tables, quotes, links, rules) - not every corner of Markdown; anything
     else simply shows as typed. Maths formulas (LaTeX) are not rendered.
+32. **Real push delivery is tested by hand, not automatically.** The server
+    side is tested with a fake sender and the service worker with a push
+    handed to it directly, but Playwright's headless browser cannot
+    subscribe to a real push service or show real notifications - so a
+    real phone is the final check (M22).
+33. **Push needs `VAPID_PUBLIC_KEY` / `VAPID_PRIVATE_KEY` on Render** - until
+    they are set, everything else works and notifications only arrive while
+    PingMe is open, as before.
+34. **iPhone: push only for the installed app (iOS 16.4+), and no Install
+    button** - Apple's rules; PingMe shows the Share → Add to Home Screen
+    steps instead.
+35. **A device that was NOT logged out keeps its subscription** until the
+    session's account changes on it, the password is changed, or the browser
+    drops it (then the push service answers 410 and it is deleted). Logging
+    out properly removes it at once.
+36. **A message that arrives during the ~45 seconds after a phone silently
+    freezes the app in the background** may get no notification: the
+    server still counts it "online" until its connection times out, so it
+    neither pushes nor can the frozen app show its own. Later ones push.
+37. **Not cached offline:** the app itself needs a connection to start
+    (offline it shows the offline page); no offline reading of old messages.
 
 ---
 
@@ -1085,9 +1191,9 @@ really is Reply. Confirmed it fails on the pre-fix code and passes after.
 ## How to verify everything
 
 1. `npm install`
-2. `npm test` - 364 pass
+2. `npm test` - 379 pass
 3. `npm run lint` - no errors
-4. `npx playwright install chromium` (once), then `npm run test:e2e` - 33 pass
+4. `npx playwright install chromium` (once), then `npm run test:e2e` - 39 pass
 5. `cp server/.env.example server/.env`, fill in `MONGO_URI` and `JWT_SECRET`
 6. `npm run seed`, then `npm run dev`, open <http://localhost:5173>
 7. `npm run make-admin -- aman` to try the admin panel, then log in as `aman`

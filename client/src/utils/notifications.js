@@ -1,9 +1,9 @@
 // Browser notifications for new messages.
 //
-// These work while PingMe is open in ANY tab - even minimised or in the
-// background. They do not arrive once the browser is fully closed; that
-// would need Web Push (server keys, stored push subscriptions), which this
-// project does not use.
+// The ones in this file are shown by the OPEN app, from socket events - in
+// any tab, even minimised or in the background. While PingMe is closed, the
+// server sends a Web Push instead and the service worker shows it (see
+// utils/push.js and public/sw.js) - the same permission covers both.
 
 const supported = typeof window !== 'undefined' && 'Notification' in window
 
@@ -83,7 +83,9 @@ export async function showMessageNotification({ title, body, icon, conversationI
 
   const options = {
     body,
-    icon: icon || '/favicon.svg',
+    icon: icon || '/icons/icon-192.png',
+    // The small white shape in an Android phone's status bar.
+    badge: '/icons/badge-96.png',
     // One notification per chat: a second message from the same person
     // replaces the first instead of stacking up, and `renotify` makes it
     // alert again rather than updating silently.

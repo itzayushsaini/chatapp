@@ -8,6 +8,7 @@ import {
   sendMessage,
 } from '../../services/messageService.js'
 import { isOnline } from '../../services/presenceService.js'
+import { notifyNewMessage } from '../../services/pushService.js'
 import { AppError } from '../../utils/AppError.js'
 import { emitToUser } from '../emitter.js'
 
@@ -108,7 +109,12 @@ export function registerMessageHandlers(socket) {
       }
 
       ack({ ok: true, message })
-      if (created) await announceDeliveredIfOnline(userId, otherId, message.conversationId, message.id)
+      if (created) {
+        await announceDeliveredIfOnline(userId, otherId, message.conversationId, message.id)
+        // Recipient has PingMe open nowhere: a push notification instead
+        // (in the background - see pushService).
+        notifyNewMessage(otherId, message)
+      }
     } catch (err) {
       // An AppError (403 not friends, 404 conversation) is safe to show. Any
       // other error is a bug: log it, but give the client a generic message.
@@ -184,6 +190,7 @@ export function registerMessageHandlers(socket) {
       for (const result of results) {
         if (result.ok) {
           await announceDeliveredIfOnline(userId, result.otherId, result.conversationId, result.message.id)
+          notifyNewMessage(result.otherId, result.message)
         }
       }
     } catch (err) {

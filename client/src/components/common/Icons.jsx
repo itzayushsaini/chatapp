@@ -302,6 +302,22 @@ export const RefreshIcon = (p) => (
     <path d="M21 3v5h-5" />
   </Icon>
 )
+// Safari's Share button (a box with an arrow out of it) - drawn in the iPhone
+// install steps so people recognise it.
+export const ShareIcon = (p) => (
+  <Icon {...p}>
+    <path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8" />
+    <path d="m16 6-4-4-4 4" />
+    <path d="M12 2v13" />
+  </Icon>
+)
+export const PlusSquareIcon = (p) => (
+  <Icon {...p}>
+    <rect x="3" y="3" width="18" height="18" rx="2" />
+    <path d="M8 12h8" />
+    <path d="M12 8v8" />
+  </Icon>
+)
 export const SmartphoneIcon = (p) => (
   <Icon {...p}>
     <rect x="6" y="2" width="12" height="20" rx="2" />

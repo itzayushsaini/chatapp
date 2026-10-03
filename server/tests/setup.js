@@ -16,6 +16,10 @@ delete env.GOOGLE_CLIENT_SECRET
 // a test could send real requests to Google. tests/ai.test.js replaces
 // services/geminiClient.js with a fake instead, so nothing ever leaves.
 delete env.GEMINI_API_KEY
+// And push: tests/push.test.js sets its own keys and fakes web-push's
+// sending, so no test ever posts to a real push service.
+delete env.VAPID_PUBLIC_KEY
+delete env.VAPID_PRIVATE_KEY
 
 // Every test run gets a real MongoDB, started in memory and thrown away
 // afterwards. Nothing touches the development database.

@@ -10,19 +10,25 @@ import {
   BanIcon,
   BellIcon,
   ChatIcon,
+  CheckIcon,
+  DownloadIcon,
   HelpIcon,
   KeyIcon,
   LogoutIcon,
   MonitorIcon,
   MoonIcon,
+  SmartphoneIcon,
   SunIcon,
 } from '../components/common/Icons.jsx'
+import InstallAppDialog from '../components/common/InstallAppDialog.jsx'
 import LogoutDialog from '../components/common/LogoutDialog.jsx'
 import Spinner from '../components/common/Spinner.jsx'
 import Switch from '../components/common/Switch.jsx'
 import ProfileDialog from '../components/profile/ProfileDialog.jsx'
 import { useAuth } from '../context/AuthContext.jsx'
+import { useInstallApp } from '../hooks/useInstallApp.js'
 import { useChatStore } from '../store/useChatStore.js'
+import { isIos, isStandalone } from '../utils/install.js'
 import {
   notificationPermission,
   notificationsEnabled,
@@ -30,6 +36,7 @@ import {
   setNotificationsEnabled,
 } from '../utils/notifications.js'
 import { enterToSend, setEnterToSend } from '../utils/preferences.js'
+import { ensurePushSubscription, hasPushSubscription, removePushSubscription } from '../utils/push.js'
 import { applyTheme } from '../utils/theme.js'
 
 const ISSUES_URL = 'https://github.com/itzayushsaini/chatapp/issues'
@@ -75,6 +82,7 @@ export default function SettingsPage() {
           <AccountSection onChangePassword={() => setProfileOpen(true)} />
           <PrivacySection />
           <NotificationsSection />
+          <AppSection />
           <ChatsSection />
           <ThemeSection />
 
@@ -229,6 +237,12 @@ function PrivacySection() {
 function NotificationsSection() {
   const [permission, setPermission] = useState(notificationPermission)
   const [enabled, setEnabled] = useState(notificationsEnabled)
+  // Whether this device ALSO gets them while PingMe is closed (Web Push).
+  const [whileClosed, setWhileClosed] = useState(false)
+
+  useEffect(() => {
+    hasPushSubscription().then(setWhileClosed)
+  }, [])
 
   // On only if the browser allows it AND the app switch is on.
   const on = permission === 'granted' && enabled
@@ -237,6 +251,9 @@ function NotificationsSection() {
     if (!next) {
       setNotificationsEnabled(false)
       setEnabled(false)
+      // Off means off: no push notifications to this device either.
+      await removePushSubscription()
+      setWhileClosed(false)
       return
     }
     // The browser only asks once; after that it must be changed in the
@@ -246,15 +263,18 @@ function NotificationsSection() {
     if (result === 'granted') {
       setNotificationsEnabled(true)
       setEnabled(true)
+      setWhileClosed(await ensurePushSubscription().catch(() => false))
     }
   }
 
   const note =
     permission === 'unsupported'
-      ? "This browser doesn't support notifications."
+      ? isIos() && !isStandalone()
+        ? 'On iPhone and iPad, notifications work once PingMe is installed to your Home Screen (see App below).'
+        : "This browser doesn't support notifications."
       : permission === 'denied'
         ? 'Notifications are blocked for this site. Allow them in your browser’s site settings, then come back.'
-        : 'A pop-up for each new message while PingMe is open in any tab - even minimised. Muted chats never pop up.'
+        : 'A pop-up for each new message, friend request and PingMe update. Muted chats never pop up.'
 
   return (
     <Card icon={<BellIcon className="h-5 w-5" />} title="Notifications">
@@ -265,7 +285,62 @@ function NotificationsSection() {
         label="Message notifications"
         description={note}
       />
+      {on && (
+        <p className="mt-2 flex items-start gap-1.5 px-1 text-xs text-slate-600">
+          {whileClosed ? (
+            <>
+              <CheckIcon className="mt-px h-3.5 w-3.5 shrink-0 text-brand-700" />
+              They arrive even while PingMe is closed, on this device.
+            </>
+          ) : (
+            'They arrive while PingMe is open in any tab (even minimised).'
+          )}
+        </p>
+      )}
       <p className="mt-1 px-1 text-xs text-slate-500">This setting is for this browser only.</p>
+    </Card>
+  )
+}
+
+// Installing PingMe as an app - see utils/install.js. What it shows depends
+// on what this browser can do.
+function AppSection() {
+  const { state, install } = useInstallApp()
+  const [stepsOpen, setStepsOpen] = useState(false)
+
+  return (
+    <Card icon={<SmartphoneIcon className="h-5 w-5" />} title="App">
+      {state === 'installed' ? (
+        <p className="flex items-start gap-1.5 px-1 text-sm text-slate-700">
+          <CheckIcon className="mt-0.5 h-4 w-4 shrink-0 text-brand-700" />
+          PingMe is installed on this device - it opens in its own window, like any other app.
+        </p>
+      ) : (
+        <div className="space-y-3 px-1">
+          <p className="text-sm text-slate-600">
+            Install PingMe to get an icon on your home screen or desktop. It opens full screen, without the browser
+            bar, and can show notifications even while it is closed.
+          </p>
+          {state === 'prompt' && (
+            <Button size="sm" onClick={install}>
+              <DownloadIcon className="h-4 w-4" />
+              Install PingMe
+            </Button>
+          )}
+          {state === 'ios' && (
+            <Button size="sm" variant="secondary" onClick={() => setStepsOpen(true)}>
+              Show me how
+            </Button>
+          )}
+          {state === 'manual' && (
+            <p className="text-xs text-slate-500">
+              Open your browser&apos;s menu and choose &quot;Install app&quot; or &quot;Add to Home screen&quot; - Chrome,
+              Edge and Safari can install PingMe.
+            </p>
+          )}
+        </div>
+      )}
+      <InstallAppDialog open={stepsOpen} onClose={() => setStepsOpen(false)} />
     </Card>
   )
 }

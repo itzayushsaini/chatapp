@@ -6,6 +6,7 @@ import { disconnectUser, emitToUser } from '../socket/emitter.js'
 import { AppError } from '../utils/AppError.js'
 import { clearHistory as clearAiHistory, countAllAnswersToday } from './aiService.js'
 import { isOnline } from './presenceService.js'
+import { removeAllFor as removePushSubscriptions } from './pushService.js'
 
 const sameId = (a, b) => String(a) === String(b)
 
@@ -64,7 +65,9 @@ export async function suspendUser(meId, userId) {
 
   // Ends their session on every open tab right now - otherwise they could
   // keep chatting until whatever token they are holding expires on its own.
+  // Their devices also stop getting push notifications.
   disconnectUser(userId)
+  await removePushSubscriptions(userId)
   return adminUserView(user)
 }
 
@@ -93,6 +96,7 @@ export async function deleteUser(meId, userId) {
   await Friendship.deleteMany({ _id: { $in: friendships.map((f) => f._id) } })
   await Block.deleteMany({ $or: [{ blocker: userId }, { blocked: userId }] })
   await clearAiHistory(userId)
+  await removePushSubscriptions(userId)
   await User.deleteOne({ _id: userId })
 
   for (const f of friendships) {

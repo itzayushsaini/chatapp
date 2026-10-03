@@ -52,4 +52,10 @@ services:
       # Left blank, PingMe AI is not shown.
       - key: GEMINI_API_KEY
         sync: false
+      # Optional push notifications while PingMe is closed - a key pair made
+      # once with `npx web-push generate-vapid-keys` (docs/DEPLOY.md 1.8).
+      - key: VAPID_PUBLIC_KEY
+        sync: false
+      - key: VAPID_PRIVATE_KEY
+        sync: false
       # PORT is set by Render automatically; config/env.js reads it.

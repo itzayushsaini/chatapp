@@ -10,6 +10,7 @@ import { AppError } from '../utils/AppError.js'
 import { pairKey } from '../utils/pairKey.js'
 import { publicUser } from '../utils/publicUser.js'
 import { isOnline } from './presenceService.js'
+import { notifyFriendRequest, notifyRequestAccepted } from './pushService.js'
 
 const DECLINE_COOLDOWN_MS = 7 * 24 * 60 * 60 * 1000
 
@@ -194,6 +195,7 @@ export async function sendRequest(meId, username) {
 
   const me = await User.findById(meId)
   emitToUser(target._id, 'friend:request:new', { request: requestItem(friendship, me) })
+  notifyFriendRequest(target._id, me) // a push, if they have PingMe closed
 
   return { request: requestItem(friendship, target) }
 }
@@ -232,6 +234,7 @@ export async function acceptRequest(meId, requestId) {
   // the client ignores a friend it already has).
   emitToUser(requester._id, 'friend:request:accepted', { friend: itemForRequester })
   emitToUser(me._id, 'friend:request:accepted', { friend: itemForMe })
+  notifyRequestAccepted(requester._id, me, conversation._id) // a push, if PingMe is closed
 
   // Now that they are friends, each may see the other's presence.
   if (isOnline(requester._id)) {

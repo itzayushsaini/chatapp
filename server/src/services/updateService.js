@@ -3,6 +3,7 @@ import { User } from '../models/User.js'
 import { emitToAll, emitToUser } from '../socket/emitter.js'
 import { AppError } from '../utils/AppError.js'
 import { detectFileType } from '../utils/fileType.js'
+import { notifyUpdatePosted } from './pushService.js'
 import { deleteFile, getFileInfo, saveFile } from './storageService.js'
 
 // The "PingMe" updates channel: admins post, every logged-in user reads.
@@ -51,6 +52,7 @@ export async function createUpdate(authorId, { text }, file) {
 
   const view = updateView(update)
   emitToAll('update:new', { update: view })
+  notifyUpdatePosted(view) // and a push to everyone who has PingMe closed
   return view
 }
 

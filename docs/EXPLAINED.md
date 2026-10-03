@@ -2414,3 +2414,150 @@ chat is visible only to them.
   fake (and a second test file fakes Google's SDK to test `geminiClient.js`
   itself); the browser tests run against `e2e/fakeGemini.js`, which answers
   in Google's own streaming format.
+
+---
+
+# Phase 22 - PingMe as an app, with notifications while it is closed
+
+**Goal of this phase:** people should be able to put PingMe on their phone
+like WhatsApp - an icon, full screen, no browser bar - and be told about a
+new message even when PingMe is closed. We did it WITHOUT writing a second
+app: PingMe is now a **Progressive Web App (PWA)**.
+
+## 1. What a PWA is, in one paragraph
+
+A PWA is an ordinary website that gives the browser three extra things:
+a **manifest** (a small JSON "ID card": name, icons, colours, "open full
+screen"), a **service worker** (a script the browser keeps running in the
+background for this site), and **HTTPS**. With those, Chrome, Edge, Samsung
+Internet and Safari let people install it - it then gets its own icon and
+window, and appears in the phone's app list. The same code still runs in a
+normal browser tab.
+
+> **Likely question: why not a "real" Android app?**
+> A native app means a second codebase (Kotlin, or React Native) that the
+> team must write, test and explain, plus app-store reviews for every
+> change. A PWA reuses all of PingMe - every update reaches every phone the
+> moment we deploy. Big companies do the same (Twitter/X Lite, Starbucks,
+> Pinterest). If we ever want it on the Play Store, Google's own tool can
+> wrap this exact PWA into an APK.
+
+## 2. The manifest and the icons
+
+`client/public/manifest.webmanifest` says: the name is PingMe, start at `/`,
+`display: standalone` (no address bar), the theme colour is our green, and
+here are the icons. The icons were drawn from the logo's own SVG, in the
+sizes each system needs:
+
+| File | Why it exists |
+|---|---|
+| `icon-192.png`, `icon-512.png` | The normal app icon (rounded square) |
+| `icon-maskable-512.png` | Android cuts icons into circles or squircles - this one is green edge to edge, with the bubble inside the middle "safe zone", so nothing gets cut off |
+| `apple-touch-icon.png` (180 px) | iPhone home screen. Fully opaque, because iOS fills transparent corners with black |
+| `badge-96.png` | The small white shape in an Android phone's status bar |
+
+While doing this we noticed the browser-tab icon (`favicon.svg`) was still
+the old blue from before the green redesign - it is green now.
+
+## 3. "Install" buttons - and why the iPhone is different
+
+Chrome decides by itself that a site can be installed and fires ONE event,
+`beforeinstallprompt`. `utils/install.js` catches it (it is loaded with the
+app, so the event is never missed), stops the browser's own small bar, and
+keeps it. Our **Install** buttons - a one-line offer in the chat list,
+Settings → App, and the home page - call its `prompt()`, which opens the
+browser's real install dialog.
+
+Apple does not support that event at all: on an iPhone the ONLY way is
+Safari's Share menu → "Add to Home Screen". So on iPhones the same buttons
+open a small dialog with those three steps.
+
+## 4. The service worker - and why it caches almost nothing
+
+`client/public/sw.js` already showed notifications (Phase 16a). It now does
+three jobs:
+
+1. show notifications - the open app's, and **push** ones while PingMe is
+   closed (section 5);
+2. open the right place when a notification is tapped;
+3. when PingMe is opened with **no internet**, show our own "You're
+   offline" page instead of the browser's error page.
+
+For job 3 it saves exactly two files in advance: `offline.html` and the icon
+on it. Nothing else - not the app's code, not messages, not the API. Many
+PWAs cache everything to work offline, but then a person can be stuck on an
+OLD version of the app after an update, or see stale messages. For a chat
+app, "always fresh from the server" is the safer choice - and simpler to
+explain. (Testing caught a real bug here: at first the worker only served
+the page from its cache, not the icon, so offline the picture was broken.)
+
+## 5. Push notifications while PingMe is closed (Web Push)
+
+Before this phase, notifications came from the socket: no open app, no
+socket, no notification. Web Push is the standard way around that:
+
+1. When someone allows notifications, their browser creates a **push
+   subscription** - an address (the "endpoint") at its maker's push service
+   (Google's for Chrome, Mozilla's for Firefox, Apple's for Safari), for that
+   ONE device - and PingMe saves it on our server (`POST /api/push/subscriptions`).
+2. When something happens and that person has PingMe open **nowhere**, the
+   server posts an **encrypted** message to that address (`web-push` does the
+   encryption, and signs the request with our **VAPID** keys, which prove it
+   is really our server).
+3. The push service wakes the phone's PingMe service worker - even with
+   PingMe closed - and it shows the notification. A tap opens PingMe at
+   `/?open=<the chat>`.
+
+What gets a push: a new or forwarded message (never for a muted chat), a
+friend request, an accepted request, a finished PingMe AI answer, and a new
+PingMe update post.
+
+> **Likely question: can Google read our messages then?**
+> No. Each push is encrypted with the receiving device's own public key
+> (it gives us that key along with the address), so the push service only
+> carries an envelope it cannot open.
+
+> **Likely question: why only when the person is offline?**
+> If PingMe is open anywhere, the open app already shows a notification
+> from the socket event. Pushing too would show two. "Online" is exactly the
+> presence count we already keep (Phase 5).
+
+## 6. Keeping it safe
+
+- **Only real push services:** a subscription's address must be `https` on
+  Google's, Mozilla's, Apple's or Microsoft's push service. Otherwise anyone
+  could save an address of their choosing and make OUR server send requests
+  to it - an attack called SSRF.
+- **Shared computers:** logging out first removes this device's
+  subscription, and a subscription is stored by its address - if someone
+  else logs in on the same browser, it moves to them. One person's messages
+  never pop up for the next person.
+- **Changed password, suspended or deleted:** every device of that account
+  stops getting pushes (a stolen phone stops too). The device still logged
+  in simply subscribes again.
+- **Never in the way:** sending a push is fire-and-forget - it can never slow
+  down or break sending a message. A subscription the browser threw away
+  (the push service answers 410) is deleted.
+- **Tests never send a real push:** the server tests fake `web-push`'s
+  sender, and the browser tests hand a push straight to the service worker.
+
+## 7. iPhone rules, honestly
+
+Apple only allows push for a PingMe that is **installed** to the Home Screen
+(iOS 16.4 or newer), and never shows an install button for websites. So the
+Settings page tells iPhone users to install first, and every Install button
+shows the Share → Add to Home Screen steps.
+
+## 8. Small pieces worth knowing
+
+- **Keys are settings, not code:** `VAPID_PUBLIC_KEY` / `VAPID_PRIVATE_KEY`,
+  made once with `npx web-push generate-vapid-keys`. Without them PingMe
+  works exactly as before (notifications while open).
+- **Dark mode top bar:** `theme-init.js` now also sets the phone's top-bar
+  colour before React starts, so an installed app opens dark from the
+  first frame.
+- **Dialogs are always left-aligned** - the iPhone steps opened from the
+  centred home page had inherited centred text.
+- **Testing the install button without installing:** the browser test fires
+  a fake `beforeinstallprompt` event and checks our button calls `prompt()`;
+  Chrome's own DevTools check confirms PingMe is installable.

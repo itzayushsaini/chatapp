@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import { Link } from 'react-router'
 
 import AnnouncementBanner from '../components/common/AnnouncementBanner.jsx'
@@ -24,8 +25,10 @@ import {
   UserPlusIcon,
   ZapIcon,
 } from '../components/common/Icons.jsx'
+import InstallAppDialog from '../components/common/InstallAppDialog.jsx'
 import Logo from '../components/common/Logo.jsx'
 import ChatPreview from '../components/landing/ChatPreview.jsx'
+import { useInstallApp } from '../hooks/useInstallApp.js'
 
 // The public home page, shown at "/" to anyone who is NOT logged in (a
 // logged-in user gets the chat there instead - see App.jsx). It is a plain,
@@ -194,7 +197,7 @@ const FAQS = [
   },
   {
     q: 'Do I need to install anything?',
-    a: 'No - PingMe runs in your browser on phones, tablets and laptops. You can turn on notifications so new messages pop up while PingMe is open in a tab.',
+    a: 'No - PingMe runs in your browser on phones, tablets and laptops. But you can install it as an app (Chrome, Edge or Safari: "Install app" or "Add to Home Screen"): it gets its own icon, opens full screen, and with notifications on it tells you about new messages even while it is closed.',
   },
   {
     q: 'I forgot my password. What now?',
@@ -261,6 +264,29 @@ function Header() {
   )
 }
 
+// "Install the app" - only where installing works right now: the browser
+// has offered it (Chrome, Edge, Android), or on an iPhone/iPad (then it shows
+// the Add to Home Screen steps). Already installed, or anywhere else: nothing.
+function InstallAppLink() {
+  const { state, install } = useInstallApp()
+  const [stepsOpen, setStepsOpen] = useState(false)
+  if (state !== 'prompt' && state !== 'ios') return null
+
+  return (
+    <>
+      <button
+        type="button"
+        onClick={() => (state === 'ios' ? setStepsOpen(true) : install())}
+        className="mt-5 inline-flex items-center gap-2 rounded-lg px-2 py-1 text-sm font-semibold text-brand-700 hover:bg-brand-50 focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:outline-none"
+      >
+        <SmartphoneIcon className="h-4 w-4" />
+        Install the app
+      </button>
+      <InstallAppDialog open={stepsOpen} onClose={() => setStepsOpen(false)} />
+    </>
+  )
+}
+
 function Hero() {
   return (
     <section className="relative">
@@ -274,7 +300,7 @@ function Hero() {
         <div className="animate-fade-in text-center lg:text-left">
           <span className="inline-flex items-center gap-2 rounded-full bg-surface px-3 py-1 text-xs font-medium text-brand-700 shadow-sm ring-1 ring-slate-200">
             <span className="h-1.5 w-1.5 rounded-full bg-brand-600" />
-            New: voice notes 🎤
+            New: PingMe is now an app 📱
           </span>
           <h1 className="mt-5 text-4xl font-extrabold tracking-tight text-balance text-slate-900 sm:text-5xl xl:text-[3.5rem] xl:leading-[1.1]">
             Real conversations.
@@ -303,6 +329,7 @@ function Hero() {
               </li>
             ))}
           </ul>
+          <InstallAppLink />
         </div>
 
         <ChatPreview />

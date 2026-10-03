@@ -28,6 +28,12 @@ process.env.GOOGLE_CLIENT_SECRET = ''
 process.env.GEMINI_API_KEY = 'e2e-fake-key'
 const { installFakeGemini } = await import('./fakeGemini.js')
 installFakeGemini()
+// Web Push stays OFF here, whatever server/.env says: with real keys, a test
+// could make the server post to Google's or Mozilla's push service. The
+// sending side is covered by server/tests/push.test.js (with a fake
+// sender); pwa.spec.js hands a push to the service worker directly.
+process.env.VAPID_PUBLIC_KEY = ''
+process.env.VAPID_PRIVATE_KEY = ''
 
 // Imported only now, because config/env.js validates process.env on load.
 await import('../server/src/server.js')

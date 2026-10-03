@@ -6,6 +6,7 @@ import {
   promptDismissed,
   requestNotificationPermission,
 } from '../../utils/notifications.js'
+import { ensurePushSubscription } from '../../utils/push.js'
 
 // A one-line offer to turn on message notifications. Shown only while the
 // browser has not been asked yet ("default") - once allowed, blocked, or
@@ -19,8 +20,10 @@ export default function NotificationPrompt() {
   if (!visible) return null
 
   async function enable() {
-    await requestNotificationPermission()
+    const result = await requestNotificationPermission()
     setVisible(false)
+    // Also while PingMe is closed, where this browser supports it.
+    if (result === 'granted') ensurePushSubscription().catch(() => {})
   }
 
   function dismiss() {
