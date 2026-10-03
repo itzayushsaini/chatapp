@@ -2,7 +2,7 @@
 
 A new session should be able to read this file and carry on from it.
 
-Last updated: 2026-10-03 (Post-22 polish: bigger on phones - done, not yet committed. Before that, Phase 22: installable app (PWA) + push notifications while PingMe is closed - done and committed. Push needs VAPID keys on Render - docs/DEPLOY.md 1.8; the real-phone checks are M22 in TEST_CASES.md)
+Last updated: 2026-10-03 (Post-22 polish: bigger on phones - done and committed (84cb813). Before that, Phase 22: installable app (PWA) + push notifications while PingMe is closed - done and committed. Push needs VAPID keys on Render - docs/DEPLOY.md 1.8; the real-phone checks are M22 in TEST_CASES.md)
 
 ---
 
