@@ -160,7 +160,7 @@ export default function MessageBubble({
 
           {/* Time and tick sit INSIDE the bubble, bottom-right - the same
               place WhatsApp puts them, rather than as a caption below it. */}
-          <div className={`flex items-center justify-end gap-1 text-[11px] text-meta ${attachment && !text ? 'px-2 pb-1' : ''}`}>
+          <div className={`flex items-center justify-end gap-1 text-[0.6875rem] text-meta ${attachment && !text ? 'px-2 pb-1' : ''}`}>
             <span>{formatTime(message.createdAt)}</span>
             {mine && (
               <MessageStatus status={status} read={read} delivered={delivered} onRetry={() => onRetry(message)} />
@@ -405,7 +405,7 @@ export function UploadProgress({ progress }) {
           style={{ width: `${percent}%` }}
         />
       </div>
-      <p className="mt-1 text-[11px] text-meta">Uploading {percent}%</p>
+      <p className="mt-1 text-[0.6875rem] text-meta">Uploading {percent}%</p>
     </div>
   )
 }

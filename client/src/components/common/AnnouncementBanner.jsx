@@ -50,7 +50,7 @@ export default function AnnouncementBanner() {
           {/* The visible label, from 640px up (the screen-reader text above
               says the same on every screen size). */}
           <span
-            className="mr-2 hidden rounded-full bg-brand-600/15 px-2 py-0.5 align-[1px] text-[11px] font-semibold tracking-wide text-brand-700 uppercase sm:inline-block"
+            className="mr-2 hidden rounded-full bg-brand-600/15 px-2 py-0.5 align-[1px] text-[0.6875rem] font-semibold tracking-wide text-brand-700 uppercase sm:inline-block"
             aria-hidden="true"
           >
             Announcement

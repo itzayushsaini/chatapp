@@ -103,6 +103,20 @@ body {
   @apply bg-slate-50 font-sans text-slate-900 antialiased;
 }
 
+/* Bigger on phones (below 768px, Tailwind's md), so PingMe feels like an
+   app there rather than a shrunken website - the team's request. Every
+   Tailwind size (text, spacing, avatars, icons, buttons) is in rem, i.e. a
+   multiple of this one root size, so this single line scales the whole
+   layout evenly: 112.5% = 18px instead of the browser's 16px (about 113%).
+   A percentage, not 18px, so someone who set a larger text size in their
+   browser still gets their own size on top. Media queries are measured in
+   the browser's default size, never this one, so breakpoints don't move. */
+@media (max-width: 47.99rem) {
+  html {
+    font-size: 112.5%;
+  }
+}
+
 /* The chat panel's background, behind the message bubbles - WhatsApp's own
    flat warm-white tone plus a very faint repeating doodle pattern, so the
    panel is never a flat, empty colour the way the rest of the app is. */

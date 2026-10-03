@@ -51,7 +51,7 @@ export default function ChatPreview() {
             <span className="h-2.5 w-2.5 rounded-full bg-red-400" />
             <span className="h-2.5 w-2.5 rounded-full bg-amber-400" />
             <span className="h-2.5 w-2.5 rounded-full bg-emerald-400" />
-            <span className="ml-3 rounded-md bg-surface px-3 py-0.5 text-[10px] text-slate-500">PingMe</span>
+            <span className="ml-3 rounded-md bg-surface px-3 py-0.5 text-[0.625rem] text-slate-500">PingMe</span>
           </div>
           <div className="flex h-[22rem]">
             <ChatList />
@@ -110,7 +110,7 @@ function ChatList() {
   return (
     <div className="flex w-44 shrink-0 flex-col border-r border-slate-200 bg-surface lg:w-48">
       <div className="p-2">
-        <div className="flex items-center gap-1.5 rounded-full bg-slate-100 px-2.5 py-1.5 text-[10px] text-slate-400">
+        <div className="flex items-center gap-1.5 rounded-full bg-slate-100 px-2.5 py-1.5 text-[0.625rem] text-slate-400">
           <SearchIcon className="h-3 w-3" /> Search chats
         </div>
       </div>
@@ -122,15 +122,15 @@ function ChatList() {
           <Avatar user={chat.user} size="sm" online={chat.online} />
           <div className="min-w-0 flex-1">
             <div className="flex items-baseline justify-between gap-1">
-              <span className="truncate text-[11px] font-semibold text-slate-900">{chat.user.displayName}</span>
-              <span className="shrink-0 text-[9px] text-slate-400">{chat.time}</span>
+              <span className="truncate text-[0.6875rem] font-semibold text-slate-900">{chat.user.displayName}</span>
+              <span className="shrink-0 text-[0.5625rem] text-slate-400">{chat.time}</span>
             </div>
             <div className="flex items-center justify-between gap-1">
-              <span className={`truncate text-[10px] ${chat.typing ? 'text-emerald-600' : 'text-slate-500'}`}>
+              <span className={`truncate text-[0.625rem] ${chat.typing ? 'text-emerald-600' : 'text-slate-500'}`}>
                 {chat.preview}
               </span>
               {chat.unread && (
-                <span className="rounded-full bg-brand-600 px-1.5 text-[9px] font-semibold text-white">
+                <span className="rounded-full bg-brand-600 px-1.5 text-[0.5625rem] font-semibold text-white">
                   {chat.unread}
                 </span>
               )}
@@ -149,7 +149,7 @@ function ChatHeader({ user, status, typing = false, back = false }) {
       <Avatar user={user} size="sm" online />
       <div className="min-w-0">
         <p className="truncate text-xs font-semibold text-slate-900">{user.displayName}</p>
-        <p className={`flex items-center gap-1 text-[10px] ${typing ? 'text-emerald-600' : 'text-slate-500'}`}>
+        <p className={`flex items-center gap-1 text-[0.625rem] ${typing ? 'text-emerald-600' : 'text-slate-500'}`}>
           {status}
         </p>
       </div>
@@ -161,20 +161,20 @@ function Bubble({ mine = false, delay, time, photo = false, reply, children }) {
   return (
     <div className={`flex ${mine ? 'justify-end' : 'justify-start'}`}>
       <div
-        className={`landing-pop max-w-[85%] rounded-lg px-2 py-1 text-[11px] leading-snug text-slate-900 shadow-sm ${
+        className={`landing-pop max-w-[85%] rounded-lg px-2 py-1 text-[0.6875rem] leading-snug text-slate-900 shadow-sm ${
           mine ? 'bubble-tail-mine rounded-tr-none bg-brand-100' : 'bubble-tail-theirs rounded-tl-none bg-surface'
         }`}
         style={{ '--delay': `${delay}s` }}
       >
         {photo && <PhotoThumb />}
         {reply && (
-          <div className="mb-1 rounded border-l-[3px] border-brand-500 bg-overlay/5 px-1.5 py-0.5 text-[9px]">
+          <div className="mb-1 rounded border-l-[3px] border-brand-500 bg-overlay/5 px-1.5 py-0.5 text-[0.5625rem]">
             <p className="font-medium text-brand-700">{reply.name}</p>
             <p className="truncate text-slate-600">{reply.text}</p>
           </div>
         )}
         {children}
-        <span className="mt-0.5 flex items-center justify-end gap-0.5 text-[9px] text-meta">
+        <span className="mt-0.5 flex items-center justify-end gap-0.5 text-[0.5625rem] text-meta">
           {time}
           {mine && <CheckCheckIcon className="landing-tick h-3 w-3 text-tick-read" />}
         </span>
@@ -223,7 +223,7 @@ function VoiceNote({ mine = false }) {
           />
         ))}
       </span>
-      <span className="shrink-0 text-[9px] text-meta">0:12</span>
+      <span className="shrink-0 text-[0.5625rem] text-meta">0:12</span>
     </span>
   )
 }
@@ -231,7 +231,7 @@ function VoiceNote({ mine = false }) {
 function Composer({ compact = false }) {
   return (
     <div className="flex items-center gap-1.5 bg-slate-100 px-2 py-1.5">
-      <div className="flex min-w-0 flex-1 items-center gap-1.5 rounded-full bg-surface px-2.5 py-1.5 text-[10px] text-slate-400">
+      <div className="flex min-w-0 flex-1 items-center gap-1.5 rounded-full bg-surface px-2.5 py-1.5 text-[0.625rem] text-slate-400">
         <PaperclipIcon className="h-3 w-3 shrink-0" />
         <span className="truncate">{compact ? 'Message' : 'Type a message'}</span>
       </div>

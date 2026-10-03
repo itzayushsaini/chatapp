@@ -2591,3 +2591,36 @@ message in view if you were already at the bottom - like WhatsApp.
 
 Also, at the team's request, the announcement banner is hidden on phones
 (`hidden md:block`) - on a small screen every line belongs to the chat.
+
+## 10. Polish after Phase 22: bigger on phones
+
+**What the team wanted:** on a phone PingMe looked small, like a website
+squeezed onto a phone, not big and clear like an app.
+
+**How one line does it:** Tailwind writes every size - text, padding,
+avatars, icons, buttons - in **rem**, which means "a multiple of the page's
+root text size". Browsers start that root size at 16px. So `index.css`
+says: on screens narrower than 768px (where PingMe uses its phone layout),
+the root size is `112.5%`, i.e. 18px. Everything measured in rem grows by
+the same 18/16 ≈ 13% at once, keeping all the proportions; computers stay
+at 16px and look exactly as before.
+
+- **Why `112.5%` and not `18px`?** A percentage is "of the user's own
+  setting". Someone who already chose bigger text in their browser keeps
+  that, plus our 13%.
+- **Doesn't a bigger root size move the 768px breakpoint?** No - media
+  queries in rem are always measured in the browser's *default* size,
+  never the page's own, so the phone/computer switch stays at 768px.
+- **The few fixed sizes:** message times and a few labels were written in
+  pixels (`text-[11px]`), which would not grow. They became the same size
+  in rem (`text-[0.6875rem]` = 11px on a computer, about 12.4px on a phone).
+- **Smallest phones (320px):** two things got cramped there and were fixed.
+  The sidebar tabs now size to their words and never wrap, and in Settings
+  the "Edit profile" button gets its own full-width row on phones instead
+  of squeezing the name.
+
+> **Likely question: how do you test "bigger"?**
+> A browser test opens the same chat on a phone-sized and a computer-sized
+> window, reads the actual font sizes the browser computed, and checks the
+> phone's are exactly 18/16 of the computer's. It fails if the line in
+> `index.css` is removed - we checked.

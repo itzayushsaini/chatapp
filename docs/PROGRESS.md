@@ -2,7 +2,7 @@
 
 A new session should be able to read this file and carry on from it.
 
-Last updated: 2026-10-03 (Phase 22: installable app (PWA) + push notifications while PingMe is closed - done and committed. Push needs VAPID keys on Render - docs/DEPLOY.md 1.8; the real-phone checks are M22 in TEST_CASES.md)
+Last updated: 2026-10-03 (Post-22 polish: bigger on phones - done, not yet committed. Before that, Phase 22: installable app (PWA) + push notifications while PingMe is closed - done and committed. Push needs VAPID keys on Render - docs/DEPLOY.md 1.8; the real-phone checks are M22 in TEST_CASES.md)
 
 ---
 
@@ -1172,6 +1172,37 @@ text box sat at 730px, behind the keyboard). Plus the viewport tag, and
 the banner hidden at 375px but shown on a computer. A real keyboard can't be
 opened in an automated browser - M23 checks it on a real phone.
 
+## Post-22 polish (2026-10-03): bigger on phones
+
+**What the team asked:** on a phone PingMe looked small - "like a desktop
+site" - not big and clear like an app.
+
+**Change:**
+- `index.css`: below 768px (`max-width: 47.99rem`, Tailwind's `md`) the
+  root size is `112.5%` (18px instead of 16px). Every Tailwind size (text,
+  spacing, avatars, icons, buttons, bubbles) is in rem, so the whole phone
+  layout grows by the same ~13%; computers are unchanged. A percentage, so
+  a larger text size set in the browser still applies on top. Media queries
+  are measured in the browser's default size, so no breakpoint moves.
+- The few fixed pixel text sizes (message times, the upload %, the
+  voice-note timer, the home page's preview) became the same sizes in rem
+  (`text-[11px]` → `text-[0.6875rem]` etc.), so they grow too.
+- On a 320px phone two things got cramped and were fixed: the sidebar tabs
+  are `flex-auto whitespace-nowrap` with a little less padding below `sm`
+  ("Add Friend" no longer breaks onto two lines, even with a Requests
+  badge), and in Settings the "Edit profile" button takes its own
+  full-width row below `sm` (`max-sm:basis-full`) instead of squeezing the
+  name to "N…".
+
+**Checked:** chat list, Add Friend, profile dialog, a chat, Forward dialog,
+Contact info, PingMe AI, the updates channel, Settings, home, login and
+register at 320px in Chromium - nothing wider than the screen.
+
+**Test:** `e2e/mobileLayout.spec.js` (E43) - root 18px on a phone, 16px on
+a computer, and the message box and a message's time exactly 18/16 bigger.
+Confirmed to FAIL without the change. The existing 320px phone test still
+passes. M24 in TEST_CASES.md is the real-phone check.
+
 ## Post-21 polish (2026-10-02): the announcement banner looks professional
 
 The admin's banner was a plain solid-green strip with centred text, which
@@ -1231,7 +1262,7 @@ really is Reply. Confirmed it fails on the pre-fix code and passes after.
 1. `npm install`
 2. `npm test` - 379 pass
 3. `npm run lint` - no errors
-4. `npx playwright install chromium` (once), then `npm run test:e2e` - 42 pass
+4. `npx playwright install chromium` (once), then `npm run test:e2e` - 43 pass
 5. `cp server/.env.example server/.env`, fill in `MONGO_URI` and `JWT_SECRET`
 6. `npm run seed`, then `npm run dev`, open <http://localhost:5173>
 7. `npm run make-admin -- aman` to try the admin panel, then log in as `aman`

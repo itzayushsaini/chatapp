@@ -225,7 +225,7 @@ function UpdatePost({ update, onOpenImage, onImageLoad }) {
         {update.text && (
           <p className={`whitespace-pre-wrap wrap-anywhere ${update.imageUrl ? 'px-2 pt-1.5' : ''}`}>{update.text}</p>
         )}
-        <div className={`flex justify-end text-[11px] text-meta ${update.imageUrl ? 'px-2 pb-1' : ''}`}>
+        <div className={`flex justify-end text-[0.6875rem] text-meta ${update.imageUrl ? 'px-2 pb-1' : ''}`}>
           {formatTime(update.createdAt)}
         </div>
       </div>

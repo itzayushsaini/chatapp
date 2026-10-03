@@ -135,7 +135,7 @@ export default function VoicePlayer({ attachment, mine = false, compact = false 
             />
           ))}
         </div>
-        <div className="mt-0.5 flex items-center justify-between text-[11px] text-meta tabular-nums">
+        <div className="mt-0.5 flex items-center justify-between text-[0.6875rem] text-meta tabular-nums">
           <span>{formatDuration((playing || position > 0 ? position : duration) * 1000)}</span>
           <button
             type="button"

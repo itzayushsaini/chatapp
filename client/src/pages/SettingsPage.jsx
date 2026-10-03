@@ -66,15 +66,17 @@ export default function SettingsPage() {
 
       <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain">
         <div className="mx-auto w-full max-w-2xl space-y-4 px-3 py-4 sm:px-4 sm:py-6">
-          {/* Me - the same profile editor the sidebar opens. */}
-          <section className="flex items-center gap-4 rounded-2xl bg-surface p-4 shadow-sm">
+          {/* Me - the same profile editor the sidebar opens. On phones (below
+              `sm`) the button gets a full-width row of its own under the name,
+              instead of squeezing the name down to one letter beside it. */}
+          <section className="flex flex-wrap items-center gap-4 rounded-2xl bg-surface p-4 shadow-sm">
             <Avatar user={user} size="lg" />
             <div className="min-w-0 flex-1">
               <p className="truncate font-semibold text-slate-900">{user.displayName}</p>
               <p className="truncate text-sm text-slate-500">@{user.username}</p>
               {user.bio && <p className="mt-0.5 truncate text-sm text-slate-600">{user.bio}</p>}
             </div>
-            <Button variant="secondary" size="sm" onClick={() => setProfileOpen(true)}>
+            <Button variant="secondary" size="sm" className="max-sm:basis-full" onClick={() => setProfileOpen(true)}>
               Edit profile
             </Button>
           </section>

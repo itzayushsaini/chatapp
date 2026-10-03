@@ -463,11 +463,11 @@ function StepSearch() {
         <SearchIcon className="h-3.5 w-3.5 text-slate-400" /> aman_verma
       </div>
       <div className="flex items-center gap-2 rounded-lg bg-slate-50 p-2">
-        <span className="inline-flex h-7 w-7 items-center justify-center rounded-full bg-sky-600 text-[10px] font-semibold text-white">
+        <span className="inline-flex h-7 w-7 items-center justify-center rounded-full bg-sky-600 text-[0.625rem] font-semibold text-white">
           AV
         </span>
         <span className="min-w-0 flex-1 truncate font-medium text-slate-900">Aman Verma</span>
-        <span className="rounded-md bg-brand-600 px-2 py-1 text-[10px] font-medium text-white">Add friend</span>
+        <span className="rounded-md bg-brand-600 px-2 py-1 text-[0.625rem] font-medium text-white">Add friend</span>
       </div>
     </div>
   )
@@ -475,7 +475,7 @@ function StepSearch() {
 
 function StepChat() {
   return (
-    <div className="chat-background space-y-1.5 rounded-lg p-2 text-[11px]">
+    <div className="chat-background space-y-1.5 rounded-lg p-2 text-[0.6875rem]">
       <div className="flex justify-start">
         <span className="rounded-lg rounded-tl-none bg-surface px-2 py-1 text-slate-900 shadow-sm">Request accepted! 👋</span>
       </div>

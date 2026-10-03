@@ -58,7 +58,7 @@ function Question({ message, animateIn, onOpenImage, onMediaLoad, onRetryQuestio
         {status === 'uploading' && <UploadProgress progress={message.progress ?? 0} />}
         {text && <p className={`whitespace-pre-wrap wrap-anywhere ${attachment ? 'px-2 pt-1.5' : ''}`}>{text}</p>}
 
-        <div className={`flex items-center justify-end gap-1.5 text-[11px] text-meta ${attachment ? 'px-2 pb-1' : ''}`}>
+        <div className={`flex items-center justify-end gap-1.5 text-[0.6875rem] text-meta ${attachment ? 'px-2 pb-1' : ''}`}>
           <span>{formatTime(message.createdAt)}</span>
           {(status === 'sending' || status === 'uploading') && (
             <span className="inline-flex items-center">
@@ -168,7 +168,7 @@ function Answer({ message, animateIn, isLatestAnswer, onOpenImage, onMediaLoad, 
           </div>
         )}
 
-        <div className="mt-1 flex items-center justify-end gap-2 text-[11px] text-meta">
+        <div className="mt-1 flex items-center justify-end gap-2 text-[0.6875rem] text-meta">
           {text && status !== 'streaming' && (
             <button
               type="button"

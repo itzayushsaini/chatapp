@@ -104,7 +104,7 @@ export default function Sidebar({ className = '' }) {
               aria-controls={`panel-${t.id}`}
               tabIndex={selected ? 0 : -1}
               onClick={() => setTab(t.id)}
-              className={`relative flex flex-1 items-center justify-center gap-1.5 rounded-full px-2 py-1.5 text-sm font-medium focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:outline-none ${
+              className={`relative flex flex-auto items-center justify-center gap-1.5 rounded-full px-1.5 py-1.5 text-sm font-medium whitespace-nowrap sm:px-2 focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:outline-none ${
                 selected ? 'bg-brand-600 text-white' : 'text-slate-600 hover:bg-slate-100'
               }`}
             >

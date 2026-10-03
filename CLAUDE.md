@@ -1139,6 +1139,7 @@ All responses are JSON (except the two file downloads). Errors use the shape `{ 
 
 - A sidebar with the tabs **Chats | Requests (with a badge) | Add Friend**, next to a chat panel.
 - Below 768px, show either the list or the chat, with a back button.
+- **Bigger on phones:** below 768px the root font size is `112.5%` (18px) in `index.css`, so the whole rem-based layout is ~13% bigger, like an app; computers stay at 16px. Write sizes in rem (Tailwind classes, `text-[0.6875rem]`), never fixed `px` text, so they scale too.
 - **Phone keyboard:** the chat shell is one screen tall and must stay fully on screen when the keyboard opens - the header never slides off the top. `index.html`'s viewport has `interactive-widget=resizes-content` (Android shrinks the page), and `utils/viewport.js` sets `--app-height` from `window.visualViewport` while a keyboard is open (iPhone Safari ignores the tag); `LoggedInLayout` is `h-[var(--app-height,100dvh)]`. Message lists keep the newest message in view when they get shorter, if the reader was at the bottom (`hooks/useKeepBottomOnResize.js`).
 
 ### Sidebar tabs

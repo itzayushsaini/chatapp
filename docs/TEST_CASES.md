@@ -7,8 +7,8 @@ Kept up to date at the end of every phase.
 - **Manual** cases are the ones a person checks in the browser. Fill in the
   Actual and Result columns when you run them.
 
-Last full run: 2026-10-03 (after Phase 22 - installable app + push) - **379/379
-server tests pass, 42/42 end-to-end tests pass (E40-E42 added with the phone keyboard fix), lint clean in both workspaces, `npm run build`
+Last full run: 2026-10-03 (after the "bigger on phones" polish) - **379/379
+server tests pass, 43/43 end-to-end tests pass (E40-E42 added with the phone keyboard fix, E43 with the bigger phone size), lint clean in both workspaces, `npm run build`
 succeeds.** No automated test ever calls Google or a push service: `npm test` fakes
 `geminiClient.js` (or Google's SDK) and `web-push`'s sender, and the e2e server uses
 `e2e/fakeGemini.js` with push switched off.
@@ -489,6 +489,7 @@ email provider configured.
 | E40 | Phone keyboard (`e2e/mobileKeyboard.spec.js`) | At 375px with a chat full of messages, "opening the keyboard" (the visible area becomes 400px, as on an iPhone): the chat header stays on screen, the text box stays above 400px, the page stays at the top and the newest message stays in view; closing it removes `--app-height`. Fails without the fix |
 | E41 | Android keyboard setting | The viewport tag contains `interactive-widget=resizes-content` |
 | E42 | Banner on phones | With the banner on, a 375px phone does not show it; a computer does |
+| E43 | Bigger on phones (`e2e/mobileLayout.spec.js`) | The same chat on a 390px phone and a 1280px computer: the root text size is 18px on the phone and 16px on the computer, and the message box and a message's time are exactly 18/16 bigger on the phone. Fails without the fix (16px) |
 | E34 | Announcement banner (`e2e/announcement.spec.js`) | An admin turns it on: a logged-out visitor sees it on the login page as one status labelled "Announcement", and the logged-in admin sees it in the chat; turned off, it disappears live for the admin and after a reload for the visitor |
 ---
 
@@ -792,6 +793,14 @@ Google cases need `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` set (see
 | M23.2 | iPhone keyboard | The same on iPhone Safari (or the installed app) | The same | | |
 | M23.3 | PingMe AI | The same in the PingMe AI chat | The same | | |
 | M23.4 | No banner on phones | Admin turns the announcement banner on → look on a phone, then a laptop | Not on the phone; shown on the laptop | Automated (E42) | Pass |
+
+### Post-22 polish - bigger on phones
+
+| ID | Scenario | Steps | Expected | Actual | Result |
+|---|---|---|---|---|---|
+| M24.1 | Phone size | Open PingMe on a phone (browser or installed app): chat list, a chat, Settings, PingMe AI | Text, photos, buttons and avatars clearly bigger than before, like an app; nothing cut off or scrolling sideways | | |
+| M24.2 | Small phone | The same on the smallest phone available (or Chrome's 320px device mode) | The three tabs fit on one line (even with a Requests badge); in Settings, "Edit profile" is a full-width button under the name | Checked at 320px in Chromium | Pass |
+| M24.3 | Computer unchanged | Open PingMe on a laptop | Exactly the same size as before | Automated (E43) | Pass |
 
 ### Phase 9 - deployment
 
