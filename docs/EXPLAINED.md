@@ -2561,3 +2561,33 @@ shows the Share → Add to Home Screen steps.
 - **Testing the install button without installing:** the browser test fires
   a fake `beforeinstallprompt` event and checks our button calls `prompt()`;
   Chrome's own DevTools check confirms PingMe is installable.
+
+## 9. Fix after Phase 22: typing on a phone hid the chat header
+
+**The bug:** on a phone, opening the keyboard made the whole screen slide up
+and the chat header (the friend's photo and name) vanished.
+
+**Why:** the chat is exactly one screen tall (`100dvh`). Phones do not make
+the page shorter when the keyboard opens - by default they slide the page
+up so the text box stays visible, and the top of the page goes off screen.
+
+**The fix, in two parts:**
+- One word in `index.html`'s viewport tag, `interactive-widget=resizes-content`,
+  tells Android browsers to make the page shorter instead - so the whole
+  chat fits above the keyboard.
+- iPhone Safari ignores that, so `utils/viewport.js` watches
+  `window.visualViewport` (the part of the page you can actually see). When
+  it gets shorter than the page - the keyboard - the chat's height is set to
+  exactly that visible height, and the page is put back at the top.
+
+And because the message list gets shorter, a small hook keeps the newest
+message in view if you were already at the bottom - like WhatsApp.
+
+> **Likely question: how did you test a phone keyboard automatically?**
+> A test browser cannot open a real keyboard. But all a keyboard does to the
+> page is shrink `visualViewport`, so the test replaces it with one it
+> controls, shrinks it to 400px, and checks the header and the text box are
+> both on screen. We also checked the test FAILS without the fix.
+
+Also, at the team's request, the announcement banner is hidden on phones
+(`hidden md:block`) - on a small screen every line belongs to the chat.

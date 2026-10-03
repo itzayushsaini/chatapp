@@ -80,7 +80,8 @@ pingme/
                      settings.js, admin.js, updates.js, ai.js, push.js
       store/         useChatStore.js (zustand)
       context/       AuthContext.jsx, SocketContext.jsx
-      hooks/         useSocketEvents.js, useFriendStatus.js, useVoiceRecorder.js, useInstallApp.js
+      hooks/         useSocketEvents.js, useFriendStatus.js, useVoiceRecorder.js, useInstallApp.js,
+                     useKeepBottomOnResize.js
       pages/         LandingPage.jsx, LoginPage.jsx, RegisterPage.jsx, ChatPage.jsx, SettingsPage.jsx, AdminPage.jsx
       components/    layout/, sidebar/, chat/, profile/, admin/, landing/ (ChatPreview.jsx),
                      updates/ (UpdatesRow.jsx, UpdatesChannel.jsx, PingMeAvatar.jsx),
@@ -89,7 +90,8 @@ pingme/
                      common/ (incl. AnnouncementBanner.jsx, buttonClass.js, InstallAppDialog.jsx),
                      sidebar/ (incl. NotificationPrompt.jsx, InstallPrompt.jsx)
       utils/         time.js, avatar.js, files.js, image.js, notifications.js, theme.js, preferences.js,
-                     install.js (installing as an app), push.js (Web Push subscription)
+                     install.js (installing as an app), push.js (Web Push subscription),
+                     viewport.js (keeps the chat on screen when a phone keyboard opens)
     public/          favicon.svg, manifest.webmanifest (the installable app), icons/ (app icons),
                      sw.js (service worker: notifications, push, the offline page), offline.html,
                      theme-init.js (applies the saved theme before React loads)
@@ -787,7 +789,9 @@ runaway script.
   see "Updates channel"), **Settings** (every toggle above, the PingMe AI
   switch / daily limit / picture creation - with a warning when the server
   has no `GEMINI_API_KEY` - plus the announcement banner).
-- **`AnnouncementBanner.jsx`** is rendered in TWO places - inside `AuthLayout`
+- **`AnnouncementBanner.jsx`** is shown only from 768px up - not on phones
+  (the team's decision: there every line of height belongs to the chat, and
+  the PingMe updates channel reaches phone users). It is rendered in TWO places - inside `AuthLayout`
   (login/register/forgot/reset pages) and inside `ChatPage` - because
   `useSocket()` only returns a real socket inside the logged-in part of the
   app (`SocketProvider` only wraps `ChatPage`). Both copies fetch
@@ -1135,6 +1139,7 @@ All responses are JSON (except the two file downloads). Errors use the shape `{ 
 
 - A sidebar with the tabs **Chats | Requests (with a badge) | Add Friend**, next to a chat panel.
 - Below 768px, show either the list or the chat, with a back button.
+- **Phone keyboard:** the chat shell is one screen tall and must stay fully on screen when the keyboard opens - the header never slides off the top. `index.html`'s viewport has `interactive-widget=resizes-content` (Android shrinks the page), and `utils/viewport.js` sets `--app-height` from `window.visualViewport` while a keyboard is open (iPhone Safari ignores the tag); `LoggedInLayout` is `h-[var(--app-height,100dvh)]`. Message lists keep the newest message in view when they get shorter, if the reader was at the bottom (`hooks/useKeepBottomOnResize.js`).
 
 ### Sidebar tabs
 

@@ -2,7 +2,11 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <!-- interactive-widget=resizes-content: when the phone keyboard opens,
+         the page itself gets shorter (Android Chrome/Edge/Firefox), instead
+         of the browser sliding the whole page up and hiding the chat header.
+         iPhone Safari ignores it - see src/utils/viewport.js. -->
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, interactive-widget=resizes-content" />
     <meta
       name="description"
       content="PingMe - private one-to-one real-time chat. Find friends by their exact username, send a request, and chat with read receipts, files and voice notes."

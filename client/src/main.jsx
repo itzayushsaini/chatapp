@@ -9,6 +9,8 @@ import './index.css'
 // Loaded with the app (not when a component first needs it): the browser's
 // "can be installed" event fires only once, early on, and must not be missed.
 import './utils/install.js'
+// Keeps the chat header on screen when a phone keyboard opens (iPhone).
+import './utils/viewport.js'
 import { registerServiceWorker } from './utils/notifications.js'
 
 // StrictMode deliberately runs effects twice in development to expose effects

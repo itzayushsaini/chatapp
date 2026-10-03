@@ -71,7 +71,10 @@ function LiveShell() {
     // itself. Scoped to just this logged-in chat shell, so every OTHER
     // page (Admin panel, Login/Register) keeps ordinary page scrolling for
     // whatever does not fit the viewport.
-    <div className="flex h-dvh flex-col overflow-hidden overscroll-none">
+    // The height is one screen (100dvh) - or, while a phone keyboard is
+    // open on an iPhone, just the part above it (--app-height, set by
+    // utils/viewport.js), so the chat header never slides off the top.
+    <div className="flex h-[var(--app-height,100dvh)] flex-col overflow-hidden overscroll-none">
       <AnnouncementBanner />
       {connection === 'reconnecting' && (
         <div className="animate-slide-down bg-amber-100 px-4 py-1.5 text-center text-sm text-amber-900" role="status">

@@ -2,6 +2,7 @@ import { Fragment, useEffect, useLayoutEffect, useRef, useState } from 'react'
 
 import { askAi, clearAi, retryAi, stopAi } from '../../api/ai.js'
 import { errorMessage } from '../../api/http.js'
+import { useKeepBottomOnResize } from '../../hooks/useKeepBottomOnResize.js'
 import { useChatStore } from '../../store/useChatStore.js'
 import { kindOf } from '../../utils/files.js'
 import { dayLabel, isSameDay } from '../../utils/time.js'
@@ -285,6 +286,9 @@ function AiMessageList({ items, hasMore, latestAnswerId, onOpenImage, ...actions
   const [loadingOlder, setLoadingOlder] = useState(false)
   // Messages already there when the chat opened don't slide in - only new ones.
   const [shownAtOpen] = useState(() => new Set(items.map(keyOf)))
+
+  // The keyboard opening makes the list shorter - keep the newest in view.
+  useKeepBottomOnResize(listRef, nearBottom)
 
   // Runs on every change, including each streamed piece of an answer.
   useLayoutEffect(() => {

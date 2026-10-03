@@ -1,5 +1,6 @@
 import { Fragment, useLayoutEffect, useRef, useState } from 'react'
 
+import { useKeepBottomOnResize } from '../../hooks/useKeepBottomOnResize.js'
 import { useChatStore } from '../../store/useChatStore.js'
 import { dayLabel, isSameDay } from '../../utils/time.js'
 import Dialog from '../common/Dialog.jsx'
@@ -36,6 +37,9 @@ export default function MessageList({
   const [loadingOlder, setLoadingOlder] = useState(false)
   const [showNewPill, setShowNewPill] = useState(false)
   const [viewing, setViewing] = useState(null) // the photo open full size
+
+  // The keyboard opening makes the list shorter - keep the newest in view.
+  useKeepBottomOnResize(listRef, nearBottom)
 
   // Runs after React updates the DOM but BEFORE the browser paints, so any
   // scroll adjustment is invisible - no jump.

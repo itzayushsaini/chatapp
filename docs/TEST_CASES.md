@@ -8,7 +8,7 @@ Kept up to date at the end of every phase.
   Actual and Result columns when you run them.
 
 Last full run: 2026-10-03 (after Phase 22 - installable app + push) - **379/379
-server tests pass, 39/39 end-to-end tests pass, lint clean in both workspaces, `npm run build`
+server tests pass, 42/42 end-to-end tests pass (E40-E42 added with the phone keyboard fix), lint clean in both workspaces, `npm run build`
 succeeds.** No automated test ever calls Google or a push service: `npm test` fakes
 `geminiClient.js` (or Google's SDK) and `web-push`'s sender, and the e2e server uses
 `e2e/fakeGemini.js` with push switched off.
@@ -486,6 +486,9 @@ email provider configured.
 | E37 | Install offer | Nothing until Chrome offers it; then "Install PingMe as an app" → Install calls the browser's prompt and the offer goes; × is remembered after a reload; Settings → App shows Install PingMe, then "installed" after `appinstalled` |
 | E38 | iPhone | "Install the app" on the home page and Install in the chat list open "Install PingMe on your iPhone" with the Add to Home Screen steps |
 | E39 | A push and a tap | A push handed to the service worker produces the notification (title, body, app icon, badge, tag, `open`); `/?open=requests` opens the Requests tab and clears the address; `/?open=pingme-ai` opens PingMe AI; junk is ignored |
+| E40 | Phone keyboard (`e2e/mobileKeyboard.spec.js`) | At 375px with a chat full of messages, "opening the keyboard" (the visible area becomes 400px, as on an iPhone): the chat header stays on screen, the text box stays above 400px, the page stays at the top and the newest message stays in view; closing it removes `--app-height`. Fails without the fix |
+| E41 | Android keyboard setting | The viewport tag contains `interactive-widget=resizes-content` |
+| E42 | Banner on phones | With the banner on, a 375px phone does not show it; a computer does |
 | E34 | Announcement banner (`e2e/announcement.spec.js`) | An admin turns it on: a logged-out visitor sees it on the login page as one status labelled "Announcement", and the logged-in admin sees it in the chat; turned off, it disappears live for the admin and after a reload for the visitor |
 ---
 
@@ -780,6 +783,15 @@ Google cases need `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` set (see
 | M22.12 | Shared computer | Log out → log in as someone else on the same browser → close PingMe → message the FIRST account | Nothing pops up on this computer | | |
 | M22.13 | Offline page | Installed app → airplane mode → open PingMe | "You're offline" with Try again; works again once back online | Automated (E36) | Pass |
 | M22.14 | Settings wording | Settings → Notifications with push working | "They arrive even while PingMe is closed, on this device." | | |
+
+### Post-22 fix - typing on a phone
+
+| ID | Scenario | Steps | Expected | Actual | Result |
+|---|---|---|---|---|---|
+| M23.1 | Android keyboard | Android Chrome (or the installed app) → open a chat with many messages → tap the message box | The keyboard opens; the header (friend's photo and name) stays at the top; the newest message stays just above the box | | |
+| M23.2 | iPhone keyboard | The same on iPhone Safari (or the installed app) | The same | | |
+| M23.3 | PingMe AI | The same in the PingMe AI chat | The same | | |
+| M23.4 | No banner on phones | Admin turns the announcement banner on → look on a phone, then a laptop | Not on the phone; shown on the laptop | Automated (E42) | Pass |
 
 ### Phase 9 - deployment
 

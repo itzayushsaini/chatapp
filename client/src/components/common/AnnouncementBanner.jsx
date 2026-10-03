@@ -32,8 +32,12 @@ export default function AnnouncementBanner() {
   // A soft brand tint rather than a solid colour block, so it reads as a
   // notice instead of an error. brand-50 / brand-700 are redefined for dark
   // mode in index.css, so the same classes work in both themes.
+  //
+  // Not shown on phones (below 768px, the app's phone layout - the team's
+  // decision): there, every line of height matters for the chat, and the
+  // PingMe updates channel already reaches phone users with news.
   return (
-    <div className="animate-slide-down border-b border-brand-600/20 bg-brand-50" role="status">
+    <div className="animate-slide-down hidden border-b border-brand-600/20 bg-brand-50 md:block" role="status">
       <div className="mx-auto flex max-w-5xl items-start gap-3 px-4 py-2.5 sm:items-center sm:justify-center sm:px-6">
         <span
           className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-brand-600 text-white shadow-sm"

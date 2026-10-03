@@ -1039,6 +1039,9 @@ cleanly, so one commit "Phases 1-9: complete ChatApp (later renamed PingMe)" is 
     neither pushes nor can the frozen app show its own. Later ones push.
 37. **Not cached offline:** the app itself needs a connection to start
     (offline it shows the offline page); no offline reading of old messages.
+38. **The announcement banner is not shown on phones** (below 768px - the
+    team's decision, 2026-10-03), so an urgent notice only reaches phone
+    users if it is also posted in the PingMe updates channel.
 
 ---
 
@@ -1134,6 +1137,41 @@ times. Confirmed it fails on the pre-fix code (the page shows "Something
 went wrong") and passes after. `npm test` 283/283, `npm run test:e2e` 22/22,
 lint clean.
 
+## Post-22 bugfix (2026-10-03): on phones, typing hid the chat header
+
+**What the team saw:** on a phone, tapping the message box and opening the
+keyboard made the whole screen slide up - the chat header (the friend's
+photo and name) disappeared off the top.
+
+**Root cause:** the chat shell is exactly one screen tall (`100dvh`). By
+default, Android Chrome and iPhone Safari do NOT make the page shorter when
+the keyboard opens; they slide the whole page up so the text box stays
+visible, and the top of the page - the header - goes off screen.
+
+**Fix:**
+- `index.html`: `interactive-widget=resizes-content` in the viewport tag -
+  Android Chrome/Edge/Firefox then shrink the page for the keyboard, so
+  `100dvh` fits above it.
+- `utils/viewport.js` (iPhone Safari ignores that tag): while the visible
+  area (`window.visualViewport`) is shorter than the page - an open keyboard,
+  not a pinch-zoom - it sets `--app-height` to the visible height and puts
+  the page back at the top; `LoggedInLayout` uses
+  `h-[var(--app-height,100dvh)]`. Closed keyboard → removed → `100dvh`.
+- `hooks/useKeepBottomOnResize.js`: when a message list gets shorter, a
+  reader who was at the bottom stays at the newest message (friend chats and
+  PingMe AI) - it used to stay where it was, hiding the latest messages.
+- Also, at the team's request, **the announcement banner is no longer shown
+  on phones** (below 768px - `hidden md:block`); the PingMe updates channel
+  still reaches phone users.
+
+**Test:** `e2e/mobileKeyboard.spec.js` (E40-E42) - with `visualViewport`
+replaced by one the test controls, "opening the keyboard" (400px visible)
+must keep the header on screen, the text box above 400px, the page at the
+top and the newest message in view. Confirmed to FAIL without the fix (the
+text box sat at 730px, behind the keyboard). Plus the viewport tag, and
+the banner hidden at 375px but shown on a computer. A real keyboard can't be
+opened in an automated browser - M23 checks it on a real phone.
+
 ## Post-21 polish (2026-10-02): the announcement banner looks professional
 
 The admin's banner was a plain solid-green strip with centred text, which
@@ -1193,7 +1231,7 @@ really is Reply. Confirmed it fails on the pre-fix code and passes after.
 1. `npm install`
 2. `npm test` - 379 pass
 3. `npm run lint` - no errors
-4. `npx playwright install chromium` (once), then `npm run test:e2e` - 39 pass
+4. `npx playwright install chromium` (once), then `npm run test:e2e` - 42 pass
 5. `cp server/.env.example server/.env`, fill in `MONGO_URI` and `JWT_SECRET`
 6. `npm run seed`, then `npm run dev`, open <http://localhost:5173>
 7. `npm run make-admin -- aman` to try the admin panel, then log in as `aman`
