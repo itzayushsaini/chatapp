@@ -1,4 +1,4 @@
-import { Fragment, useLayoutEffect, useRef, useState } from 'react'
+import { Fragment, useEffect, useLayoutEffect, useRef, useState } from 'react'
 
 import { useKeepBottomOnResize } from '../../hooks/useKeepBottomOnResize.js'
 import { useChatStore } from '../../store/useChatStore.js'
@@ -11,6 +11,10 @@ import MessageBubble from './MessageBubble.jsx'
 // "Near the bottom" = within this many pixels of it.
 const NEAR_BOTTOM_PX = 120
 const LOAD_OLDER_PX = 80
+// Two messages from the same person within this long sit close together.
+const GROUP_WITHIN_MS = 5 * 60 * 1000
+// The floating date label stays this long after scrolling stops.
+const DAY_PILL_MS = 1400
 
 export default function MessageList({
   conversationId,
@@ -37,6 +41,18 @@ export default function MessageList({
   const [loadingOlder, setLoadingOlder] = useState(false)
   const [showNewPill, setShowNewPill] = useState(false)
   const [viewing, setViewing] = useState(null) // the photo open full size
+  // The date of the messages at the top of the screen, shown in a small
+  // pill while the reader scrolls (and for a moment after) - so in a long
+  // history they always know which day they are in.
+  const [floatingDay, setFloatingDay] = useState(null)
+  const dayTimer = useRef(null)
+  // Scrolls the list does by itself (down to a new message, after photos
+  // load) are not the reader looking around - no floating date for them.
+  const quietUntil = useRef(0)
+  const scrollByCode = (ms = 400) => {
+    quietUntil.current = Date.now() + ms
+  }
+  useEffect(() => () => clearTimeout(dayTimer.current), [])
 
   // The keyboard opening makes the list shorter - keep the newest in view.
   useKeepBottomOnResize(listRef, nearBottom)
@@ -56,6 +72,7 @@ export default function MessageList({
       // Older messages were added ABOVE. Without this, the content would
       // shift down and the user would lose their place. Keep the same
       // distance from the bottom instead.
+      scrollByCode()
       el.scrollTop = el.scrollHeight - restoreFrom.current.height + restoreFrom.current.top
       restoreFrom.current = null
       return
@@ -71,6 +88,7 @@ export default function MessageList({
     // their own message). If they scrolled up to read, do not yank them
     // down - show the "New messages" pill instead.
     if (isFirstRender || nearBottom.current || last?.senderId === myId) {
+      scrollByCode()
       el.scrollTop = el.scrollHeight
       setShowNewPill(false)
     } else {
@@ -82,6 +100,20 @@ export default function MessageList({
     const el = listRef.current
     nearBottom.current = el.scrollHeight - el.scrollTop - el.clientHeight < NEAR_BOTTOM_PX
     if (nearBottom.current) setShowNewPill(false)
+
+    if (Date.now() >= quietUntil.current) {
+      // Which day is at the top? The last date separator that has scrolled
+      // up to (or past) the top edge.
+      const topEdge = el.getBoundingClientRect().top
+      let day = null
+      for (const separator of el.querySelectorAll('[data-day]')) {
+        if (separator.getBoundingClientRect().top > topEdge + 8) break
+        day = separator.dataset.day
+      }
+      setFloatingDay(day)
+      clearTimeout(dayTimer.current)
+      dayTimer.current = setTimeout(() => setFloatingDay(null), DAY_PILL_MS)
+    }
 
     if (el.scrollTop < LOAD_OLDER_PX && hasMore && !loadingOlder) {
       setLoadingOlder(true)
@@ -99,11 +131,15 @@ export default function MessageList({
   // there.
   function handleMediaLoad() {
     const el = listRef.current
-    if (el && nearBottom.current) el.scrollTop = el.scrollHeight
+    if (el && nearBottom.current) {
+      scrollByCode()
+      el.scrollTop = el.scrollHeight
+    }
   }
 
   function scrollToBottom() {
     const el = listRef.current
+    scrollByCode(900)
     el.scrollTo({ top: el.scrollHeight, behavior: 'smooth' })
     setShowNewPill(false)
   }
@@ -119,8 +155,17 @@ export default function MessageList({
       >
         {/* Positioned over the list rather than inside it, so showing it
             does not change the content height the scroll restore relies on. */}
+        {floatingDay && (
+          // Decorative (the real separators are in the list), so hidden from
+          // screen readers; over the list, so it does not move anything.
+          <div className="pointer-events-none absolute inset-x-0 top-2 z-10 flex justify-center" aria-hidden="true">
+            <span className="animate-fade-in rounded-full bg-surface/95 px-3 py-1 text-xs font-medium text-slate-600 shadow-md ring-1 ring-slate-200">
+              {floatingDay}
+            </span>
+          </div>
+        )}
         {loadingOlder && (
-          <div className="pointer-events-none absolute inset-x-0 top-2 flex justify-center">
+          <div className="pointer-events-none absolute inset-x-0 top-12 flex justify-center">
             <span className="rounded-full bg-surface p-1.5 shadow">
               <Spinner className="h-5 w-5" />
             </span>
@@ -137,10 +182,16 @@ export default function MessageList({
           {messages.map((m, i) => {
             const previous = messages[i - 1]
             const newDay = !previous || !isSameDay(previous.createdAt, m.createdAt)
+            // A run of messages from one person, a few minutes apart.
+            const grouped =
+              Boolean(previous) &&
+              !newDay &&
+              previous.senderId === m.senderId &&
+              new Date(m.createdAt) - new Date(previous.createdAt) < GROUP_WITHIN_MS
             return (
               <Fragment key={m.clientId}>
                 {newDay && (
-                  <li className="flex justify-center py-2">
+                  <li className="flex justify-center py-2" data-day={dayLabel(m.createdAt)}>
                     <span className="rounded-full bg-surface px-3 py-1 text-xs font-medium text-slate-500 shadow-sm">
                       {dayLabel(m.createdAt)}
                     </span>
@@ -156,6 +207,7 @@ export default function MessageList({
                   // do not.
                   isNew={historyShownRef.current && i === messages.length - 1}
                   mine={m.senderId === myId}
+                  grouped={grouped}
                   myId={myId}
                   friendName={friendName}
                   // Same-length hex ids compare correctly as strings. Read

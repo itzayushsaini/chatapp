@@ -52,3 +52,10 @@ export function lastSeenLabel(date) {
   if (days === 1) return `Last seen yesterday at ${formatTime(date)}`
   return `Last seen ${new Date(date).toLocaleDateString([], { day: 'numeric', month: 'short' })}`
 }
+
+// "2026-09-12" -> "12 Sep", for the admin charts. The server's days are UTC
+// days, so the label is formatted in UTC too - otherwise a day could read as
+// the one before it for someone west of Greenwich.
+export function utcDayShort(isoDate) {
+  return new Date(`${isoDate}T00:00:00Z`).toLocaleDateString([], { day: 'numeric', month: 'short', timeZone: 'UTC' })
+}

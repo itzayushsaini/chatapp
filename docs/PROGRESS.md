@@ -2,7 +2,7 @@
 
 A new session should be able to read this file and carry on from it.
 
-Last updated: 2026-10-03 (Post-22 polish: bigger on phones - done and committed (84cb813). Before that, Phase 22: installable app (PWA) + push notifications while PingMe is closed - done and committed. Push needs VAPID keys on Render - docs/DEPLOY.md 1.8; the real-phone checks are M22 in TEST_CASES.md)
+Last updated: 2026-10-11 (Post-22 polish: a more professional look - done, not yet committed. Before that, bigger on phones (84cb813) and Phase 22: installable app (PWA) + push notifications while PingMe is closed - done and committed. Push needs VAPID keys on Render - docs/DEPLOY.md 1.8; the real-phone checks are M22 in TEST_CASES.md)
 
 ---
 
@@ -1172,6 +1172,46 @@ text box sat at 730px, behind the keyboard). Plus the viewport tag, and
 the banner hidden at 375px but shown on a computer. A real keyboard can't be
 opened in an automated browser - M23 checks it on a real phone.
 
+## Post-22 polish (2026-10-11): a more professional look
+
+**What the team asked:** "update the interface, make it more professional" -
+visual polish only (CLAUDE.md: no new features).
+
+**Server (small, for the new admin dashboard):**
+- `GET /api/admin/stats/activity?days=14` (`adminService.getActivity`): per UTC
+  day - new accounts, messages, finished PingMe AI answers - zero-filled, oldest
+  first. Three grouped queries.
+- `GET /api/admin/users` gained `sort` (newest / oldest / name / lastSeen), a
+  fixed list validated by zod (`collation` makes "name" case-insensitive).
+- 5 new tests in `admin.test.js` (A15.15-A15.19): 384 server tests.
+
+**Client:**
+- **Login / register / forgot / reset** (`AuthLayout`): from 1024px a green
+  brand panel (three selling points) beside the form; the form card has a
+  softer shadow. A phone gets only the form.
+- **Home page:** a "See it in action" section with REAL screenshots
+  (`public/screens/*.webp`, 28-46 KB each) in a laptop frame and a phone
+  frame with a Light / Dark switch (the laptop one is hidden below 640px); a
+  four-column footer (Explore, Account, Project) with a "Report a problem" link.
+- **Admin:** header with a shield badge and "Signed in as"; tabs with icons;
+  Overview = four stat cards (icon, "+N this week") and bar charts
+  (`ActivityChart`, HTML/CSS, 7/14/30 days, each chart one `role="img"` with
+  a summary); Users = avatars, Joined, badges, "Last seen", search with an
+  icon, a Sort menu; deleting a user or an update now asks in the app's own
+  `ConfirmDialog` instead of `window.confirm`; skeleton loaders.
+- **Chat:** runs of messages from one person (within 5 minutes) sit closer
+  and only the first has the tail; a floating date pill shows while scrolling
+  (not for the list's own auto-scrolls).
+- **404 page** (`NotFoundPage`) replaces the silent redirect home; the error
+  screen and the start-up loader got the same soft background and a card.
+
+**Tests:** `e2e/uiPolish.spec.js` (E44-E48, 6 tests; 49 e2e in all);
+`e2e/updates.spec.js` and `e2e/chat.spec.js` updated for the new delete
+dialog and the 404. Lint clean; `npm audit --omit=dev` unchanged.
+
+**Update post:** `PingMe Update Posts/04 - A fresh new look (Polish)` (.png,
+.txt, preview04-desktop.png).
+
 ## Post-22 polish (2026-10-03): bigger on phones
 
 **What the team asked:** on a phone PingMe looked small - "like a desktop
@@ -1260,9 +1300,9 @@ really is Reply. Confirmed it fails on the pre-fix code and passes after.
 ## How to verify everything
 
 1. `npm install`
-2. `npm test` - 379 pass
+2. `npm test` - 384 pass
 3. `npm run lint` - no errors
-4. `npx playwright install chromium` (once), then `npm run test:e2e` - 43 pass
+4. `npx playwright install chromium` (once), then `npm run test:e2e` - 49 pass
 5. `cp server/.env.example server/.env`, fill in `MONGO_URI` and `JWT_SECRET`
 6. `npm run seed`, then `npm run dev`, open <http://localhost:5173>
 7. `npm run make-admin -- aman` to try the admin panel, then log in as `aman`

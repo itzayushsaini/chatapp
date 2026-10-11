@@ -218,6 +218,7 @@ export default function LandingPage() {
       <main>
         <Hero />
         <Highlights />
+        <Showcase />
         <Features />
         <HowItWorks />
         <Privacy />
@@ -369,6 +370,88 @@ function SectionHeading({ eyebrow, title, text }) {
       <h2 className="mt-2 text-3xl font-bold tracking-tight text-slate-900 sm:text-4xl">{title}</h2>
       {text && <p className="mt-4 text-base leading-relaxed text-slate-600">{text}</p>}
     </div>
+  )
+}
+
+// Real screenshots of the app (public/screens/), light and dark, on a
+// laptop and on a phone. The Light/Dark switch only swaps which pictures
+// show - it does not change the page's own theme.
+const SHOTS = {
+  light: { desktop: '/screens/chat-light.webp', phone: '/screens/phone-light.webp' },
+  dark: { desktop: '/screens/chat-dark.webp', phone: '/screens/phone-dark.webp' },
+}
+
+function Showcase() {
+  const [look, setLook] = useState('light')
+
+  return (
+    <section id="screenshots" aria-labelledby="screenshots-heading" className="scroll-mt-20 px-4 py-20 sm:px-6">
+      <div className="mx-auto max-w-6xl">
+        <div className="reveal mx-auto max-w-2xl text-center">
+          <p className="text-sm font-semibold tracking-wide text-brand-700 uppercase">See it in action</p>
+          <h2 id="screenshots-heading" className="mt-2 text-3xl font-bold tracking-tight text-slate-900 sm:text-4xl">
+            Clean on a laptop. Just as good on your phone.
+          </h2>
+          <p className="mt-4 text-base leading-relaxed text-slate-600">
+            The same chat, photos, voice notes and read receipts everywhere - in a light or a dark look.
+          </p>
+          <div role="group" aria-label="Show the screenshots in" className="mt-6 inline-flex rounded-lg bg-slate-100 p-0.5">
+            {['light', 'dark'].map((name) => (
+              <button
+                key={name}
+                type="button"
+                aria-pressed={look === name}
+                onClick={() => setLook(name)}
+                className={`rounded-md px-4 py-1.5 text-sm font-medium capitalize transition-colors duration-150 focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:outline-none ${
+                  look === name ? 'bg-surface text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-800'
+                }`}
+              >
+                {name}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        <div className="reveal mt-12 grid items-end gap-10 lg:grid-cols-[1fr_15rem]">
+          {/* A laptop browser window - not on a phone, where it would be too
+              small to read; the phone picture below is the one that fits. */}
+          <div className="hidden overflow-hidden rounded-xl bg-surface shadow-2xl ring-1 shadow-slate-900/10 ring-slate-200 sm:block">
+            <div className="flex items-center gap-1.5 border-b border-slate-200 bg-slate-100 px-4 py-2.5" aria-hidden="true">
+              <span className="h-2.5 w-2.5 rounded-full bg-slate-300" />
+              <span className="h-2.5 w-2.5 rounded-full bg-slate-300" />
+              <span className="h-2.5 w-2.5 rounded-full bg-slate-300" />
+              <span className="ml-3 rounded-md bg-surface px-3 py-0.5 text-[0.625rem] text-slate-500">chatapp-xu38.onrender.com</span>
+            </div>
+            {Object.entries(SHOTS).map(([name, shot]) => (
+              <img
+                key={name}
+                src={shot.desktop}
+                width="1400"
+                height="787"
+                loading="lazy"
+                alt={`PingMe on a laptop in the ${name} look: the chat list on the left and a conversation with a photo, a reply and a voice note.`}
+                className={look === name ? 'block h-auto w-full' : 'hidden'}
+              />
+            ))}
+          </div>
+
+          {/* A phone. */}
+          <div className="mx-auto w-56 overflow-hidden rounded-[2rem] border-[6px] border-neutral-800 bg-surface shadow-2xl shadow-slate-900/20 lg:mx-0 lg:w-full">
+            {Object.entries(SHOTS).map(([name, shot]) => (
+              <img
+                key={name}
+                src={shot.phone}
+                width="600"
+                height="1022"
+                loading="lazy"
+                alt={`PingMe on a phone in the ${name} look: a conversation fills the screen.`}
+                className={look === name ? 'block h-auto w-full' : 'hidden'}
+              />
+            ))}
+          </div>
+        </div>
+      </div>
+    </section>
   )
 }
 
@@ -581,34 +664,72 @@ function FinalCta() {
   )
 }
 
+// A link in a footer column.
+const footerLink =
+  'rounded text-slate-600 transition-colors hover:text-slate-900 focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:outline-none'
+
 function Footer() {
   return (
     <footer className="border-t border-slate-200 bg-surface">
-      <div className="mx-auto max-w-6xl px-4 py-10 sm:px-6">
-        <div className="flex flex-col gap-8 md:flex-row md:items-start md:justify-between">
-          <div className="max-w-sm">
+      <div className="mx-auto max-w-6xl px-4 py-12 sm:px-6">
+        <div className="grid gap-10 md:grid-cols-[1.6fr_1fr_1fr_1fr]">
+          <div className="max-w-xs">
             <Logo small />
             <p className="mt-3 text-sm leading-relaxed text-slate-600">
-              A private, real-time chat app - a B.Tech CSE 2nd year project, COER University.
+              A private, real-time chat app - a B.Tech CSE 2nd year project, COER University, Roorkee.
             </p>
           </div>
-          <nav aria-label="Footer" className="flex flex-wrap gap-x-6 gap-y-2 text-sm">
-            {NAV.map((item) => (
-              <a key={item.href} href={item.href} className="rounded text-slate-600 hover:text-slate-900 focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:outline-none">
-                {item.label}
-              </a>
-            ))}
-            <a
-              href={REPO_URL}
-              target="_blank"
-              rel="noreferrer"
-              className="rounded text-slate-600 hover:text-slate-900 focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:outline-none"
-            >
-              GitHub ↗
-            </a>
+          <nav aria-label="Footer" className="contents">
+            <div>
+              <h2 className="text-sm font-semibold text-slate-900">Explore</h2>
+              <ul className="mt-3 space-y-2 text-sm">
+                {NAV.map((item) => (
+                  <li key={item.href}>
+                    <a href={item.href} className={footerLink}>
+                      {item.label}
+                    </a>
+                  </li>
+                ))}
+              </ul>
+            </div>
+            <div>
+              <h2 className="text-sm font-semibold text-slate-900">Account</h2>
+              <ul className="mt-3 space-y-2 text-sm">
+                <li>
+                  <Link to="/register" className={footerLink}>
+                    Create an account
+                  </Link>
+                </li>
+                <li>
+                  <Link to="/login" className={footerLink}>
+                    Log in
+                  </Link>
+                </li>
+                <li>
+                  <Link to="/forgot-password" className={footerLink}>
+                    Forgot password
+                  </Link>
+                </li>
+              </ul>
+            </div>
+            <div>
+              <h2 className="text-sm font-semibold text-slate-900">Project</h2>
+              <ul className="mt-3 space-y-2 text-sm">
+                <li>
+                  <a href={REPO_URL} target="_blank" rel="noreferrer" className={footerLink}>
+                    Source code on GitHub ↗
+                  </a>
+                </li>
+                <li>
+                  <a href={`${REPO_URL}/issues`} target="_blank" rel="noreferrer" className={footerLink}>
+                    Report a problem ↗
+                  </a>
+                </li>
+              </ul>
+            </div>
           </nav>
         </div>
-        <div className="mt-8 flex flex-col gap-3 border-t border-slate-200 pt-6 text-xs text-slate-500 sm:flex-row sm:items-center sm:justify-between">
+        <div className="mt-10 flex flex-col gap-3 border-t border-slate-200 pt-6 text-xs text-slate-500 sm:flex-row sm:items-center sm:justify-between">
           <p>© {new Date().getFullYear()} PingMe team</p>
           <p className="flex flex-wrap items-center gap-1.5">
             Built with

@@ -3,36 +3,67 @@ import { useEffect, useState } from 'react'
 import { deleteUser, listUsers, suspendUser, unsuspendUser } from '../../api/admin.js'
 import { errorMessage } from '../../api/http.js'
 import { useAuth } from '../../context/AuthContext.jsx'
+import { lastSeenLabel } from '../../utils/time.js'
+import Avatar from '../common/Avatar.jsx'
 import Button from '../common/Button.jsx'
-import Spinner from '../common/Spinner.jsx'
+import ConfirmDialog from '../common/ConfirmDialog.jsx'
+import { SearchIcon } from '../common/Icons.jsx'
+import Skeleton from '../common/Skeleton.jsx'
 
 const PAGE_SIZE = 20
+
+const SORTS = [
+  { value: 'newest', label: 'Newest first' },
+  { value: 'oldest', label: 'Oldest first' },
+  { value: 'name', label: 'Name (A–Z)' },
+  { value: 'lastSeen', label: 'Last seen' },
+]
+
+// "12 Sep 2026" - when the account was created.
+const joined = (date) => new Date(date).toLocaleDateString([], { day: 'numeric', month: 'short', year: 'numeric' })
+
+function Badge({ tone, children }) {
+  const tones = {
+    brand: 'bg-brand-100 text-brand-700',
+    red: 'bg-red-100 text-red-700',
+    green: 'bg-emerald-100 text-emerald-700',
+  }
+  return <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${tones[tone]}`}>{children}</span>
+}
 
 export default function UsersTab() {
   const { user: me } = useAuth()
   const [search, setSearch] = useState('')
+  const [searched, setSearched] = useState('') // the search the list on screen is for
+  const [sort, setSort] = useState('newest')
   const [page, setPage] = useState(1)
   const [result, setResult] = useState(null)
   const [error, setError] = useState('')
   const [busyId, setBusyId] = useState(null)
+  const [toDelete, setToDelete] = useState(null)
 
-  function fetchUsers(pageToLoad) {
-    listUsers({ search: search.trim() || undefined, page: pageToLoad, limit: PAGE_SIZE })
-      .then(setResult)
-      .catch((err) => setError(errorMessage(err)))
-  }
-
+  // Reloads whenever the page, the sort or the submitted search changes.
+  // Typing alone does not refetch on every keystroke: `searched` only
+  // changes when the form is submitted.
   useEffect(() => {
-    fetchUsers(page)
-    // Reloads when the page changes; a search reloads itself via its own
-    // form submit instead, so typing does not refetch on every keystroke.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [page])
+    let current = true
+    listUsers({ search: searched || undefined, sort, page, limit: PAGE_SIZE })
+      .then((r) => current && (setResult(r), setError('')))
+      .catch((err) => current && setError(errorMessage(err)))
+    return () => {
+      current = false
+    }
+  }, [page, sort, searched])
 
   function handleSearchSubmit(event) {
     event.preventDefault()
-    if (page === 1) fetchUsers(1)
-    else setPage(1)
+    setPage(1)
+    setSearched(search.trim())
+  }
+
+  function handleSort(event) {
+    setPage(1)
+    setSort(event.target.value)
   }
 
   async function handleSuspendToggle(u) {
@@ -48,17 +79,11 @@ export default function UsersTab() {
   }
 
   async function handleDelete(u) {
-    if (!window.confirm(`Permanently delete ${u.displayName} (@${u.username})? This cannot be undone.`)) {
-      return
-    }
-    setBusyId(u.id)
     try {
       await deleteUser(u.id)
       setResult((r) => ({ ...r, users: r.users.filter((x) => x.id !== u.id), total: r.total - 1 }))
     } catch (err) {
       setError(errorMessage(err))
-    } finally {
-      setBusyId(null)
     }
   }
 
@@ -66,34 +91,60 @@ export default function UsersTab() {
 
   return (
     <div className="space-y-4">
-      <form onSubmit={handleSearchSubmit} className="flex gap-2">
-        <input
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          placeholder="Search by username or email"
-          aria-label="Search users"
-          className="block w-full max-w-sm rounded-lg border border-slate-300 bg-surface px-3 py-2 text-sm text-slate-900 placeholder:text-slate-400 focus:border-brand-500 focus:ring-2 focus:ring-brand-500/30 focus:outline-none"
-        />
-        <Button type="submit" size="sm">
-          Search
-        </Button>
-      </form>
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <form onSubmit={handleSearchSubmit} className="flex w-full max-w-md gap-2">
+          <div className="relative flex-1">
+            <SearchIcon className="pointer-events-none absolute top-1/2 left-3 h-4 w-4 -translate-y-1/2 text-slate-400" />
+            <input
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder="Search by username or email"
+              aria-label="Search users"
+              className="block w-full rounded-lg border border-slate-300 bg-surface py-2 pr-3 pl-9 text-sm text-slate-900 placeholder:text-slate-400 focus:border-brand-500 focus:ring-2 focus:ring-brand-500/30 focus:outline-none"
+            />
+          </div>
+          <Button type="submit" size="sm">
+            Search
+          </Button>
+        </form>
+        <label className="flex items-center gap-2 text-sm text-slate-600">
+          Sort
+          <select
+            value={sort}
+            onChange={handleSort}
+            className="rounded-lg border border-slate-300 bg-surface px-2.5 py-1.5 text-sm text-slate-900 focus:border-brand-500 focus:ring-2 focus:ring-brand-500/30 focus:outline-none"
+          >
+            {SORTS.map((s) => (
+              <option key={s.value} value={s.value}>
+                {s.label}
+              </option>
+            ))}
+          </select>
+        </label>
+      </div>
 
       {error && <p className="text-sm text-red-600">{error}</p>}
 
       {!result ? (
-        <div className="flex justify-center py-10">
-          <Spinner />
+        <div className="space-y-2" role="status">
+          <span className="sr-only">Loading users</span>
+          {[0, 1, 2, 3].map((i) => (
+            <Skeleton key={i} className="h-14 w-full" />
+          ))}
         </div>
       ) : (
         <>
-          <div className="overflow-hidden rounded-xl border border-slate-200 bg-surface">
+          <p className="text-sm text-slate-500">
+            {result.total} {result.total === 1 ? 'user' : 'users'}
+            {searched && <> matching “{searched}”</>}
+          </p>
+          <div className="overflow-x-auto rounded-xl border border-slate-200 bg-surface shadow-sm">
             <table className="w-full text-left text-sm">
               <thead className="bg-slate-50 text-xs tracking-wide text-slate-500 uppercase">
                 <tr>
-                  <th className="px-4 py-2.5">User</th>
-                  <th className="px-4 py-2.5">Email</th>
-                  <th className="px-4 py-2.5">Status</th>
+                  <th className="px-4 py-2.5 font-medium">User</th>
+                  <th className="hidden px-4 py-2.5 font-medium md:table-cell">Joined</th>
+                  <th className="px-4 py-2.5 font-medium">Status</th>
                   <th className="px-4 py-2.5" />
                 </tr>
               </thead>
@@ -101,30 +152,27 @@ export default function UsersTab() {
                 {result.users.map((u) => {
                   const isMe = u.id === me.id
                   return (
-                    <tr key={u.id}>
+                    <tr key={u.id} className="transition-colors duration-150 hover:bg-slate-50">
                       <td className="px-4 py-2.5">
-                        <p className="font-medium text-slate-900">{u.displayName}</p>
-                        <p className="text-xs text-slate-500">@{u.username}</p>
+                        <div className="flex items-center gap-3">
+                          <Avatar user={u} size="sm" />
+                          <div className="min-w-0">
+                            <p className="truncate font-medium text-slate-900">{u.displayName}</p>
+                            <p className="truncate text-xs text-slate-500">@{u.username}</p>
+                            <p className="truncate text-xs text-slate-500">{u.email}</p>
+                          </div>
+                        </div>
                       </td>
-                      <td className="px-4 py-2.5 text-slate-700">{u.email}</td>
+                      <td className="hidden px-4 py-2.5 whitespace-nowrap text-slate-600 md:table-cell">{joined(u.createdAt)}</td>
                       <td className="px-4 py-2.5">
                         <div className="flex flex-wrap gap-1">
-                          {u.isAdmin && (
-                            <span className="rounded-full bg-brand-100 px-2 py-0.5 text-xs font-medium text-brand-700">
-                              Admin
-                            </span>
-                          )}
-                          {u.suspended && (
-                            <span className="rounded-full bg-red-100 px-2 py-0.5 text-xs font-medium text-red-700">
-                              Suspended
-                            </span>
-                          )}
-                          {u.online && !u.suspended && (
-                            <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-xs font-medium text-emerald-700">
-                              Online
-                            </span>
-                          )}
+                          {u.isAdmin && <Badge tone="brand">Admin</Badge>}
+                          {u.suspended && <Badge tone="red">Suspended</Badge>}
+                          {u.online && !u.suspended && <Badge tone="green">Online</Badge>}
                         </div>
+                        {!u.online && (
+                          <p className="mt-1 text-xs text-slate-500">{u.lastSeen ? lastSeenLabel(u.lastSeen) : 'Never seen'}</p>
+                        )}
                       </td>
                       <td className="px-4 py-2.5 text-right">
                         {isMe ? (
@@ -139,12 +187,7 @@ export default function UsersTab() {
                             >
                               {u.suspended ? 'Unsuspend' : 'Suspend'}
                             </Button>
-                            <Button
-                              variant="danger"
-                              size="sm"
-                              disabled={busyId === u.id}
-                              onClick={() => handleDelete(u)}
-                            >
+                            <Button variant="danger" size="sm" disabled={busyId === u.id} onClick={() => setToDelete(u)}>
                               Delete
                             </Button>
                           </div>
@@ -155,7 +198,7 @@ export default function UsersTab() {
                 })}
                 {result.users.length === 0 && (
                   <tr>
-                    <td colSpan={4} className="px-4 py-6 text-center text-slate-500">
+                    <td colSpan={4} className="px-4 py-8 text-center text-slate-500">
                       No users found.
                     </td>
                   </tr>
@@ -166,29 +209,35 @@ export default function UsersTab() {
 
           {totalPages > 1 && (
             <div className="flex items-center justify-center gap-3 text-sm">
-              <Button
-                variant="secondary"
-                size="sm"
-                disabled={page <= 1}
-                onClick={() => setPage((p) => p - 1)}
-              >
+              <Button variant="secondary" size="sm" disabled={page <= 1} onClick={() => setPage((p) => p - 1)}>
                 Previous
               </Button>
               <span className="text-slate-600">
                 Page {page} of {totalPages}
               </span>
-              <Button
-                variant="secondary"
-                size="sm"
-                disabled={page >= totalPages}
-                onClick={() => setPage((p) => p + 1)}
-              >
+              <Button variant="secondary" size="sm" disabled={page >= totalPages} onClick={() => setPage((p) => p + 1)}>
                 Next
               </Button>
             </div>
           )}
         </>
       )}
+
+      <ConfirmDialog
+        open={Boolean(toDelete)}
+        onClose={() => setToDelete(null)}
+        title="Delete this account?"
+        confirmLabel="Delete account"
+        danger
+        onConfirm={() => handleDelete(toDelete)}
+      >
+        {toDelete && (
+          <p>
+            <strong>{toDelete.displayName}</strong> (@{toDelete.username}) will be permanently deleted, along with their
+            friendships and PingMe AI chat. Their friends keep the messages they already have. This cannot be undone.
+          </p>
+        )}
+      </ConfirmDialog>
     </div>
   )
 }

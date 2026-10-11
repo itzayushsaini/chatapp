@@ -45,6 +45,10 @@ function attachmentSnippetLabel(kind) {
 // INSIDE the bubble: `break-words` only breaks it after the bubble has already
 // grown to the word's full width, which pushed a phone's chat off-screen.
 //
+// `grouped` is true when the message before this one is from the same person
+// a moment earlier: the two sit closer together, and only the FIRST of a run
+// has the little speech-bubble tail and the squared corner - like WhatsApp.
+//
 // `delivered` and `read` are only meaningful when `mine` is true: has the
 // OTHER person's app received this message yet, and have they read it?
 // Together they drive the single grey / double grey / double blue tick.
@@ -60,6 +64,7 @@ export default function MessageBubble({
   onMediaLoad,
   onReply,
   isNew,
+  grouped = false,
 }) {
   const { status, attachment, text, replyTo, forwarded, deletedForEveryone } = message
   const socket = useSocket()
@@ -78,7 +83,7 @@ export default function MessageBubble({
 
   if (deletedForEveryone) {
     return (
-      <li className={`flex ${mine ? 'justify-end' : 'justify-start'}`}>
+      <li className={`flex ${mine ? 'justify-end' : 'justify-start'} ${grouped ? '-mt-1' : ''}`}>
         <div className="max-w-[80%] rounded-lg bg-surface/70 px-2.5 py-1.5 text-sm text-slate-500 italic shadow-sm sm:max-w-[65%]">
           This message was deleted
         </div>
@@ -122,14 +127,16 @@ export default function MessageBubble({
     // each new row, which traps the menu's own z-index inside that row - so
     // without this, later bubbles were drawn on top of the menu.
     <li
-      className={`group flex ${mine ? 'justify-end' : 'justify-start'} ${animateIn ? 'animate-message-in' : ''} ${
+      className={`group flex ${mine ? 'justify-end' : 'justify-start'} ${grouped ? '-mt-1' : ''} ${animateIn ? 'animate-message-in' : ''} ${
         menuOpen ? 'relative z-20' : ''
       }`}
     >
       <div className={`flex max-w-[80%] items-start gap-1 sm:max-w-[65%] ${mine ? 'flex-row-reverse' : ''}`}>
         <div
-          className={`min-w-0 rounded-lg text-sm shadow-sm ${attachment ? 'overflow-hidden' : mine ? 'bubble-tail-mine' : 'bubble-tail-theirs'} ${
-            mine ? 'rounded-tr-none bg-brand-100 text-slate-900' : 'rounded-tl-none bg-surface text-slate-900'
+          className={`min-w-0 rounded-lg text-sm shadow-sm ${attachment ? 'overflow-hidden' : grouped ? '' : mine ? 'bubble-tail-mine' : 'bubble-tail-theirs'} ${
+            mine
+              ? `${grouped ? '' : 'rounded-tr-none'} bg-brand-100 text-slate-900`
+              : `${grouped ? '' : 'rounded-tl-none'} bg-surface text-slate-900`
           } ${status === 'failed' ? 'opacity-70' : ''} ${attachment ? 'p-1' : 'px-2.5 py-1.5'}`}
         >
           {replyTo && (

@@ -7,8 +7,8 @@ Kept up to date at the end of every phase.
 - **Manual** cases are the ones a person checks in the browser. Fill in the
   Actual and Result columns when you run them.
 
-Last full run: 2026-10-03 (after the "bigger on phones" polish) - **379/379
-server tests pass, 43/43 end-to-end tests pass (E40-E42 added with the phone keyboard fix, E43 with the bigger phone size), lint clean in both workspaces, `npm run build`
+Last full run: 2026-10-11 (after the "professional UI" polish) - **384/384
+server tests pass, 49/49 end-to-end tests pass (E40-E42 phone keyboard fix, E43 bigger phone size, E44-E48 the UI polish - 6 tests), lint clean in both workspaces, `npm run build`
 succeeds.** No automated test ever calls Google or a push service: `npm test` fakes
 `geminiClient.js` (or Google's SDK) and `web-push`'s sender, and the e2e server uses
 `e2e/fakeGemini.js` with push switched off.
@@ -250,6 +250,11 @@ succeeds.** No automated test ever calls Google or a push service: `npm test` fa
 | A15.12 | Suspend a user with an open Socket.IO connection | Their socket receives a `disconnect` event immediately (a real Socket.IO test, not just REST) |
 | A15.13 | Delete a user who has an accepted friendship | 204; the `Friendship` document is gone; the shared `Conversation` still exists |
 | A15.14 | Stats | `{ totalUsers, totalMessages, onlineNow }` match reality |
+| A15.15 | Sort the user list | `newest` (and the default) / `oldest` / `name` (case-insensitive: "aman verma" before "Bina" before "Zoya") / `lastSeen` order correctly; `sort=passwordHash` and `sort=name&sort=oldest` → 400 |
+| A15.16 | `GET /api/admin/stats/activity` with no session / as a non-admin | 401 / 403 |
+| A15.17 | Activity with only the admin registered | 14 entries, oldest first, the last is today's UTC date with `users: 1`; every other day all zeros |
+| A15.18 | Activity with messages, users and AI messages on known days | Counted on the right day; a message from 40 days ago is outside a 7-day window; a failed answer and a question are not AI answers |
+| A15.19 | `days` = 90 / 0, 6, 91, `abc` | 90 entries / 400 each |
 
 ### Phase 16a - `server/tests/deliveryTyping.test.js`, `server/tests/auth.test.js`
 
@@ -489,6 +494,11 @@ email provider configured.
 | E40 | Phone keyboard (`e2e/mobileKeyboard.spec.js`) | At 375px with a chat full of messages, "opening the keyboard" (the visible area becomes 400px, as on an iPhone): the chat header stays on screen, the text box stays above 400px, the page stays at the top and the newest message stays in view; closing it removes `--app-height`. Fails without the fix |
 | E41 | Android keyboard setting | The viewport tag contains `interactive-widget=resizes-content` |
 | E42 | Banner on phones | With the banner on, a 375px phone does not show it; a computer does |
+| E44 | Login panel (`e2e/uiPolish.spec.js`) | At 1280px the login page shows the green brand panel ("Chat with the people you actually know", "Private by design"); at 390px it does not, only the form |
+| E45 | Message runs | Three messages in a row from one person: only the first bubble has the tail (`.bubble-tail-theirs` count 1) and the 2nd and 3rd are pulled up (`-mt-1`); my reply gets its own tail; the other person's next message gets another |
+| E46 | Floating date | In a long chat a new message does not show the date pill; after the reader scrolls up the pill "Today" shows, then goes away by itself |
+| E47 | Admin dashboard | The cards, three charts (each one image with a summary, the new-accounts count ≥ 3), the 30-day range; Users: search, sort by name (Abe, Team Dash, Zed) and by oldest, Delete opens the app's dialog, Cancel keeps the account, confirming removes it |
+| E48 | Home page | Real screenshots (loaded, not broken) with a Light/Dark switch; footer links (create account, forgot password, report a problem). Also: login, register, forgot-password, 404 and the four admin tabs fit a 320px phone |
 | E43 | Bigger on phones (`e2e/mobileLayout.spec.js`) | The same chat on a 390px phone and a 1280px computer: the root text size is 18px on the phone and 16px on the computer, and the message box and a message's time are exactly 18/16 bigger on the phone. Fails without the fix (16px) |
 | E34 | Announcement banner (`e2e/announcement.spec.js`) | An admin turns it on: a logged-out visitor sees it on the login page as one status labelled "Announcement", and the logged-in admin sees it in the chat; turned off, it disappears live for the admin and after a reload for the visitor |
 ---
@@ -793,6 +803,16 @@ Google cases need `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` set (see
 | M23.2 | iPhone keyboard | The same on iPhone Safari (or the installed app) | The same | | |
 | M23.3 | PingMe AI | The same in the PingMe AI chat | The same | | |
 | M23.4 | No banner on phones | Admin turns the announcement banner on → look on a phone, then a laptop | Not on the phone; shown on the laptop | Automated (E42) | Pass |
+
+### Post-22 polish - the new look (2026-10-11)
+
+| ID | Scenario | Steps | Expected | Actual | Result |
+|---|---|---|---|---|---|
+| M25.1 | Login page | Open `/login` on a laptop, then on a phone | Laptop: green panel on the left, form on the right. Phone: only the form | Checked in Chromium | Pass |
+| M25.2 | A 404 page | Open `/nothing-here` logged out and logged in | "This page doesn't exist", Go to PingMe / Go back both work | Automated (E48) | Pass |
+| M25.3 | Chat | Send 3 messages in a row, then wait 6 minutes and send another | The 3 sit close together (one tail); the later one starts a new run | Automated (E45) | Pass |
+| M25.4 | Admin on your phone | Admin → Overview, Users | Charts readable; the user table scrolls sideways inside its box, the page does not | 320px checked | Pass |
+| M25.5 | Dark mode | Light/Dark on the home page; Admin → Overview in dark | Everything readable; charts use the green scale | | |
 
 ### Post-22 polish - bigger on phones
 

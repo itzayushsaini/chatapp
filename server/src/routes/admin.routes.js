@@ -41,7 +41,12 @@ const listUsersQuery = validate({
     search: z.string().trim().max(100).optional(),
     page: z.coerce.number().int().min(1).default(1),
     limit: z.coerce.number().int().min(1).max(100).default(20),
+    sort: z.enum(['newest', 'oldest', 'name', 'lastSeen']).default('newest'),
   }),
+})
+
+const activityQuery = validate({
+  query: z.object({ days: z.coerce.number().int().min(7).max(90).default(14) }),
 })
 
 const router = Router()
@@ -59,6 +64,7 @@ router.patch('/users/:userId/unsuspend', adminLimiter, userIdParams, admin.unsus
 router.delete('/users/:userId', adminLimiter, userIdParams, admin.deleteUser)
 
 router.get('/stats', admin.getStats)
+router.get('/stats/activity', activityQuery, admin.getActivity)
 
 // The "PingMe" updates channel. requireAuth + requireAdmin above run BEFORE
 // multer, so a non-admin can never make the server receive a file. The text

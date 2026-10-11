@@ -59,8 +59,8 @@ test('an admin posts an update; an online user sees it live, reads it, and canno
   await expect(user.getByRole('button', { name: /PingMe \(official account\)/ }).getByLabel(/unread/)).toHaveCount(0)
 
   // Deleting it removes it live from the user's chat list.
-  admin.once('dialog', (dialog) => dialog.accept())
   await admin.getByRole('button', { name: 'Delete update' }).click()
+  await admin.getByRole('button', { name: 'Delete for everyone' }).click()
   await expect(admin.getByText('Nothing posted yet.')).toBeVisible()
   await expect(user.getByRole('button', { name: /PingMe \(official account\)/ })).toContainText(
     'Official updates from the PingMe team',

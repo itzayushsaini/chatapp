@@ -728,7 +728,9 @@ escalation.
 
 ### User management
 
-- **`GET /api/admin/users?search=&page=&limit=`** - unlike the exact-only
+- **`GET /api/admin/users?search=&sort=&page=&limit=`** (`sort`: `newest` - the
+  default, `oldest`, `name` (case-insensitive) or `lastSeen`; anything else is a
+  400 - the value picks from a fixed list, it is never a field name) - unlike the exact-only
   username search everyone else uses (`friendService.searchByUsername`),
   this is a deliberate, partial, case-insensitive match on username OR
   email. That asymmetry is intentional: exact-only search exists specifically
@@ -768,6 +770,11 @@ escalation.
 - fine at this app's scale, and avoids a second, parallel tracking structure
 just for one number on one screen.
 
+**`GET /api/admin/stats/activity?days=14`** (7-90) returns `{ days: [{ date, users,
+messages, aiAnswers }] }`, oldest first, one entry per UTC day INCLUDING today -
+days with nothing are zeros, so the charts have no gaps. `aiAnswers` counts
+finished (`done`) answers only. Three grouped queries, no new collection.
+
 ### Rate limiting
 
 Admin mutation routes (`PATCH`/`DELETE`) share one limiter, 200 per hour per
@@ -782,10 +789,13 @@ runaway script.
   live updates; refreshing is enough). Reached only via a small shield icon
   next to Log out in the sidebar, shown only when `user.isAdmin`; the route
   itself redirects anyone else straight back to `/`.
-- Four tabs: **Overview** (the four stats), **Users** (search, suspend/
-  unsuspend, delete - delete asks for confirmation with a native
-  `window.confirm`, the same pattern the chat header's "Remove friend" already
-  uses), **Updates** (post to / delete from the "PingMe" updates channel -
+- Four tabs (each with a small icon): **Overview** (four stat cards with a
+  "+N this week" line, and bar charts of messages / new accounts / PingMe AI
+  answers per day for 7, 14 or 30 days - `ActivityChart.jsx`, plain HTML/CSS,
+  no chart library; each chart is one `role="img"` with a text summary),
+  **Users** (search, a Sort menu, avatars, Joined date, Admin / Suspended /
+  Online badges, "Last seen", suspend/unsuspend, delete - which asks in the
+  app's own `ConfirmDialog`, as does deleting an update), **Updates** (post to / delete from the "PingMe" updates channel -
   see "Updates channel"), **Settings** (every toggle above, the PingMe AI
   switch / daily limit / picture creation - with a warning when the server
   has no `GEMINI_API_KEY` - plus the announcement banner).
@@ -1060,11 +1070,12 @@ All responses are JSON (except the two file downloads). Errors use the shape `{ 
 | GET | `/api/settings/public` | no | `{ settings }` - registrationOpen, allowedEmailDomains, announcement, googleSignIn |
 | GET | `/api/admin/settings` | admin | `{ settings }` (every field) |
 | PATCH | `/api/admin/settings` | admin | Any subset of `Setting`'s fields → `{ settings }` |
-| GET | `/api/admin/users?search=&page=&limit=` | admin | `{ users, total, page, limit }` (AdminUser shape) |
+| GET | `/api/admin/users?search=&sort=&page=&limit=` | admin | `{ users, total, page, limit }` (AdminUser shape), `sort` = newest / oldest / name / lastSeen |
 | PATCH | `/api/admin/users/:userId/suspend` | admin | `{ user }` |
 | PATCH | `/api/admin/users/:userId/unsuspend` | admin | `{ user }` |
 | DELETE | `/api/admin/users/:userId` | admin | 204 - hard delete, see Admin panel |
 | GET | `/api/admin/stats` | admin | `{ totalUsers, totalMessages, onlineNow, aiAnswersToday }` |
+| GET | `/api/admin/stats/activity?days=14` | admin | `{ days: [{ date, users, messages, aiAnswers }] }` - per UTC day, oldest first (7-90 days) |
 | GET | `/api/updates/summary` | yes | `{ latest, unreadCount }` - for the pinned "PingMe" row |
 | GET | `/api/updates?before=&limit=20` | yes | `{ updates, hasMore }`, oldest → newest, keyset pagination (max 50) |
 | POST | `/api/updates/read` | yes | `{ upToId }` → 204 (404 if not a real post); the pointer only moves forward |
@@ -1123,7 +1134,7 @@ All responses are JSON (except the two file downloads). Errors use the shape `{ 
 
 ### Routes and session
 
-- Routes: `/login`, `/register`, `/forgot-password`, `/reset-password`, `/` (the chat app when logged in; the public **home page** when logged out - see "Home page" below), `/settings` (protected) and `/admin` (only when `user.isAdmin` - a logged-in non-admin is sent to `/`). Logged out, `/settings` and `/admin` send you to `/login`. Unknown routes redirect to `/`.
+- Routes: `/login`, `/register`, `/forgot-password`, `/reset-password`, `/` (the chat app when logged in; the public **home page** when logged out - see "Home page" below), `/settings` (protected) and `/admin` (only when `user.isAdmin` - a logged-in non-admin is sent to `/`). Logged out, `/settings` and `/admin` send you to `/login`. Unknown routes show a friendly 404 page (`NotFoundPage`) with a button back to `/`.
 - **Ending a session goes to `/login` explicitly** (`AuthContext`'s `clearSession`, used by Log out and by the 401 handler below): since `/` is the home page for logged-out visitors, a plain "clear the user" would otherwise land on the home page instead of the login form. A fresh visit (or reload) while logged out is just an ordinary visitor and gets the home page.
 - **AuthContext:** calls `GET /api/auth/me` on load and shows a full-screen spinner until it resolves. There must be no flash of the login page for users who are already logged in.
 - **axios instance:** `baseURL: '/api'`, `withCredentials: true`. On a 401 from any call except `/auth/me` and `/auth/login`, clear the user and go to `/login`. (`/auth/password`'s "wrong current password" is deliberately a 400, not a 401, so it is never mistaken for an expired session.)
@@ -1139,6 +1150,8 @@ All responses are JSON (except the two file downloads). Errors use the shape `{ 
 
 - A sidebar with the tabs **Chats | Requests (with a badge) | Add Friend**, next to a chat panel.
 - Below 768px, show either the list or the chat, with a back button.
+- **Auth pages** (`AuthLayout`: login, register, forgot, reset): the form card, and from 1024px up a green brand panel on the left (fixed hex colours, so it looks the same in dark mode; after the form in the DOM, `lg:order-first`). A phone gets only the form.
+- **Message runs:** consecutive messages from the same person within 5 minutes on the same day (`grouped` in `MessageList` → `MessageBubble`) sit closer (`-mt-1`) and only the first has the tail and the squared corner. While the reader scrolls, a small aria-hidden date pill floats at the top (`data-day` on the date separators; not shown for the list's own auto-scrolls - a 400 ms "quiet" window).
 - **Bigger on phones:** below 768px the root font size is `112.5%` (18px) in `index.css`, so the whole rem-based layout is ~13% bigger, like an app; computers stay at 16px. Write sizes in rem (Tailwind classes, `text-[0.6875rem]`), never fixed `px` text, so they scale too.
 - **Phone keyboard:** the chat shell is one screen tall and must stay fully on screen when the keyboard opens - the header never slides off the top. `index.html`'s viewport has `interactive-widget=resizes-content` (Android shrinks the page), and `utils/viewport.js` sets `--app-height` from `window.visualViewport` while a keyboard is open (iPhone Safari ignores the tag); `LoggedInLayout` is `h-[var(--app-height,100dvh)]`. Message lists keep the newest message in view when they get shorter, if the reader was at the bottom (`hooks/useKeepBottomOnResize.js`).
 

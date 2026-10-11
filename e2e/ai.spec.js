@@ -122,7 +122,9 @@ test('a photo, and a message forwarded from a friend chat', async ({ browser }) 
   await kabir.getByLabel('Type a message').press('Enter')
 
   await riya.getByRole('button', { name: /Kabir/ }).click()
-  const bubble = riya.getByRole('listitem').filter({ hasText: 'Is the DBMS exam on Friday?' })
+  // Inside the message list only: Kabir's row in the chat list shows the
+  // same text as its preview, which also matches a bare "listitem".
+  const bubble = riya.getByRole('log', { name: 'Messages' }).getByRole('listitem').filter({ hasText: 'Is the DBMS exam on Friday?' })
   await bubble.hover()
   await bubble.getByRole('button', { name: 'Message actions' }).click()
   await riya.getByRole('menuitem', { name: 'Forward' }).click()

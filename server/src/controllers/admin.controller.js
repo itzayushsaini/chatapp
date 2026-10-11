@@ -30,3 +30,7 @@ export async function deleteUser(req, res) {
 export async function getStats(req, res) {
   res.json(await adminService.getStats())
 }
+
+export async function getActivity(req, res) {
+  res.json(await adminService.getActivity(req.valid.query.days))
+}

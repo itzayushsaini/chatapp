@@ -6,8 +6,9 @@ import { getUpdates } from '../../api/updates.js'
 import { kindOf } from '../../utils/files.js'
 import { dayLabel, formatTime } from '../../utils/time.js'
 import Button from '../common/Button.jsx'
+import ConfirmDialog from '../common/ConfirmDialog.jsx'
 import { ImageIcon, TrashIcon } from '../common/Icons.jsx'
-import Spinner from '../common/Spinner.jsx'
+import Skeleton from '../common/Skeleton.jsx'
 
 const TEXT_MAX = 1000
 const PHOTO_MAX_BYTES = 10 * 1024 * 1024
@@ -22,6 +23,7 @@ export default function UpdatesTab() {
   const [message, setMessage] = useState(null) // { kind: 'error' | 'ok', text }
   const [posts, setPosts] = useState(null) // newest first
   const [hasMore, setHasMore] = useState(false)
+  const [toDelete, setToDelete] = useState(null) // the post the confirm dialog is about
   const fileInput = useRef(null)
 
   async function load() {
@@ -87,7 +89,6 @@ export default function UpdatesTab() {
   }
 
   async function handleDelete(post) {
-    if (!window.confirm('Delete this update for everyone?')) return
     try {
       await deleteUpdate(post.id)
       setPosts((p) => p.filter((u) => u.id !== post.id))
@@ -100,7 +101,7 @@ export default function UpdatesTab() {
 
   return (
     <div className="max-w-xl space-y-6">
-      <form onSubmit={handleSubmit} className="space-y-3 rounded-xl border border-slate-200 bg-surface p-5">
+      <form onSubmit={handleSubmit} className="space-y-3 rounded-xl border border-slate-200 bg-surface p-5 shadow-sm">
         <div>
           <h2 className="font-semibold text-slate-900">Post an update</h2>
           <p className="mt-0.5 text-sm text-slate-500">
@@ -165,15 +166,17 @@ export default function UpdatesTab() {
       <section className="space-y-3">
         <h2 className="font-semibold text-slate-900">Past updates</h2>
         {posts === null ? (
-          <div className="flex justify-center py-6">
-            <Spinner />
+          <div className="space-y-3" role="status">
+            <span className="sr-only">Loading updates</span>
+            <Skeleton className="h-20 w-full" />
+            <Skeleton className="h-20 w-full" />
           </div>
         ) : posts.length === 0 ? (
           <p className="text-sm text-slate-500">Nothing posted yet.</p>
         ) : (
           <ul className="space-y-3">
             {posts.map((post) => (
-              <li key={post.id} className="flex gap-3 rounded-xl border border-slate-200 bg-surface p-4">
+              <li key={post.id} className="flex gap-3 rounded-xl border border-slate-200 bg-surface p-4 shadow-sm">
                 {post.imageUrl && (
                   <img src={post.imageUrl} alt="" className="h-16 w-16 shrink-0 rounded-md object-cover" />
                 )}
@@ -190,7 +193,7 @@ export default function UpdatesTab() {
                 <Button
                   variant="ghost"
                   size="sm"
-                  onClick={() => handleDelete(post)}
+                  onClick={() => setToDelete(post)}
                   className="shrink-0 self-start text-red-600"
                   aria-label="Delete update"
                 >
@@ -206,6 +209,17 @@ export default function UpdatesTab() {
           </Button>
         )}
       </section>
+
+      <ConfirmDialog
+        open={Boolean(toDelete)}
+        onClose={() => setToDelete(null)}
+        title="Delete this update?"
+        confirmLabel="Delete for everyone"
+        danger
+        onConfirm={() => handleDelete(toDelete)}
+      >
+        <p>It disappears from every user’s PingMe chat, together with its photo. This cannot be undone.</p>
+      </ConfirmDialog>
     </div>
   )
 }

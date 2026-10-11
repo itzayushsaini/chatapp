@@ -347,3 +347,31 @@ export const ChevronDownIcon = (p) => (
     <path d="m6 9 6 6 6-6" />
   </Icon>
 )
+export const UsersIcon = (p) => (
+  <Icon {...p}>
+    <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" />
+    <circle cx="9" cy="7" r="4" />
+    <path d="M22 21v-2a4 4 0 0 0-3-3.9" />
+    <path d="M16 3.1a4 4 0 0 1 0 7.8" />
+  </Icon>
+)
+export const BarChartIcon = (p) => (
+  <Icon {...p}>
+    <path d="M4 20V10" />
+    <path d="M10 20V4" />
+    <path d="M16 20v-7" />
+    <path d="M22 20H2" />
+  </Icon>
+)
+export const TrendingUpIcon = (p) => (
+  <Icon {...p}>
+    <path d="m22 7-8.5 8.5-5-5L2 17" />
+    <path d="M16 7h6v6" />
+  </Icon>
+)
+export const ArrowUpDownIcon = (p) => (
+  <Icon {...p}>
+    <path d="m7 15 5 5 5-5" />
+    <path d="m7 9 5-5 5 5" />
+  </Icon>
+)

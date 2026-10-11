@@ -2,6 +2,7 @@ import { Component } from 'react'
 
 import Button from './Button.jsx'
 import { AlertIcon } from './Icons.jsx'
+import Logo from './Logo.jsx'
 
 // The full-screen "Something went wrong" page. Used for two different
 // failures: the app crashing while drawing the screen (ErrorBoundary below),
@@ -9,15 +10,18 @@ import { AlertIcon } from './Icons.jsx'
 // (see AuthContext's bootError).
 export function ErrorScreen({ message, onRetry }) {
   return (
-    <main className="flex min-h-dvh flex-col items-center justify-center gap-4 bg-slate-50 px-6 text-center">
-      <span className="flex h-14 w-14 items-center justify-center rounded-full bg-red-100 text-red-600">
-        <AlertIcon className="h-7 w-7" />
-      </span>
-      <div>
-        <h1 className="text-lg font-semibold text-slate-900">Something went wrong</h1>
-        <p className="mt-1 max-w-sm text-sm text-slate-600">{message}</p>
+    <main className="auth-background flex min-h-dvh flex-col items-center justify-center gap-6 bg-slate-50 px-6 text-center">
+      <Logo />
+      <div className="animate-scale-in w-full max-w-sm rounded-2xl border border-slate-200 bg-surface p-8 shadow-md shadow-slate-900/5">
+        <span className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-red-100 text-red-600">
+          <AlertIcon className="h-7 w-7" />
+        </span>
+        <h1 className="mt-4 text-lg font-semibold text-slate-900">Something went wrong</h1>
+        <p className="mt-1 text-sm text-slate-600">{message}</p>
+        <Button onClick={onRetry} className="mt-6 w-full">
+          Try again
+        </Button>
       </div>
-      <Button onClick={onRetry}>Try again</Button>
     </main>
   )
 }

@@ -9,6 +9,7 @@ import ChatPage from './pages/ChatPage.jsx'
 import ForgotPasswordPage from './pages/ForgotPasswordPage.jsx'
 import LandingPage from './pages/LandingPage.jsx'
 import LoginPage from './pages/LoginPage.jsx'
+import NotFoundPage from './pages/NotFoundPage.jsx'
 import RegisterPage from './pages/RegisterPage.jsx'
 import ResetPasswordPage from './pages/ResetPasswordPage.jsx'
 import SettingsPage from './pages/SettingsPage.jsx'
@@ -21,7 +22,7 @@ import SettingsPage from './pages/SettingsPage.jsx'
 //   logged in  -> /login, /register, /forgot-password and /reset-password
 //                 all send you to "/"
 //   logged in but not an admin -> /admin sends you to "/"
-//   anything else -> "/"
+//   anything else -> a 404 page (with a button back to "/")
 export default function App() {
   const { user, loading, bootError, retrySession } = useAuth()
 
@@ -77,7 +78,7 @@ export default function App() {
           )
         }
       />
-      <Route path="*" element={<Navigate to="/" replace />} />
+      <Route path="*" element={<NotFoundPage />} />
     </Routes>
   )
 }

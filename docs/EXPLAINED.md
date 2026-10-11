@@ -2624,3 +2624,63 @@ at 16px and look exactly as before.
 > window, reads the actual font sizes the browser computed, and checks the
 > phone's are exactly 18/16 of the computer's. It fails if the line in
 > `index.css` is removed - we checked.
+
+## 11. Polish after Phase 22: a more professional look
+
+**What the team wanted:** the interface "more professional". The rule from
+`CLAUDE.md` still holds - no new features, only how things look and feel.
+
+**A brand panel on the login page.** `AuthLayout` is the one component all four
+account pages (login, register, forgot, reset) share, so one change restyled
+them all. From 1024px up it shows a green panel with three selling points beside
+the form; a phone gets only the form. The panel is written *after* the form in
+the page and moved to the left with `lg:order-first`, so a screen reader reads
+the form first. Its colours are fixed hex values, not theme colours, because in
+dark mode the theme's `brand-700` becomes light teal and white text on it would
+be unreadable.
+
+**Real screenshots on the home page.** Instead of only a drawn preview, the home
+page now shows real screenshots of the app, with a Light / Dark switch. They are
+WebP files (about 30-45 KB each, so they load fast on a phone) in
+`client/public/screens/`. The switch only swaps which pictures are visible.
+
+**Admin charts without a chart library.** The admin Overview shows how many
+messages, new accounts and AI answers there were each day. The server does this
+with three *grouped* queries (`$group` by day), fills days with nothing as 0 so the
+chart has no gaps, and sends one small list. The browser draws it as plain HTML:
+each day is a column whose height is its share of the busiest day. No library
+means one dependency less to explain, and dark mode works automatically because
+the bars use the theme colours. Each chart is announced to screen readers as one
+image with a sentence ("New accounts: 12 in the last 14 days, most 5 in a day").
+
+> **Likely question: why UTC days?** So everyone sees the same chart, whatever
+> their time zone; the chart says "(UTC)".
+
+**Sorting the user list safely.** The sort menu sends `sort=name` (etc.). The
+server only accepts one of four words (zod `enum`) and looks the real sort up in a
+fixed table - the request never supplies a database field name. Anything else is
+a 400. `collation` makes "name" ignore capital letters.
+
+**Messages from the same person sit together.** If the message before is from the
+same person, on the same day, less than 5 minutes earlier, the bubble is pulled
+up a little (`-mt-1`) and only the *first* bubble of the run has the speech-bubble
+tail - like WhatsApp. It is worked out in `MessageList` while drawing, so nothing
+extra is stored.
+
+**The floating date.** While you scroll a long history, a small pill at the top
+shows the day of the messages there. On each scroll the list finds the last date
+separator that has moved up to the top edge. Scrolls the app does itself (down to
+a new message) must not trigger it, so those set a 400 ms "quiet" time first.
+
+**A 404 page.** An address PingMe does not have used to silently jump to the home
+page, which hides mistakes. Now `NotFoundPage` says so and offers "Go to PingMe".
+
+**Safer deletes.** Deleting a user or an update used the browser's plain
+`window.confirm`. It now uses the app's own `ConfirmDialog` (same look, dark mode,
+a spinner while it runs) and explains what will be removed.
+
+> **Likely question: how did you test "looks professional"?** We can't test taste,
+> but we test the things that make it work: the panel shows on a laptop and not on
+> a phone, only the first bubble of a run has a tail, the date pill shows after a
+> scroll and not after a new message, the charts have the right numbers, sorting
+> and the delete dialog work, and every page still fits a 320px phone.

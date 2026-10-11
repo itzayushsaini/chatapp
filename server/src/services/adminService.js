@@ -1,3 +1,4 @@
+import { AiMessage } from '../models/AiMessage.js'
 import { Block } from '../models/Block.js'
 import { Friendship } from '../models/Friendship.js'
 import { Message } from '../models/Message.js'
@@ -38,7 +39,16 @@ function adminUserView(user) {
 // partial, case-insensitive match on username OR email - that is the whole
 // point of an admin user list, and it is only ever reachable by an account
 // with isAdmin already true.
-export async function listUsers({ search, page = 1, limit = 20 }) {
+// How the admin's user list can be ordered. A fixed list (never a field name
+// taken from the request), so the sort can only ever be one of these.
+const USER_SORTS = {
+  newest: { createdAt: -1, _id: -1 },
+  oldest: { createdAt: 1, _id: 1 },
+  name: { displayName: 1, _id: 1 },
+  lastSeen: { lastSeen: -1, _id: -1 },
+}
+
+export async function listUsers({ search, page = 1, limit = 20, sort = 'newest' }) {
   const filter = search
     ? {
         $or: [
@@ -50,7 +60,8 @@ export async function listUsers({ search, page = 1, limit = 20 }) {
 
   const skip = (Math.max(page, 1) - 1) * limit
   const [users, total] = await Promise.all([
-    User.find(filter).sort({ createdAt: -1 }).skip(skip).limit(limit),
+    // The collation makes "name" ignore upper/lower case (Zoya after aman).
+    User.find(filter).collation({ locale: 'en' }).sort(USER_SORTS[sort]).skip(skip).limit(limit),
     User.countDocuments(filter),
   ])
 
@@ -123,6 +134,46 @@ export async function getStats() {
     countAllAnswersToday(),
   ])
   return { totalUsers, totalMessages, onlineNow, aiAnswersToday }
+}
+
+const DAY_MS = 24 * 60 * 60 * 1000
+
+// How many new accounts, messages and PingMe AI answers there were on each of
+// the last `days` days (today included), oldest first - the numbers behind
+// the charts on the admin Overview. Days are UTC days, so the same chart is
+// shown whatever time zone the admin is in; a day with nothing is 0, not
+// missing, so the chart has no gaps.
+export async function getActivity(days = 14) {
+  const now = new Date()
+  const today = Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate())
+  const start = new Date(today - (days - 1) * DAY_MS)
+
+  // One grouped query per collection: documents since `start`, counted per
+  // "YYYY-MM-DD". The createdAt indexes are not needed at this size.
+  const perDay = async (Model, extra = {}) => {
+    const rows = await Model.aggregate([
+      { $match: { createdAt: { $gte: start }, ...extra } },
+      { $group: { _id: { $dateToString: { format: '%Y-%m-%d', date: '$createdAt', timezone: 'UTC' } }, count: { $sum: 1 } } },
+    ])
+    return new Map(rows.map((r) => [r._id, r.count]))
+  }
+  const [users, messages, aiAnswers] = await Promise.all([
+    perDay(User),
+    perDay(Message),
+    perDay(AiMessage, { role: 'model', status: 'done' }),
+  ])
+
+  const series = []
+  for (let i = 0; i < days; i++) {
+    const date = new Date(start.getTime() + i * DAY_MS).toISOString().slice(0, 10)
+    series.push({
+      date,
+      users: users.get(date) ?? 0,
+      messages: messages.get(date) ?? 0,
+      aiAnswers: aiAnswers.get(date) ?? 0,
+    })
+  }
+  return { days: series }
 }
 
 // There is no single "list everyone online" call in presenceService (it only

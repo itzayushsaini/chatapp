@@ -5,13 +5,17 @@ import { PASSWORD, register } from './helpers.js'
 // Each browser "context" is a separate, isolated browser profile with its own
 // cookies - so two contexts are two different people on two computers.
 
-test('a logged-out visitor gets the home page at "/", and unknown routes go home', async ({ page }) => {
+test('a logged-out visitor gets the home page at "/", and unknown routes get a 404 page', async ({ page }) => {
   // Since Phase 19, "/" is the public home page for anyone not logged in.
   await page.goto('/')
   await expect(page).toHaveURL(/\/$/)
   await expect(page.getByRole('heading', { level: 1 })).toContainText('Real conversations')
 
+  // An address PingMe does not have shows a friendly 404, with a way home.
   await page.goto('/some/unknown/page')
+  await expect(page).toHaveURL(/\/some\/unknown\/page$/)
+  await expect(page.getByRole('heading', { level: 1 })).toHaveText('This page doesn’t exist')
+  await page.getByRole('link', { name: 'Go to PingMe' }).click()
   await expect(page).toHaveURL(/\/$/)
   await expect(page.getByRole('heading', { level: 1 })).toContainText('Real conversations')
 
