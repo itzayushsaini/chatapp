@@ -67,6 +67,11 @@ const userSchema = new mongoose.Schema(
     // Set by an admin. Blocks login, and any EXISTING session stops working
     // immediately too - see authService.userFromToken.
     suspended: { type: Boolean, default: false },
+    // True for every account created since profile photos became required
+    // (registration and Google sign-up both set it). The app does not let
+    // such an account in until it has a photo. Older accounts are false:
+    // they are only reminded, with a popup, until they add one.
+    photoRequired: { type: Boolean, default: false },
   },
   { timestamps: true },
 )

@@ -7,6 +7,10 @@ export async function search(req, res) {
   res.json(await friendService.searchByUsername(req.user._id, req.valid.query.username))
 }
 
+export async function find(req, res) {
+  res.json(await friendService.findUsers(req.user._id, req.valid.query.q))
+}
+
 export async function blocked(req, res) {
   res.json({ users: await friendService.listBlocked(req.user._id) })
 }
@@ -31,9 +35,8 @@ export async function setAvatar(req, res) {
   res.json({ user: selfUser(user) })
 }
 
-export async function removeAvatar(req, res) {
-  const user = await profileService.removeAvatar(req.user._id)
-  res.json({ user: selfUser(user) })
+export async function removeAvatar() {
+  await profileService.removeAvatar()
 }
 
 export async function avatar(req, res, next) {

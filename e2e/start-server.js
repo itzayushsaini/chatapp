@@ -45,6 +45,10 @@ await import('../server/src/server.js')
 const { User } = await import('../server/src/models/User.js')
 setInterval(() => {
   User.updateMany({ username: /^admin_e2e/, isAdmin: false }, { isAdmin: true }).catch(() => {})
+  // Likewise, an account named "legacy_e2e..." is turned into one from BEFORE
+  // profile photos were required (photoRequired false), so the reminder
+  // popup for older accounts can be tested. Test server only.
+  User.updateMany({ username: /^legacy_e2e/, photoRequired: true }, { photoRequired: false }).catch(() => {})
 }, 200)
 
 // server.js exits on SIGINT/SIGTERM; stop MongoDB along with it.

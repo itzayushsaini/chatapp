@@ -94,13 +94,10 @@ export async function setAvatar(meId, file) {
   return updated
 }
 
-export async function removeAvatar(meId) {
-  const before = await User.findOneAndUpdate({ _id: meId }, { avatarFileId: null }, { new: false })
-  await deleteFile(before.avatarFileId)
-
-  const updated = await User.findById(meId)
-  await announce(updated)
-  return updated
+// Every account must have a profile photo (the team's rule), so it can be
+// changed - setAvatar above replaces it - but never removed.
+export async function removeAvatar() {
+  throw new AppError(400, 'A profile photo is required. You can change it, but not remove it.')
 }
 
 // What the avatar route needs to stream the picture. Any logged-in user may

@@ -40,6 +40,15 @@ router.get(
   users.search,
 )
 
+// Search by name or username (any part of it). At least 3 characters, so
+// one letter can't list everyone; same rate limit as the exact search.
+router.get(
+  '/find',
+  searchLimiter,
+  validate({ query: z.object({ q: z.string().trim().min(3, 'type at least 3 characters').max(40) }) }),
+  users.find,
+)
+
 router.patch('/me', profileLimiter, validate({ body: profileSchema }), users.updateMe)
 
 // Blocking. /me/blocked is registered before /:id/... so "me" is never read

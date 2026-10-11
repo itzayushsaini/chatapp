@@ -5,18 +5,12 @@ import { Message } from '../models/Message.js'
 import { User } from '../models/User.js'
 import { disconnectUser, emitToUser } from '../socket/emitter.js'
 import { AppError } from '../utils/AppError.js'
+import { escapeRegex } from '../utils/escapeRegex.js'
 import { clearHistory as clearAiHistory, countAllAnswersToday } from './aiService.js'
 import { isOnline } from './presenceService.js'
 import { removeAllFor as removePushSubscriptions } from './pushService.js'
 
 const sameId = (a, b) => String(a) === String(b)
-
-// Escapes a search string so it is safe to drop into a RegExp - without
-// this, a search containing regex syntax (e.g. ".*") could behave oddly or,
-// with a pathological pattern, run slowly (ReDoS).
-function escapeRegex(text) {
-  return text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
-}
 
 // More detail than PublicUser/SelfUser - this is for the admin's own list,
 // never sent to anyone else.

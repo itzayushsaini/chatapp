@@ -171,16 +171,32 @@ describe('profile picture', () => {
     expect(await uploadedFileCount()).toBe(1)
   })
 
-  it('removing it goes back to initials and deletes the file', async () => {
+  it('can be changed but never removed - the photo and its file stay', async () => {
     const { agent, user } = await registerUser('aman')
     await agent.put('/api/users/me/avatar').attach('avatar', PNG, 'a.png')
 
     const res = await agent.delete('/api/users/me/avatar')
 
-    expect(res.status).toBe(200)
-    expect(res.body.user.avatarUrl).toBeNull()
-    expect((await agent.get(`/api/users/${user.id}/avatar`)).status).toBe(404)
-    expect(await uploadedFileCount()).toBe(0)
+    expect(res.status).toBe(400)
+    expect(res.body.message).toBe('A profile photo is required. You can change it, but not remove it.')
+    expect((await agent.get(`/api/users/${user.id}/avatar`)).status).toBe(200)
+    expect(await uploadedFileCount()).toBe(1)
+  })
+
+  it('a new account is marked photoRequired; an older account is not', async () => {
+    const { agent, user } = await registerUser('aman')
+    const me = await agent.get('/api/auth/me')
+    expect(me.body.user.photoRequired).toBe(true)
+    expect(me.body.user.avatarUrl).toBeNull()
+
+    // An account from before the rule (no flag stored at all).
+    await User.collection.updateOne({ _id: new mongoose.Types.ObjectId(user.id) }, { $unset: { photoRequired: '' } })
+    expect((await agent.get('/api/auth/me')).body.user.photoRequired).toBe(false)
+
+    // Never part of what other users see.
+    const { agent: other } = await registerUser('priya')
+    const found = await other.get('/api/users/search').query({ username: 'aman' })
+    expect(found.body.user).not.toHaveProperty('photoRequired')
   })
 
   it.each([

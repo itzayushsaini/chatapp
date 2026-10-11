@@ -1,11 +1,11 @@
-import { useId, useRef, useState } from 'react'
+import { useId, useState } from 'react'
 
 import * as authApi from '../../api/auth.js'
 import { errorMessage } from '../../api/http.js'
-import { removeAvatar, updateProfile, uploadAvatar } from '../../api/profile.js'
+import { updateProfile } from '../../api/profile.js'
 import { useAuth } from '../../context/AuthContext.jsx'
+import { useAvatarUpload } from '../../hooks/useAvatarUpload.js'
 import { useChatStore } from '../../store/useChatStore.js'
-import { cropToSquare } from '../../utils/image.js'
 import { ensurePushSubscription } from '../../utils/push.js'
 import Avatar from '../common/Avatar.jsx'
 import Button from '../common/Button.jsx'
@@ -254,33 +254,10 @@ function BioField({ value, onChange }) {
 }
 
 // The picture is saved as soon as it is chosen (no need to press Save).
+// Every account must have one, so it can be changed but not removed.
 function PictureEditor() {
-  const { user, updateUser } = useAuth()
-  const addToast = useChatStore((s) => s.addToast)
-  const inputRef = useRef(null)
-  const [busy, setBusy] = useState(false)
-
-  async function run(action) {
-    setBusy(true)
-    try {
-      updateUser(await action())
-    } catch (err) {
-      addToast(err.response ? errorMessage(err) : err.message, 'error')
-    } finally {
-      setBusy(false)
-    }
-  }
-
-  function handleFile(event) {
-    const file = event.target.files[0]
-    event.target.value = '' // so choosing the same file again still fires
-    if (!file) return
-    if (!file.type.startsWith('image/')) {
-      addToast('Please choose a picture', 'error')
-      return
-    }
-    run(async () => uploadAvatar(await cropToSquare(file)))
-  }
+  const { user } = useAuth()
+  const { busy, choose, inputProps } = useAvatarUpload()
 
   return (
     <div className="flex items-center gap-4">
@@ -293,22 +270,11 @@ function PictureEditor() {
         )}
       </span>
       <div className="flex flex-col items-start gap-2">
-        <input
-          ref={inputRef}
-          type="file"
-          accept="image/jpeg,image/png,image/webp,image/gif"
-          onChange={handleFile}
-          className="hidden"
-          aria-label="Choose a profile picture"
-        />
-        <Button size="sm" onClick={() => inputRef.current.click()} disabled={busy}>
+        <input {...inputProps} />
+        <Button size="sm" onClick={choose} disabled={busy}>
           {user.avatarUrl ? 'Change photo' : 'Add photo'}
         </Button>
-        {user.avatarUrl && (
-          <Button size="sm" variant="ghost" onClick={() => run(removeAvatar)} disabled={busy}>
-            Remove photo
-          </Button>
-        )}
+        {!user.avatarUrl && <p className="text-xs text-slate-500">Every PingMe account has a photo.</p>}
       </div>
     </div>
   )

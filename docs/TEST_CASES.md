@@ -7,8 +7,8 @@ Kept up to date at the end of every phase.
 - **Manual** cases are the ones a person checks in the browser. Fill in the
   Actual and Result columns when you run them.
 
-Last full run: 2026-10-11 (after the "professional UI" polish) - **384/384
-server tests pass, 49/49 end-to-end tests pass (E40-E42 phone keyboard fix, E43 bigger phone size, E44-E48 the UI polish - 6 tests), lint clean in both workspaces, `npm run build`
+Last full run: 2026-10-11 (after name search, required profile photo and closing a chat) - **392/392
+server tests pass, 53/53 end-to-end tests pass (E40-E42 phone keyboard fix, E43 bigger phone size, E44-E48 the UI polish - 6 tests, E49-E52 the three new features), lint clean in both workspaces, `npm run build`
 succeeds.** No automated test ever calls Google or a push service: `npm test` fakes
 `geminiClient.js` (or Google's SDK) and `web-push`'s sender, and the e2e server uses
 `e2e/fakeGemini.js` with push switched off.
@@ -82,6 +82,13 @@ succeeds.** No automated test ever calls Google or a push service: `npm test` fa
 | A3.28 | Unfriend | 204; Friendship gone; Conversation and Messages kept; gone from both lists |
 | A3.29 | Unfriend a non-friend | 404 |
 | A3.30 | Re-friend | Same conversationId as before |
+| A3.31 | `GET /api/users/find?q=SHARMA` | Both "Sharma"s (name contains it, any case), not others; each item is `{ user: PublicUser, relationship }`; part of a username (`hul` → rahul) works too |
+| A3.32 | Ranking | Exact username first, then names/usernames starting with the text, then the rest (riya, riyansh, zara_riya) |
+| A3.33 | Who is never shown | Myself, a suspended account, someone I blocked, someone who blocked me |
+| A3.34 | Relationships in the results | friends / pending_incoming / pending_outgoing per person |
+| A3.35 | 25 people match | Only 20 returned |
+| A3.36 | `q` empty / 2 characters / spaces around 1 letter; `.*.`; `q[$gt]=`; no session | 400 / 400 / 400; `[]` (regex symbols are text); 400; 401 |
+| A3.37 | Nobody matches | 200 `{ users: [] }` |
 
 ### Phase 4 - `server/tests/conversations.test.js`
 
@@ -136,7 +143,8 @@ succeeds.** No automated test ever calls Google or a push service: `npm test` fa
 | A10.15 | Upload a picture | 200, `avatarUrl` = `/api/users/:id/avatar?v=<id>`; another user loads the exact bytes, `image/png`, cached `immutable` |
 | A10.16 | Search by a stranger | Shows bio and avatarUrl, never email |
 | A10.17 | Replace the picture | New URL; only one file left in GridFS |
-| A10.18 | Remove the picture | `avatarUrl: null`; GET 404; no files left |
+| A10.18 | Remove the picture | 400 "A profile photo is required. You can change it, but not remove it."; the picture and its file stay |
+| A10.26 | `photoRequired` | A new account (password or Google) has `photoRequired: true` in SelfUser; an account from before the rule reads `false`; never in PublicUser |
 | A10.19-20 | HTML named .png; a PDF | 400; nothing stored |
 | A10.21 | Picture over 2 MB | 413 `File is too large` |
 | A10.22 | No file attached | 400 |
@@ -499,6 +507,10 @@ email provider configured.
 | E46 | Floating date | In a long chat a new message does not show the date pill; after the reader scrolls up the pill "Today" shows, then goes away by itself |
 | E47 | Admin dashboard | The cards, three charts (each one image with a summary, the new-accounts count ≥ 3), the 30-day range; Users: search, sort by name (Abe, Team Dash, Zed) and by oldest, Delete opens the app's dialog, Cancel keeps the account, confirming removes it |
 | E48 | Home page | Real screenshots (loaded, not broken) with a Light/Dark switch; footer links (create account, forgot password, report a problem). Also: login, register, forgot-password, 404 and the four admin tabs fit a 320px phone |
+| E49 | Search by name (`e2e/searchPhotoClose.spec.js`) | "kAvYa" lists both Kavyas (not Rohan, not me); Add friend on one row only changes that row; a surname finds Rohan |
+| E50 | A new account needs a photo | After sign-up only "Add your profile photo" shows (also after a reload and on /settings), with Log out; choosing a photo opens the app; the profile dialog has Change photo and no Remove photo; DELETE avatar → 400 |
+| E51 | Older account reminder | A pre-rule account without a photo gets the "Add a profile photo" popup on every load; Later closes it until the next load; adding a photo from it ends the reminders |
+| E52 | Closing a chat | ✕ closes it; Escape closes the message menu first, then a reply in progress, then the chat; a message arriving while closed is unread; PingMe AI closes with Escape and the updates channel with ✕ |
 | E43 | Bigger on phones (`e2e/mobileLayout.spec.js`) | The same chat on a 390px phone and a 1280px computer: the root text size is 18px on the phone and 16px on the computer, and the message box and a message's time are exactly 18/16 bigger on the phone. Fails without the fix (16px) |
 | E34 | Announcement banner (`e2e/announcement.spec.js`) | An admin turns it on: a logged-out visitor sees it on the login page as one status labelled "Announcement", and the logged-in admin sees it in the chat; turned off, it disappears live for the admin and after a reload for the visitor |
 ---
@@ -803,6 +815,15 @@ Google cases need `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` set (see
 | M23.2 | iPhone keyboard | The same on iPhone Safari (or the installed app) | The same | | |
 | M23.3 | PingMe AI | The same in the PingMe AI chat | The same | | |
 | M23.4 | No banner on phones | Admin turns the announcement banner on → look on a phone, then a laptop | Not on the phone; shown on the laptop | Automated (E42) | Pass |
+
+### Name search, required photo, closing a chat (2026-10-11)
+
+| ID | Scenario | Steps | Expected | Actual | Result |
+|---|---|---|---|---|---|
+| M26.1 | Search by name | Add Friend → type part of a friend's name (3+ letters) | Everyone whose name or username contains it, best matches first; at most 20 | Automated (E49) | Pass |
+| M26.2 | New account | Sign up on a phone and on a laptop | "Add your profile photo" until a photo is chosen; then the app | Automated (E50) | Pass |
+| M26.3 | Old account without a photo | Log in to an older account that never added a photo; reload a few times | The reminder each time; Later works; after adding a photo it stops | Automated (E51) | Pass |
+| M26.4 | Close a chat | Laptop: ✕ in the header, then Escape | Back to "Select a conversation" | Automated (E52) | Pass |
 
 ### Post-22 polish - the new look (2026-10-11)
 

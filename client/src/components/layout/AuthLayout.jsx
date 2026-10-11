@@ -7,7 +7,7 @@ import Logo from '../common/Logo.jsx'
 // Shown beside the form on wide screens (from 1024px up). On a phone the
 // form needs every pixel, so the panel is not there at all.
 const POINTS = [
-  { icon: LockIcon, title: 'Private by design', text: 'There is no user list. Friends find you only by your exact username.' },
+  { icon: LockIcon, title: 'Private by design', text: 'Anyone can find you, but only people you accept can message you.' },
   { icon: ZapIcon, title: 'Instant', text: 'Messages arrive the moment they are sent, with read receipts and typing.' },
   { icon: SparklesIcon, title: 'PingMe AI built in', text: 'Ask questions, share a photo or a PDF - right inside the app.' },
 ]

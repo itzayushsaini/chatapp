@@ -4,7 +4,7 @@ import {
   acceptRequest,
   cancelRequest,
   declineRequest,
-  searchUser,
+  findUsers,
   sendRequest,
 } from '../../api/friends.js'
 import { errorMessage } from '../../api/http.js'
@@ -14,25 +14,28 @@ import Button from '../common/Button.jsx'
 import { SearchIcon } from '../common/Icons.jsx'
 import Spinner from '../common/Spinner.jsx'
 
-// Exact username search. There is deliberately no "search as you type" and
-// no list of suggestions: the server only ever answers for an exact match.
+// Search by name or username: type at least 3 letters of either, and
+// everyone whose name or username contains them is listed (up to 20, best
+// matches first - an exact username at the top). The server leaves out
+// myself, suspended accounts and anyone blocked either way.
+const MIN_CHARS = 3
+
 export default function AddFriendTab() {
   const [query, setQuery] = useState('')
-  const [result, setResult] = useState(null) // { user, relationship } | 'not-found' | null
+  const [results, setResults] = useState(null) // [{ user, relationship }] | null before a search
+  const [searched, setSearched] = useState('') // the text the results are for
   const [searching, setSearching] = useState(false)
   const [error, setError] = useState('')
 
-  async function search(username) {
+  async function search(text) {
     setSearching(true)
     setError('')
     try {
-      setResult(await searchUser(username))
+      setResults(await findUsers(text))
+      setSearched(text)
     } catch (err) {
-      if (err.response?.status === 404) setResult('not-found')
-      else {
-        setResult(null)
-        setError(errorMessage(err))
-      }
+      setResults(null)
+      setError(errorMessage(err))
     } finally {
       setSearching(false)
     }
@@ -40,47 +43,57 @@ export default function AddFriendTab() {
 
   function handleSubmit(event) {
     event.preventDefault()
-    const username = query.trim().toLowerCase()
-    if (username) search(username)
+    const text = query.trim()
+    if (text.length >= MIN_CHARS) search(text)
   }
+
+  const tooShort = query.trim().length < MIN_CHARS
 
   return (
     <div className="px-4 pt-2 pb-4">
       <form onSubmit={handleSubmit} role="search">
         <label htmlFor="friend-search" className="mb-1.5 block text-sm font-medium text-slate-700">
-          Find a friend by their exact username
+          Search by name or username
         </label>
         <div className="flex gap-2">
           <input
             id="friend-search"
             value={query}
             onChange={(e) => setQuery(e.target.value)}
-            placeholder="e.g. priya_s"
+            placeholder="e.g. Priya or priya_s"
             autoCapitalize="none"
             autoComplete="off"
             spellCheck="false"
-            maxLength={20}
-            className="min-w-0 flex-1 rounded-lg border border-slate-300 px-3 py-2 text-sm placeholder:text-slate-400 focus:border-brand-500 focus:ring-2 focus:ring-brand-500/30 focus:outline-none"
+            maxLength={40}
+            className="min-w-0 flex-1 rounded-lg border border-slate-300 bg-surface px-3 py-2 text-sm text-slate-900 placeholder:text-slate-400 focus:border-brand-500 focus:ring-2 focus:ring-brand-500/30 focus:outline-none"
           />
-          <Button type="submit" disabled={searching || !query.trim()} aria-label="Search">
+          <Button type="submit" disabled={searching || tooShort} aria-label="Search">
             {searching ? <Spinner light className="h-4 w-4" /> : <SearchIcon className="h-4 w-4" />}
           </Button>
         </div>
+        <p className="mt-1.5 text-xs text-slate-500">Type at least {MIN_CHARS} letters.</p>
       </form>
 
       <div className="mt-4" aria-live="polite">
         {error && <p className="text-sm text-red-600">{error}</p>}
-        {result === 'not-found' && (
-          <p className="animate-fade-in rounded-lg bg-slate-50 px-3 py-4 text-center text-sm text-slate-500">
-            No user found
-          </p>
+        {results?.length === 0 && (
+          <div className="animate-fade-in rounded-lg bg-slate-50 px-3 py-4 text-center text-sm text-slate-500">
+            <p className="font-medium text-slate-600">No user found</p>
+            <p className="mt-1 text-xs">Nobody&apos;s name or username contains “{searched}”.</p>
+          </div>
         )}
-        {result && result !== 'not-found' && (
-          <ResultCard
-            key={result.user.id}
-            result={result}
-            refresh={() => search(result.user.username)}
-          />
+        {results?.length > 0 && (
+          <>
+            <p className="mb-2 text-xs font-medium tracking-wide text-slate-500 uppercase">
+              {results.length === 1 ? '1 person' : `${results.length} people`}
+              {results.length >= 20 && ' (best matches - type more to narrow it down)'}
+            </p>
+            <ul aria-label="Search results" className="space-y-2">
+              {results.map((result) => (
+                <ResultCard key={result.user.id} result={result} refresh={() => search(searched)} />
+              ))}
+            </ul>
+          </>
         )}
       </div>
     </div>
@@ -180,41 +193,45 @@ function ResultCard({ result, refresh }) {
   }
 
   return (
-    <div className="animate-scale-in flex flex-col items-center rounded-2xl border border-slate-200 p-5 text-center">
-      <Avatar user={user} size="lg" />
-      <p className="mt-3 font-semibold text-slate-900">{user.displayName}</p>
-      <p className="text-sm text-slate-500">@{user.username}</p>
-      {user.bio && (
-        <p className="mt-2 text-sm whitespace-pre-wrap wrap-anywhere text-slate-600">{user.bio}</p>
-      )}
+    <li className="animate-fade-in flex gap-3 rounded-xl border border-slate-200 bg-surface p-3">
+      <Avatar user={user} size="md" />
+      <div className="min-w-0 flex-1">
+        <p className="truncate font-semibold text-slate-900">{user.displayName}</p>
+        <p className="truncate text-sm text-slate-500">@{user.username}</p>
+        {user.bio && <p className="mt-0.5 truncate text-xs text-slate-600">{user.bio}</p>}
 
-      <div className="mt-4 flex flex-wrap justify-center gap-2">
-        {relationship === 'none' && (
-          <Button onClick={add} disabled={busy}>
-            Add friend
-          </Button>
-        )}
-        {relationship === 'pending_outgoing' && (
-          <>
-            <span className="self-center text-sm text-slate-500">Requested ·</span>
-            <Button variant="secondary" onClick={cancel} disabled={busy}>
-              Cancel
+        <div className="mt-2 flex flex-wrap items-center gap-2">
+          {relationship === 'none' && (
+            <Button size="sm" onClick={add} disabled={busy}>
+              Add friend
             </Button>
-          </>
-        )}
-        {relationship === 'pending_incoming' && (
-          <>
-            <Button onClick={accept} disabled={busy}>
-              Accept
+          )}
+          {relationship === 'pending_outgoing' && (
+            <>
+              <span className="self-center text-sm text-slate-500">Requested ·</span>
+              <Button size="sm" variant="secondary" onClick={cancel} disabled={busy}>
+                Cancel
+              </Button>
+            </>
+          )}
+          {relationship === 'pending_incoming' && (
+            <>
+              <Button size="sm" onClick={accept} disabled={busy}>
+                Accept
+              </Button>
+              <Button size="sm" variant="secondary" onClick={decline} disabled={busy}>
+                Decline
+              </Button>
+            </>
+          )}
+          {relationship === 'friends' && (
+            <Button size="sm" onClick={message}>
+              Message
             </Button>
-            <Button variant="secondary" onClick={decline} disabled={busy}>
-              Decline
-            </Button>
-          </>
-        )}
-        {relationship === 'friends' && <Button onClick={message}>Message</Button>}
-        {relationship === 'self' && <p className="text-sm text-slate-500">This is you</p>}
+          )}
+          {relationship === 'self' && <p className="text-sm text-slate-500">This is you</p>}
+        </div>
       </div>
-    </div>
+    </li>
   )
 }

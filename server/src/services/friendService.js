@@ -7,6 +7,7 @@ import { Message } from '../models/Message.js'
 import { User } from '../models/User.js'
 import { emitToUser } from '../socket/emitter.js'
 import { AppError } from '../utils/AppError.js'
+import { escapeRegex } from '../utils/escapeRegex.js'
 import { pairKey } from '../utils/pairKey.js'
 import { publicUser } from '../utils/publicUser.js'
 import { isOnline } from './presenceService.js'
@@ -124,15 +125,60 @@ export async function searchByUsername(meId, username) {
   return { user: publicUser(user), relationship: await relationshipWith(meId, user._id) }
 }
 
-async function relationshipWith(meId, otherId) {
-  if (sameId(meId, otherId)) return 'self'
+// How many people a name search returns at most.
+export const FIND_LIMIT = 20
 
-  const friendship = await Friendship.findOne({ pairKey: pairKey(meId, otherId) })
+// Search by name: anyone whose display name OR username CONTAINS the text
+// (any case). The team chose this in addition to the exact username search;
+// the limits keep it from becoming a way to download the whole user list:
+// at least 3 characters (checked by the route), at most FIND_LIMIT results,
+// and the per-user search rate limit. Never myself, never a suspended
+// account, and never anyone blocked either way - a block stays invisible.
+// Results come back in a useful order: an exact username first, then names
+// or usernames that START with the text, then the rest by name.
+export async function findUsers(meId, text) {
+  const pattern = new RegExp(escapeRegex(text), 'i')
+  const blocks = await Block.find({ $or: [{ blocker: meId }, { blocked: meId }] }, { blocker: 1, blocked: 1 })
+  const hidden = blocks.map((b) => (sameId(b.blocker, meId) ? b.blocked : b.blocker))
+
+  const users = await User.find({
+    _id: { $nin: [meId, ...hidden] },
+    suspended: { $ne: true },
+    $or: [{ displayName: pattern }, { username: pattern }],
+  })
+    .collation({ locale: 'en' })
+    .sort({ displayName: 1, _id: 1 })
+    .limit(FIND_LIMIT * 3) // a few spare, so the best ones survive the ranking below
+
+  const lower = text.toLowerCase()
+  const rank = (u) =>
+    u.username === lower ? 0 : u.username.startsWith(lower) || u.displayName.toLowerCase().startsWith(lower) ? 1 : 2
+  // Array.sort is stable, so equal ranks keep the alphabetical order.
+  const top = users.sort((a, b) => rank(a) - rank(b)).slice(0, FIND_LIMIT)
+
+  // Every relationship in one query instead of one per person.
+  const friendships = await Friendship.find({ pairKey: { $in: top.map((u) => pairKey(meId, u._id)) } })
+  const byKey = new Map(friendships.map((f) => [f.pairKey, f]))
+  return {
+    users: top.map((u) => ({
+      user: publicUser(u),
+      relationship: relationshipFrom(meId, byKey.get(pairKey(meId, u._id))),
+    })),
+  }
+}
+
+// The relationship I have with someone, from our Friendship (or none).
+function relationshipFrom(meId, friendship) {
   // A declined request is shown as 'none' to BOTH sides, so the requester is
   // never told that they were declined.
   if (!friendship || friendship.status === 'declined') return 'none'
   if (friendship.status === 'accepted') return 'friends'
   return sameId(friendship.requester, meId) ? 'pending_outgoing' : 'pending_incoming'
+}
+
+async function relationshipWith(meId, otherId) {
+  if (sameId(meId, otherId)) return 'self'
+  return relationshipFrom(meId, await Friendship.findOne({ pairKey: pairKey(meId, otherId) }))
 }
 
 // ---------------------------------------------------------------------------

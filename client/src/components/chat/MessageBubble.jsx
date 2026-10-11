@@ -242,8 +242,19 @@ function ActionsMenu({ items, onClose, align }) {
     function onOutside(event) {
       if (!ref.current?.contains(event.target)) onClose()
     }
+    // Escape closes the menu - and only the menu (preventDefault tells the
+    // chat's own Escape handler that this one was used).
+    function onEscape(event) {
+      if (event.key !== 'Escape') return
+      event.preventDefault()
+      onClose()
+    }
     document.addEventListener('mousedown', onOutside)
-    return () => document.removeEventListener('mousedown', onOutside)
+    document.addEventListener('keydown', onEscape)
+    return () => {
+      document.removeEventListener('mousedown', onOutside)
+      document.removeEventListener('keydown', onEscape)
+    }
   }, [onClose])
 
   return (

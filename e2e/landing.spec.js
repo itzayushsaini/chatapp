@@ -29,9 +29,9 @@ test('the home page explains PingMe and leads to sign up and log in', async ({ p
   await expect(page.getByRole('heading', { name: 'Private by design. Secure by default.' })).toBeInViewport()
 
   // FAQ answers open and close with a click (native <details>).
-  const answer = page.getByText('you need a friend’s exact username')
+  const answer = page.getByText('Messages start only after you accept it')
   await expect(answer).toBeHidden()
-  await page.getByText('Why can I not search for people by name?').click()
+  await page.getByText('Can anyone message me?').click()
   await expect(answer).toBeVisible()
 
   // "Get started" goes to sign up, and the logo there comes back home.

@@ -8,13 +8,17 @@ test('editing my profile: photo, display name, bio and username', async ({ page 
   await page.getByRole('button', { name: 'Edit your profile' }).click()
   const dialog = page.getByRole('dialog', { name: 'Your profile' })
 
-  // The photo is cropped in the browser and saved as soon as it is chosen.
+  // Signing up already added a photo. A new one is cropped in the browser
+  // and saved as soon as it is chosen; it can be changed, never removed.
+  const footerPhoto = page.getByRole('button', { name: 'Edit your profile' }).locator('img')
+  const before = await footerPhoto.getAttribute('src')
   await dialog
     .getByLabel('Choose a profile picture')
     .setInputFiles({ name: 'me.png', mimeType: 'image/png', buffer: PNG })
-  const footerPhoto = page.getByRole('button', { name: 'Edit your profile' }).locator('img')
+  await expect(footerPhoto).not.toHaveAttribute('src', before)
   await expect.poll(() => imageLoaded(footerPhoto)).toBe(true)
-  await expect(dialog.getByRole('button', { name: 'Remove photo' })).toBeVisible()
+  await expect(dialog.getByRole('button', { name: 'Change photo' })).toBeVisible()
+  await expect(dialog.getByRole('button', { name: 'Remove photo' })).toHaveCount(0)
 
   await dialog.getByLabel('Display name').fill('Neha Kapoor')
   await dialog.getByLabel('Bio').fill('Loves clean UI')

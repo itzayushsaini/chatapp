@@ -375,3 +375,9 @@ export const ArrowUpDownIcon = (p) => (
     <path d="m7 9 5-5 5 5" />
   </Icon>
 )
+export const XIcon = (p) => (
+  <Icon {...p}>
+    <path d="M18 6 6 18" />
+    <path d="m6 6 12 12" />
+  </Icon>
+)

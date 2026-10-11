@@ -1,12 +1,15 @@
 import { useEffect } from 'react'
 import { Outlet, useSearchParams } from 'react-router'
 
+import { useAuth } from '../../context/AuthContext.jsx'
 import { SocketProvider } from '../../context/SocketContext.jsx'
 import { useSocketEvents } from '../../hooks/useSocketEvents.js'
 import { useChatStore } from '../../store/useChatStore.js'
 import { ensurePushSubscription } from '../../utils/push.js'
 import AnnouncementBanner from '../common/AnnouncementBanner.jsx'
 import Toasts from '../common/Toasts.jsx'
+import PhotoRequiredScreen from '../profile/PhotoRequiredScreen.jsx'
+import PhotoReminder from '../profile/PhotoReminder.jsx'
 
 // Everything the logged-in pages (the chat at "/" and Settings at
 // "/settings") share: ONE socket, all its listeners, the initial data, the
@@ -24,7 +27,13 @@ export default function LoggedInLayout() {
 // A separate component because useSocketEvents needs the socket, which only
 // exists inside SocketProvider.
 function LiveShell() {
+  const { user } = useAuth()
   const connection = useChatStore((s) => s.connection)
+  // Every account needs a profile photo. A NEW one (photoRequired) cannot use
+  // the app until it adds one; an OLDER one is reminded with a popup each
+  // time PingMe opens.
+  const mustAddPhoto = user.photoRequired && !user.avatarUrl
+  const remindPhoto = !user.photoRequired && !user.avatarUrl
   const totalUnread = useChatStore(
     (s) => Object.values(s.unreadCounts).reduce((sum, count) => sum + count, 0) + s.updates.unreadCount,
   )
@@ -81,9 +90,8 @@ function LiveShell() {
           Reconnecting…
         </div>
       )}
-      <div className="flex min-h-0 flex-1">
-        <Outlet />
-      </div>
+      <div className="flex min-h-0 flex-1">{mustAddPhoto ? <PhotoRequiredScreen /> : <Outlet />}</div>
+      {remindPhoto && <PhotoReminder />}
       <Toasts />
     </div>
   )

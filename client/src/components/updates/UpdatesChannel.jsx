@@ -1,6 +1,7 @@
 import { Fragment, useEffect, useLayoutEffect, useRef, useState } from 'react'
 
 import { markUpdatesRead } from '../../api/updates.js'
+import { useEscapeKey } from '../../hooks/useEscapeKey.js'
 import { useChatStore } from '../../store/useChatStore.js'
 import { dayLabel, formatTime, isSameDay } from '../../utils/time.js'
 import Button from '../common/Button.jsx'
@@ -8,6 +9,7 @@ import Dialog from '../common/Dialog.jsx'
 import { AlertIcon, BackIcon, LockIcon, VerifiedIcon } from '../common/Icons.jsx'
 import Skeleton from '../common/Skeleton.jsx'
 import Spinner from '../common/Spinner.jsx'
+import CloseChatButton from '../chat/CloseChatButton.jsx'
 import PingMeAvatar from './PingMeAvatar.jsx'
 
 const NEAR_BOTTOM_PX = 120
@@ -19,6 +21,8 @@ const LOAD_OLDER_PX = 80
 export default function UpdatesChannel() {
   const updates = useChatStore((s) => s.updates)
   const store = useChatStore.getState
+  // Escape closes the channel (unless a photo is open full size).
+  useEscapeKey(() => store().setActiveConversation(null))
   const { items, hasMore, status, latest, unreadCount } = updates
 
   // Load (or refresh) the latest page every time the channel is opened.
@@ -63,6 +67,7 @@ export default function UpdatesChannel() {
           </h2>
           <p className="truncate text-xs text-slate-500">Official updates from the PingMe team</p>
         </div>
+        <CloseChatButton />
       </header>
 
       {status === 'error' && items.length === 0 ? (

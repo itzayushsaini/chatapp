@@ -60,8 +60,8 @@ const HIGHLIGHTS = [
   },
   {
     icon: LockIcon,
-    title: 'Private by username',
-    text: 'There is no public list of users. Only someone who knows your exact username can find you.',
+    title: 'Chat only by consent',
+    text: 'Anyone can find you by name, but only people whose friend request you accept can message you.',
   },
   {
     icon: ShieldIcon,
@@ -149,7 +149,7 @@ const STEPS = [
   },
   {
     title: 'Find a friend',
-    text: 'Search their exact username and send a request. Nobody can browse the user list.',
+    text: 'Search their name or username and send a request. They decide whether to accept.',
     demo: <StepSearch />,
   },
   {
@@ -160,7 +160,7 @@ const STEPS = [
 ]
 
 const PRIVACY_POINTS = [
-  'No user directory: partial names and "browse everyone" searches find nothing.',
+  'Nobody can message you until you accept their friend request.',
   'Online status and last seen are shared with friends only.',
   'Blocking is silent - a blocked person just cannot find you, and is not told.',
   'Passwords are hashed with bcrypt and never stored as text.',
@@ -176,8 +176,8 @@ const FAQS = [
     a: 'Yes. PingMe is a student project built by a team of four at COER University, and it is free to use.',
   },
   {
-    q: 'Why can I not search for people by name?',
-    a: 'On purpose. If anyone could search by part of a name, anyone could list every user. In PingMe you need a friend’s exact username - so share yours with the people you actually want to hear from.',
+    q: 'Can anyone message me?',
+    a: 'No. People can find you by your name or username, but all they can do is send you a friend request. Messages start only after you accept it - and you can block anyone, silently.',
   },
   {
     q: 'Can people who are not my friends see when I am online?',
@@ -310,8 +310,8 @@ function Hero() {
             </span>
           </h1>
           <p className="mx-auto mt-5 max-w-xl text-base leading-relaxed text-slate-600 sm:text-lg lg:mx-0">
-            PingMe is a fast, private one-to-one chat app. Nobody can browse who is on it: you find a
-            friend by their exact username, send a request, and start chatting once they accept.
+            PingMe is a fast, private one-to-one chat app. Find a friend by name or username, send a
+            request, and start chatting once they accept - nobody can message you without your yes.
           </p>
           <div className="mt-8 flex flex-col items-center justify-center gap-3 sm:flex-row lg:justify-start">
             <Link to="/register" className={buttonClass({ size: 'lg', className: 'w-full shadow-lg shadow-brand-600/20 sm:w-auto' })}>
@@ -543,7 +543,7 @@ function StepSearch() {
   return (
     <div className="space-y-2 text-xs">
       <div className="flex items-center gap-1.5 rounded-lg border border-slate-200 px-2.5 py-1.5 text-slate-900">
-        <SearchIcon className="h-3.5 w-3.5 text-slate-400" /> aman_verma
+        <SearchIcon className="h-3.5 w-3.5 text-slate-400" /> Aman
       </div>
       <div className="flex items-center gap-2 rounded-lg bg-slate-50 p-2">
         <span className="inline-flex h-7 w-7 items-center justify-center rounded-full bg-sky-600 text-[0.625rem] font-semibold text-white">
@@ -581,17 +581,27 @@ function Privacy() {
             Private by design. Secure by default.
           </h2>
           <p className="mt-4 text-base leading-relaxed text-slate-600">
-            Most apps let anyone look you up. PingMe does not: a search only ever matches one exact
-            username, so there is no way to scroll through everyone who has an account.
+            People can find you by name, but a search shows only your name, username and photo -
+            never your email - and nobody can message you until you accept their friend request.
           </p>
-          {/* A tiny picture of that rule: a partial name finds nobody. */}
+          {/* A tiny picture of that rule: found by name, but only a request. */}
           <div aria-hidden="true" className="mt-8 max-w-sm rounded-2xl bg-surface p-4 shadow-sm ring-1 ring-slate-200">
             <div className="flex items-center gap-2 rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-900">
               <SearchIcon className="h-4 w-4 text-slate-400" />
-              pri
+              Priya
+            </div>
+            <div className="mt-3 flex items-center gap-3">
+              <span className="inline-flex h-9 w-9 items-center justify-center rounded-full bg-pink-700 text-xs font-semibold text-white">
+                PS
+              </span>
+              <span className="min-w-0 flex-1">
+                <span className="block text-sm font-medium text-slate-900">Priya Sharma</span>
+                <span className="block text-xs text-slate-500">@priya_s</span>
+              </span>
+              <span className="rounded-full bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-600">Requested</span>
             </div>
             <p className="mt-3 flex items-center gap-2 text-sm text-slate-500">
-              <LockIcon className="h-4 w-4" /> No user found
+              <LockIcon className="h-4 w-4" /> Messages start once they accept
             </p>
           </div>
         </div>

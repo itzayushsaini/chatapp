@@ -67,7 +67,7 @@ export async function register({ username, displayName, email, password }) {
   // moment could both pass it. The unique index is the only reliable guard,
   // so we just insert and translate the duplicate-key error (code 11000).
   try {
-    return await User.create({ username, displayName, email, passwordHash })
+    return await User.create({ username, displayName, email, passwordHash, photoRequired: true })
   } catch (err) {
     if (err.code === 11000) {
       if (err.keyPattern?.username) throw new AppError(409, 'Username already taken')

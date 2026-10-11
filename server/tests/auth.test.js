@@ -30,6 +30,8 @@ describe('POST /api/auth/register', () => {
       theme: 'light',
       authProvider: 'password',
       googleLinked: false,
+      // A new account must add a profile photo before using the app.
+      photoRequired: true,
     })
 
     const cookie = res.headers['set-cookie'][0]

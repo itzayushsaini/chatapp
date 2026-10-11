@@ -38,5 +38,9 @@ export function selfUser(user) {
     // How I sign in, shown on the Settings page.
     authProvider: user.authProvider ?? 'password',
     googleLinked: Boolean(user.googleId),
+    // A new account must add a profile photo before using the app (the app
+    // shows the "Add your profile photo" screen while this is true and
+    // avatarUrl is null); older accounts only get a reminder.
+    photoRequired: Boolean(user.photoRequired),
   }
 }

@@ -5,6 +5,10 @@ import { http } from './http.js'
 export const searchUser = (username) =>
   http.get('/users/search', { params: { username } }).then((r) => r.data)
 
+// Search by name or username (any part, at least 3 characters). Resolves to
+// [{ user, relationship }] - up to 20 people, best matches first.
+export const findUsers = (q) => http.get('/users/find', { params: { q } }).then((r) => r.data.users)
+
 export const getFriends = () => http.get('/friends').then((r) => r.data.friends)
 
 export const unfriend = (userId) => http.delete(`/friends/${userId}`)

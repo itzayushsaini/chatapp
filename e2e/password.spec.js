@@ -64,7 +64,7 @@ test('changing your password from the profile logs out other devices, not this o
   // land on the login form, not on the public home page that "/" shows
   // logged-out visitors since Phase 19 (AuthContext's clearSession does this).
   await otherPage.getByRole('tab', { name: 'Add Friend' }).click()
-  await otherPage.getByLabel('Find a friend by their exact username').fill('someone')
+  await otherPage.getByLabel('Search by name or username').fill('someone')
   await otherPage.getByRole('button', { name: 'Search' }).click()
   await expect(otherPage).toHaveURL(/\/login$/)
   await expect(otherPage.getByRole('heading', { name: 'Welcome back' })).toBeVisible()

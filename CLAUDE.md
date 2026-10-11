@@ -4,7 +4,7 @@
 
 A web-based, one-to-one, real-time text chat app. It is a B.Tech CSE 2nd-year project built by a team of 4 at COER University.
 
-The key feature: **users cannot see everyone who has an account.** A user finds another person by searching their **exact username**, sends a **friend request**, and the two can chat only after the request is **accepted**.
+The key feature: **nobody can message you without your consent.** A user finds another person by their **exact username** or by **searching a name** (see "Search"), sends a **friend request**, and the two can chat only after the request is **accepted**. (Until 2026-10-11 search was exact-username only; the team chose to add name search.)
 
 Two things matter as much as working code:
 
@@ -202,13 +202,14 @@ Validate them at startup with zod in `config/env.js`. If one is missing or inval
 | `updatesReadUpTo` | ObjectId → Update, or null. How far I have read the "PingMe" updates channel - one forward-only pointer, like `Conversation.lastRead`. Never sent to other users. |
 | `isAdmin` | Boolean, default false. Grants access to the admin panel. Sent to the client only in **SelfUser** (never PublicUser - other users have no reason to know it). |
 | `suspended` | Boolean, default false. Set by an admin. Blocks login (403) and invalidates any EXISTING session the instant it is set - see `userFromToken` and the Admin panel section below. |
+| `photoRequired` | Boolean, default false. Set to true for every account created by registration or Google sign-up since profile photos became required. Such an account cannot use the app until it has a photo; older accounts (false) only get a reminder popup. Sent only in SelfUser. |
 | timestamps | |
 
 - **PublicUser shape:** `{ id, username, displayName, bio, avatarUrl }`. These are the ONLY fields ever sent about another user. `avatarUrl` is `/api/users/:id/avatar?v=<avatarFileId>` or null.
 - **Friends-only fields:** `online` and `lastSeen` are sent only to friends.
-- **Email:** only ever sent to the user themself (via `/api/auth/me`), in the **SelfUser** shape: PublicUser + `email` + `usernameChangeAllowedAt` (Date or null) + `isAdmin` + `theme` + `authProvider` + `googleLinked` (boolean - whether Google sign-in works for this account).
+- **Email:** only ever sent to the user themself (via `/api/auth/me`), in the **SelfUser** shape: PublicUser + `email` + `usernameChangeAllowedAt` (Date or null) + `isAdmin` + `theme` + `authProvider` + `googleLinked` (boolean - whether Google sign-in works for this account) + `photoRequired`.
 - **AdminUser shape** (admin panel's own user list only): `{ id, username, displayName, email, isAdmin, suspended, online, lastSeen, createdAt }` - more detail than PublicUser/SelfUser, but still never `passwordHash` or any password/reset field.
-- **Avatars:** the uploaded profile picture, or - if there is none - initials on a coloured circle, with the colour derived from the username. Picture and bio are visible to any logged-in user who has the user's id (i.e. anyone who searched their exact username).
+- **Avatars:** the uploaded profile picture, or - if there is none - initials on a coloured circle, with the colour derived from the username. Picture and bio are visible to any logged-in user who has the user's id (i.e. anyone who found them by search).
 
 ### Block
 
@@ -405,9 +406,24 @@ OAuth 2.0 authorization-code flow with plain `fetch` (`googleAuthService.js`), n
 
 ### Search
 
-`GET /api/users/search?username=`
+Two searches:
 
-- **Exact match on the normalised username only.** No partial, regex or prefix search. Partial search would let anyone list all users, which defeats the purpose of the feature.
+**`GET /api/users/find?q=` - by name (what the app uses).** Anyone whose `displayName`
+OR `username` CONTAINS `q` (case-insensitive, regex characters escaped). The team
+chose this over exact-only search, knowing it lets people be looked up by name; the
+limits keep it from being a way to download the user list:
+- `q` at least 3 characters (400 otherwise), at most 40.
+- At most 20 results (`FIND_LIMIT`), ordered: exact username, then names/usernames
+  that START with `q`, then the rest alphabetically.
+- The search rate limit (30 per minute per user).
+- Never myself, never a suspended account, never anyone blocked either way.
+- Only PublicUser (never email) + `relationship`: `{ users: [{ user, relationship }] }`
+  (an empty list when nobody matches - not a 404). Relationships come from ONE
+  Friendship query for all results.
+
+**`GET /api/users/search?username=` - exact username** (kept; the API still offers it):
+
+- **Exact match on the normalised username only.**
 - **Response:** `{ user: PublicUser, relationship }`, or 404 `{ message: "No user found" }`.
 - **`relationship`** is one of `'self' | 'none' | 'pending_outgoing' | 'pending_incoming' | 'friends'`. A declined friendship shows as `'none'` to both sides.
 - If either user has blocked the other → the same 404 "No user found" (see Blocking).
@@ -476,7 +492,8 @@ Every REST route and socket handler that reads or writes messages MUST call thes
   - At most once every 30 days. The cooldown is part of the SAME atomic `findOneAndUpdate` filter (`usernameChangedAt` null or older than 30 days), so two simultaneous changes cannot both pass. Blocked → 429 "You can change your username again on YYYY-MM-DD".
   - Sending the current username is not a change and does not start the cooldown.
   - The old username becomes free for anyone to take. The client warns about this before saving.
-- **Profile picture:** `PUT /api/users/me/avatar` (multipart field `avatar`, max 2 MB, JPEG/PNG/WebP/GIF by magic bytes). The browser crops it to 256×256 before upload. Replacing or removing it deletes the old GridFS file.
+- **Profile picture:** `PUT /api/users/me/avatar` (multipart field `avatar`, max 2 MB, JPEG/PNG/WebP/GIF by magic bytes). The browser crops it to 256×256 before upload. Replacing it deletes the old GridFS file.
+- **A profile photo is required.** `DELETE /api/users/me/avatar` always answers 400 "A profile photo is required. You can change it, but not remove it." A new account (`photoRequired`) sees only the "Add your profile photo" screen (`PhotoRequiredScreen`, in `LoggedInLayout` instead of the routes, with Log out) until it has one; an older account without a photo gets the `PhotoReminder` popup (Later / Add photo) every time the app loads. This is an app rule, not a security rule: the API does not refuse other calls from an account without a photo.
 - **`GET /api/users/:id/avatar`** - any logged-in user. Cached for a year when `?v=` matches the current file id, otherwise `no-cache`.
 - After any profile change, emit `user:updated { user: PublicUser }` to everyone with a friendship or pending request with this user, and `user:updated { user: SelfUser }` to the user's own room.
 
@@ -730,13 +747,11 @@ escalation.
 
 - **`GET /api/admin/users?search=&sort=&page=&limit=`** (`sort`: `newest` - the
   default, `oldest`, `name` (case-insensitive) or `lastSeen`; anything else is a
-  400 - the value picks from a fixed list, it is never a field name) - unlike the exact-only
-  username search everyone else uses (`friendService.searchByUsername`),
-  this is a deliberate, partial, case-insensitive match on username OR
-  email. That asymmetry is intentional: exact-only search exists specifically
-  to stop an ORDINARY user from browsing the directory; an admin's own list
-  is supposed to let them find someone, and it is only ever reachable by an
-  account that already has `isAdmin`.
+  400 - the value picks from a fixed list, it is never a field name) - a
+  partial, case-insensitive match on username OR **email**, with paging and
+  no 20-result cap. Ordinary users' name search (`/api/users/find`) never
+  matches or shows email and is capped; this list is only ever reachable by
+  an account that already has `isAdmin`.
 - **`PATCH /api/admin/users/:userId/suspend`** sets `suspended: true` and
   immediately force-disconnects that user's active sockets
   (`emitter.disconnectUser`, `io.in(room).disconnectSockets()`) - otherwise
@@ -1042,6 +1057,7 @@ All responses are JSON (except the two file downloads). Errors use the shape `{ 
 | POST | `/api/auth/logout` | no | Clears the cookie, returns 204 |
 | GET | `/api/auth/me` | yes | `{ user }` (my own profile, including email) |
 | GET | `/api/users/search?username=` | yes | `{ user, relationship }` |
+| GET | `/api/users/find?q=` | yes | `{ users: [{ user, relationship }] }` - name or username contains `q` (3-40 chars), max 20 |
 | GET | `/api/friends` | yes | `{ friends }` |
 | DELETE | `/api/friends/:userId` | yes | Unfriend, returns 204 |
 | GET | `/api/friends/requests` | yes | `{ incoming, outgoing }` |
@@ -1060,7 +1076,7 @@ All responses are JSON (except the two file downloads). Errors use the shape `{ 
 | GET | `/api/auth/google` | no | Redirect to Google (see Google sign-in) |
 | GET | `/api/auth/google/callback` | no | Redirect to `/` or `/login?error=...` |
 | PUT | `/api/users/me/avatar` | yes | multipart `avatar` → `{ user }` |
-| DELETE | `/api/users/me/avatar` | yes | `{ user }` |
+| DELETE | `/api/users/me/avatar` | yes | Always 400 - a profile photo can be changed, not removed |
 | GET | `/api/users/:id/avatar` | yes | The picture (image bytes) |
 | POST | `/api/conversations/:id/attachments` | yes | multipart `file` → 201 `{ attachment }` |
 | GET | `/api/attachments/:id` | yes | The file (bytes, Range supported) |
@@ -1165,8 +1181,8 @@ All responses are JSON (except the two file downloads). Errors use the shape `{ 
   - Outgoing requests with a Cancel button.
   - Empty states for both lists.
 - **Add Friend:**
-  - One input for exact username search, showing a single result card.
-  - The card's button depends on `relationship`:
+  - One input, "Search by name or username" (at least 3 letters), calling `/api/users/find`; the results are a list (`aria-label="Search results"`), one row per person (avatar, name, @username, bio).
+  - Each row's button depends on `relationship`:
 
     | relationship | Button |
     |---|---|
@@ -1176,11 +1192,12 @@ All responses are JSON (except the two file downloads). Errors use the shape `{ 
     | `friends` | Message |
     | `self` | "This is you" |
 
-  - A 404 response shows "No user found".
+  - No matches shows "No user found".
 
 ### Chat window
 
 - **Header:** the friend's name (with a bell-off icon if muted), with "Online" or "Last seen …". Clicking the name or picture opens **Contact info**.
+- **Closing the chat:** a ✕ "Close chat" at the right of the header (from 768px up; phones have the back arrow) and the Escape key (`hooks/useEscapeKey.js`) set the open chat to none - the "Select a conversation" screen. The same in PingMe AI and the updates channel. Escape steps back one thing at a time: an open dialog, the message menu or a voice recording use it first (they `preventDefault`), then the contact info panel, then a reply in progress, then the chat.
 - **Contact info panel** (beside the chat on wide screens, over it on narrow ones): picture, name, @username, status, bio; photos/videos grid (click → full size) and documents list (click → download) from `GET /conversations/:id/attachments`; a Mute notifications switch; Clear chat, Remove friend and Block, each behind a `ConfirmDialog`.
 - **Message list:**
   - My messages on the right, theirs on the left, with the time on each.
@@ -1252,7 +1269,7 @@ All responses are JSON (except the two file downloads). Errors use the shape `{ 
 
 ### Profile
 
-- The sidebar footer (my avatar and name) opens a **Your profile** dialog: photo (Add/Change/Remove - saved immediately, cropped to 256×256 in the browser), display name, username, bio (160 max, with a counter), email (read-only). Save sends only the changed fields.
+- The sidebar footer (my avatar and name) opens a **Your profile** dialog: photo (Add/Change - saved immediately, cropped to 256×256 in the browser; never removed), display name, username, bio (160 max, with a counter), email (read-only). Save sends only the changed fields.
 - Changing the username asks for confirmation (30-day lock, old name becomes available). While locked, the field is disabled and says until when.
 - Clicking a friend's picture or name in the chat header opens their Contact info panel. The Add Friend result card shows the bio.
 - `user:updated` updates that person everywhere they appear (Chats, Requests, chat header), or my own profile if it is me.

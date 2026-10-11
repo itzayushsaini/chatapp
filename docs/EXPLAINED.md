@@ -2684,3 +2684,59 @@ a spinner while it runs) and explains what will be removed.
 > a phone, only the first bubble of a run has a tail, the date pill shows after a
 > scroll and not after a new message, the charts have the right numbers, sorting
 > and the delete dialog work, and every page still fits a 320px phone.
+
+## 12. Search by name, a required profile photo, and closing a chat
+
+### Search by name - and what it changes
+
+Until now PingMe only found someone by their **exact** username, so nobody
+could list its users. The team decided people should be able to search by
+name too. That is a real trade-off - anyone can now look someone up by name -
+so the search has limits that keep it useful without making it a way to copy
+the whole user list:
+
+- **At least 3 characters**, so "a" can't list everyone.
+- **At most 20 results**, best first: an exact username, then names that start
+  with the text, then the rest.
+- **The same rate limit** as before (30 searches a minute).
+- **Only the public profile** (name, username, bio, photo) - never an email.
+- **Blocking still hides people** in both directions, and suspended accounts
+  never show.
+
+What did *not* change is the most important rule: **finding someone only lets
+you send a friend request - messages start only after they accept.** The home
+page now says exactly that, instead of "no user directory".
+
+> **Likely question: is the search safe against injection?** The text goes
+> into a regular expression, so every special character (`.`, `*`, `(`...) is
+> escaped first (`utils/escapeRegex.js`) - ".*" searches for those two
+> characters, not "everything". zod also refuses anything that is not a short
+> string.
+
+### A required profile photo
+
+Each user now has `photoRequired`. Every account created **from now on** gets
+`true`; older accounts simply don't have it (`false`). That one flag lets the
+app treat the two groups differently without guessing from dates:
+
+- **New account, no photo:** `LoggedInLayout` shows the "Add your profile
+  photo" screen *instead of* the chat. As soon as the photo is saved, the
+  account has an `avatarUrl`, and the chat appears.
+- **Older account, no photo:** a reminder popup each time PingMe opens.
+  "Later" closes it - until the next time.
+- **Nobody can remove their photo**: the server answers 400; you can only
+  change it.
+
+> **Likely question: can't someone skip the photo by calling the API
+> directly?** Yes - this is a rule of the app, not a security rule. A missing
+> photo does no harm to anyone else, so we did not add checks to every server
+> route; the server *does* stop a photo being removed.
+
+### Closing a chat
+
+A ✕ in the chat header (on wider screens - phones already have ←) and the
+Escape key close the open chat. Escape is used by several things, so it
+works one step at a time: if a dialog or the message menu is open, or a voice
+note is being recorded, *that* uses the Escape (it calls `preventDefault`);
+otherwise the contact panel closes, or a reply is cancelled, and only then
+the chat. A small hook, `useEscapeKey`, holds that rule in one place.

@@ -2,7 +2,7 @@
 
 A new session should be able to read this file and carry on from it.
 
-Last updated: 2026-10-11 (Post-22 polish: a more professional look - done and committed (4685326). Before that, bigger on phones (84cb813) and Phase 22: installable app (PWA) + push notifications while PingMe is closed - done and committed. Push needs VAPID keys on Render - docs/DEPLOY.md 1.8; the real-phone checks are M22 in TEST_CASES.md)
+Last updated: 2026-10-11 (Search by name, required profile photo, closing a chat - done and committed ("Feature: search by name, required profile photo, closing a chat"). Before that, a more professional look (4685326), bigger on phones (84cb813) and Phase 22: installable app (PWA) + push notifications while PingMe is closed - done and committed. Push needs VAPID keys on Render - docs/DEPLOY.md 1.8; the real-phone checks are M22 in TEST_CASES.md)
 
 ---
 
@@ -1172,6 +1172,48 @@ text box sat at 730px, behind the keyboard). Plus the viewport tag, and
 the banner hidden at 375px but shown on a computer. A real keyboard can't be
 opened in an automated browser - M23 checks it on a real phone.
 
+## Post-22 (2026-10-11): search by name, required profile photo, closing a chat
+
+Three changes the team asked for together.
+
+**1. Search by name** (the team's choice - it changes the original
+"exact username only" rule; CLAUDE.md, the home page and the login panel
+were updated to match). `GET /api/users/find?q=` (`friendService.findUsers`):
+display name or username CONTAINS the text, any case; 3-40 characters; at
+most 20 results (exact username, then "starts with", then alphabetical);
+never me, suspended or blocked-either-way accounts; PublicUser +
+relationship only, relationships in one query; the search rate limit. The
+old exact `/api/users/search` stays. `utils/escapeRegex.js` is now shared
+with the admin user search. Client: Add Friend has one "Search by name or
+username" box and a results list, one row per person with the usual
+buttons. Home page wording now says what is still true: nobody can message
+you until you accept.
+
+**2. Profile photo required.** `User.photoRequired` (true for every account
+created by registration or Google sign-up from now on; older accounts have
+none = false), sent in SelfUser. `LoggedInLayout` shows
+`PhotoRequiredScreen` instead of the app while a new account has no photo
+(Log out is the only other way out); an older account without one gets
+`PhotoReminder` on every load (Later / Add photo). `DELETE /me/avatar` is now
+always 400 - a photo can be changed, never removed (the profile dialog lost
+its Remove button). `hooks/useAvatarUpload.js` is shared by the three photo
+pickers. This is an app rule, not a security rule - the API does not refuse
+other calls from an account with no photo.
+
+**3. Closing the open chat.** `CloseChatButton` (✕, from 768px up) in the
+header of friend chats, PingMe AI and the updates channel, and Escape
+(`hooks/useEscapeKey.js`) - one step at a time: dialogs, the message menu
+(now closes on Escape) and a voice recording first, then contact info, then
+a reply, then the chat.
+
+**Tests:** 8 new server tests (A3.31-A3.37, A10.26; A10.18 changed) - 392;
+`e2e/searchPhotoClose.spec.js` (E49-E52) - 53 e2e. The e2e `register()`
+helper now adds a photo (or stops at the photo screen with
+`{ photo: false }`); `searchFor()` helper; `start-server.js` turns
+"legacy_e2e..." accounts into pre-rule accounts (test server only).
+
+**Update post:** `PingMe Update Posts/05 - Find friends by name (+2 more)`.
+
 ## Post-22 polish (2026-10-11): a more professional look
 
 **What the team asked:** "update the interface, make it more professional" -
@@ -1300,9 +1342,9 @@ really is Reply. Confirmed it fails on the pre-fix code and passes after.
 ## How to verify everything
 
 1. `npm install`
-2. `npm test` - 384 pass
+2. `npm test` - 392 pass
 3. `npm run lint` - no errors
-4. `npx playwright install chromium` (once), then `npm run test:e2e` - 49 pass
+4. `npx playwright install chromium` (once), then `npm run test:e2e` - 53 pass
 5. `cp server/.env.example server/.env`, fill in `MONGO_URI` and `JWT_SECRET`
 6. `npm run seed`, then `npm run dev`, open <http://localhost:5173>
 7. `npm run make-admin -- aman` to try the admin panel, then log in as `aman`

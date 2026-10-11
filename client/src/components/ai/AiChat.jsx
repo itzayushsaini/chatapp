@@ -2,6 +2,7 @@ import { Fragment, useEffect, useLayoutEffect, useRef, useState } from 'react'
 
 import { askAi, clearAi, retryAi, stopAi } from '../../api/ai.js'
 import { errorMessage } from '../../api/http.js'
+import { useEscapeKey } from '../../hooks/useEscapeKey.js'
 import { useKeepBottomOnResize } from '../../hooks/useKeepBottomOnResize.js'
 import { useChatStore } from '../../store/useChatStore.js'
 import { kindOf } from '../../utils/files.js'
@@ -13,6 +14,7 @@ import { AlertIcon, BackIcon, LockIcon, TrashIcon } from '../common/Icons.jsx'
 import Skeleton from '../common/Skeleton.jsx'
 import Spinner from '../common/Spinner.jsx'
 import TypingDots from '../common/TypingDots.jsx'
+import CloseChatButton from '../chat/CloseChatButton.jsx'
 import AiAvatar from './AiAvatar.jsx'
 import AiBubble from './AiBubble.jsx'
 import AiComposer from './AiComposer.jsx'
@@ -35,6 +37,8 @@ const SUGGESTIONS = [
 export default function AiChat() {
   const ai = useChatStore((s) => s.ai)
   const store = useChatStore.getState
+  // Escape closes PingMe AI (unless a dialog or a recording is using it).
+  useEscapeKey(() => store().setActiveConversation(null))
   const [viewing, setViewing] = useState(null) // a photo open full size
   const [confirmClear, setConfirmClear] = useState(false)
   const { items, status, latest, available, imageGeneration, dailyLimit, usedToday, hasMore } = ai
@@ -161,6 +165,7 @@ export default function AiChat() {
             <TrashIcon className="h-5 w-5" />
           </button>
         )}
+        <CloseChatButton />
       </header>
 
       {status === 'error' && items.length === 0 ? (

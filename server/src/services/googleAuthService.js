@@ -106,7 +106,7 @@ export async function findOrCreateGoogleUser({ googleId, email, name }) {
     const displayName = (name || email.split('@')[0]).trim().slice(0, 40) || 'PingMe user'
     for (const username of usernameCandidates(email)) {
       try {
-        user = await User.create({ username, displayName, email, googleId, authProvider: 'google' })
+        user = await User.create({ username, displayName, email, googleId, authProvider: 'google', photoRequired: true })
         break
       } catch (err) {
         // Username taken - try the next candidate. Anything else is real.

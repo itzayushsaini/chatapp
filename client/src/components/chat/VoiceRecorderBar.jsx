@@ -48,7 +48,11 @@ export default function VoiceRecorderBar({ elapsedMs, levels, onCancel, onSend }
       className="flex items-center gap-2"
       role="group"
       aria-label="Recording a voice note"
-      onKeyDown={(e) => e.key === 'Escape' && onCancel()}
+      onKeyDown={(e) => {
+        if (e.key !== 'Escape') return
+        e.preventDefault() // this Escape cancels the recording, not the chat
+        onCancel()
+      }}
     >
       <button
         type="button"

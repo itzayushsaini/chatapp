@@ -4,6 +4,7 @@ import { uploadAttachment } from '../../api/conversations.js'
 import { errorMessage } from '../../api/http.js'
 import { useAuth } from '../../context/AuthContext.jsx'
 import { useSocket } from '../../context/SocketContext.jsx'
+import { useEscapeKey } from '../../hooks/useEscapeKey.js'
 import { useFriendStatus } from '../../hooks/useFriendStatus.js'
 import { useChatStore } from '../../store/useChatStore.js'
 import { kindOf } from '../../utils/files.js'
@@ -12,6 +13,7 @@ import Button from '../common/Button.jsx'
 import { AlertIcon, BackIcon, BellOffIcon } from '../common/Icons.jsx'
 import Skeleton from '../common/Skeleton.jsx'
 import TypingDots from '../common/TypingDots.jsx'
+import CloseChatButton from './CloseChatButton.jsx'
 import ContactInfoPanel from './ContactInfoPanel.jsx'
 import MessageInput from './MessageInput.jsx'
 import MessageList from './MessageList.jsx'
@@ -29,6 +31,15 @@ export default function ChatWindow({ conversationId }) {
   const store = useChatStore.getState
   const [replyTarget, setReplyTarget] = useState(null)
   const [infoOpen, setInfoOpen] = useState(false)
+
+  // Escape steps back one thing at a time: the contact info panel, then a
+  // reply in progress, then the chat itself. (Dialogs, the message menu and
+  // a voice recording handle their own Escape first - see useEscapeKey.)
+  useEscapeKey(() => {
+    if (infoOpen) setInfoOpen(false)
+    else if (replyTarget) setReplyTarget(null)
+    else store().setActiveConversation(null)
+  })
 
   // A different chat clears the reply-in-progress state and closes the
   // contact info panel.
@@ -298,6 +309,7 @@ function ChatHeader({ friend, muted, conversationId, onBack, onOpenInfo }) {
           {status.typing && <TypingDots />}
         </p>
       </div>
+      <CloseChatButton />
     </header>
   )
 }

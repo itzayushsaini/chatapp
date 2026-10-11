@@ -92,7 +92,7 @@ test('contact info: shared media, mute, clear chat, and block / unblock', async 
 
   // Neither can find the other any more.
   await priya.getByRole('tab', { name: 'Add Friend' }).click()
-  await priya.getByLabel('Find a friend by their exact username').fill('aman_block')
+  await priya.getByLabel('Search by name or username').fill('aman_block')
   await priya.getByRole('button', { name: 'Search' }).click()
   await expect(priya.getByText('No user found')).toBeVisible()
 

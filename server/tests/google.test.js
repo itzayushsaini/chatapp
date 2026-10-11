@@ -81,6 +81,8 @@ describe('GET /api/auth/google/callback', () => {
       email: 'neha.sharma@gmail.com',
       authProvider: 'google',
       googleLinked: true,
+      // A new Google account must add a profile photo too.
+      photoRequired: true,
     })
   })
 

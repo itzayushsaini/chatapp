@@ -1,6 +1,6 @@
 import { expect, test } from '@playwright/test'
 
-import { PASSWORD, register } from './helpers.js'
+import { PASSWORD, register, searchFor } from './helpers.js'
 
 // Each browser "context" is a separate, isolated browser profile with its own
 // cookies - so two contexts are two different people on two computers.
@@ -39,21 +39,25 @@ test('two people find each other, become friends and chat in real time', async (
   // Empty state shows my own username to share.
   await expect(aman.getByText('No friends yet')).toBeVisible()
 
-  // --- Search is exact-match only ---------------------------------------
+  // --- Search by name or username --------------------------------------
   await aman.getByRole('tab', { name: 'Add Friend' }).click()
-  const search = aman.getByLabel('Find a friend by their exact username')
+  const search = aman.getByLabel('Search by name or username')
 
-  await search.fill('priya')
+  // Fewer than 3 letters can't be searched.
+  await search.fill('pr')
+  await expect(aman.getByRole('button', { name: 'Search' })).toBeDisabled()
+
+  await search.fill('nobody_called_this')
   await aman.getByRole('button', { name: 'Search' }).click()
   await expect(aman.getByText('No user found')).toBeVisible()
 
-  await search.fill('PRIYA_E2E')
-  await aman.getByRole('button', { name: 'Search' }).click()
-  await expect(aman.getByText('Priya Sharma')).toBeVisible()
+  // Any part of the username, in any case.
+  const priyaRow = await searchFor(aman, 'IYA_E2', 'priya_e2e')
+  await expect(priyaRow).toContainText('Priya Sharma')
 
   // --- Friend request, delivered live -----------------------------------
-  await aman.getByRole('button', { name: 'Add friend' }).click()
-  await expect(aman.getByText('Requested ·')).toBeVisible()
+  await priyaRow.getByRole('button', { name: 'Add friend' }).click()
+  await expect(priyaRow.getByText('Requested ·')).toBeVisible()
 
   await expect(priya.getByText('Aman Kumar sent you a friend request')).toBeVisible()
   await expect(priya.getByLabel('1 incoming')).toBeVisible()
@@ -115,10 +119,7 @@ test('switching between two chats never shows the other chat\'s messages, and on
   await register(priya, 'priya_switch', 'Priya Sharma')
 
   for (const [friend, username] of [[rahul, 'rahul_switch'], [priya, 'priya_switch']]) {
-    await aman.getByRole('tab', { name: 'Add Friend' }).click()
-    await aman.getByLabel('Find a friend by their exact username').fill(username)
-    await aman.getByRole('button', { name: 'Search' }).click()
-    await aman.getByRole('button', { name: 'Add friend' }).click()
+    await (await searchFor(aman, username)).getByRole('button', { name: 'Add friend' }).click()
     await friend.getByRole('tab', { name: /Requests/ }).click()
     await friend.getByRole('button', { name: 'Accept' }).click()
     await aman.getByRole('tab', { name: 'Chats' }).click()
@@ -167,10 +168,7 @@ test('scrolling the message list never scrolls the page itself (no scroll chaini
   const rahul = await (await page.context().browser().newContext()).newPage()
   await register(rahul, 'rahul_wheel', 'Rahul Singh')
 
-  await page.getByRole('tab', { name: 'Add Friend' }).click()
-  await page.getByLabel('Find a friend by their exact username').fill('rahul_wheel')
-  await page.getByRole('button', { name: 'Search' }).click()
-  await page.getByRole('button', { name: 'Add friend' }).click()
+  await (await searchFor(page, 'rahul_wheel')).getByRole('button', { name: 'Add friend' }).click()
   await rahul.getByRole('tab', { name: /Requests/ }).click()
   await rahul.getByRole('button', { name: 'Accept' }).click()
   await page.getByRole('tab', { name: 'Chats' }).click()

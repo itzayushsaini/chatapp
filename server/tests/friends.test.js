@@ -5,6 +5,7 @@ import app from '../src/app.js'
 import { Conversation } from '../src/models/Conversation.js'
 import { Friendship } from '../src/models/Friendship.js'
 import { Message } from '../src/models/Message.js'
+import { User } from '../src/models/User.js'
 import { makeFriends, registerUser } from './helpers.js'
 
 const send = (agent, username) => agent.post('/api/friends/requests').send({ username })
@@ -79,6 +80,95 @@ describe('GET /api/users/search', () => {
   it('requires login', async () => {
     const res = await request(app).get('/api/users/search?username=aman')
     expect(res.status).toBe(401)
+  })
+})
+
+describe('GET /api/users/find (search by name)', () => {
+  const find = (agent, q) => agent.get('/api/users/find').query({ q })
+  const names = (res) => res.body.users.map((r) => r.user.username)
+
+  it('finds anyone whose name or username contains the text, in any case', async () => {
+    const { agent } = await registerUser('aman')
+    await registerUser('priya_s', { displayName: 'Priya Sharma' })
+    await registerUser('psharma', { displayName: 'Pooja Sharma' })
+    await registerUser('rahul', { displayName: 'Rahul Singh' })
+
+    const res = await find(agent, 'SHARMA')
+    expect(res.status).toBe(200)
+    expect(names(res).sort()).toEqual(['priya_s', 'psharma'])
+    // Only the public profile, plus how we are related.
+    expect(res.body.users[0]).toEqual({
+      user: { id: expect.any(String), username: expect.any(String), displayName: expect.any(String), bio: '', avatarUrl: null },
+      relationship: 'none',
+    })
+    // A part of a username works too.
+    expect(names(await find(agent, 'hul'))).toEqual(['rahul'])
+  })
+
+  it('puts an exact username first, then names that start with the text', async () => {
+    const { agent } = await registerUser('aman')
+    await registerUser('zara_riya', { displayName: 'Zara' }) // contains "riya"
+    await registerUser('riyansh', { displayName: 'Bob' }) // username starts with it
+    await registerUser('riya', { displayName: 'Zoe' }) // exact username
+
+    expect(names(await find(agent, 'riya'))).toEqual(['riya', 'riyansh', 'zara_riya'])
+  })
+
+  it('never shows me, suspended accounts or anyone blocked either way', async () => {
+    const { agent } = await registerUser('kumar_a', { displayName: 'Kumar A' })
+    await registerUser('kumar_b', { displayName: 'Kumar B' })
+    const c = await registerUser('kumar_c', { displayName: 'Kumar C' })
+    const d = await registerUser('kumar_d', { displayName: 'Kumar D' })
+    await registerUser('kumar_e', { displayName: 'Kumar E' })
+    await User.updateOne({ username: 'kumar_b' }, { suspended: true })
+    await agent.post(`/api/users/${c.user.id}/block`) // I blocked C
+    const me = (await agent.get('/api/auth/me')).body.user
+    await d.agent.post(`/api/users/${me.id}/block`) // D blocked me
+
+    expect(names(await find(agent, 'kumar'))).toEqual(['kumar_e'])
+  })
+
+  it('shows the right relationship for each person', async () => {
+    const { a, b } = await makeFriends('anil_x', 'anil_y')
+    const c = await registerUser('anil_z')
+    await send(c.agent, 'anil_x') // C asked A
+    const w = await registerUser('anil_w')
+    await send(a.agent, 'anil_w') // A asked W
+
+    const res = await find(a.agent, 'anil')
+    const rel = Object.fromEntries(res.body.users.map((r) => [r.user.username, r.relationship]))
+    expect(rel).toEqual({ anil_y: 'friends', anil_z: 'pending_incoming', anil_w: 'pending_outgoing' })
+    expect(b && w).toBeTruthy()
+  })
+
+  it('returns at most 20 people', async () => {
+    const { agent } = await registerUser('aman')
+    await User.insertMany(
+      Array.from({ length: 25 }, (_, i) => ({
+        username: `student${String(i).padStart(2, '0')}`,
+        displayName: `Student ${i}`,
+        email: `student${i}@gmail.com`,
+      })),
+    )
+    const res = await find(agent, 'student')
+    expect(res.body.users).toHaveLength(20)
+  })
+
+  it('needs at least 3 characters, treats regex symbols as text, and needs a session', async () => {
+    const { agent } = await registerUser('aman')
+    await registerUser('priya')
+    for (const q of ['', 'pr', '  a ']) expect((await find(agent, q)).status).toBe(400)
+    // ".*" would match everyone as a pattern - as text it matches nobody.
+    expect((await find(agent, '.*.')).body.users).toEqual([])
+    expect((await agent.get('/api/users/find?q[$gt]=')).status).toBe(400)
+    expect((await request(app).get('/api/users/find').query({ q: 'priya' })).status).toBe(401)
+  })
+
+  it('finds nobody: an empty list, not an error', async () => {
+    const { agent } = await registerUser('aman')
+    const res = await find(agent, 'nobody-here')
+    expect(res.status).toBe(200)
+    expect(res.body.users).toEqual([])
   })
 })
 
