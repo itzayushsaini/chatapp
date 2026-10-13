@@ -13,8 +13,7 @@ const router = Router()
 
 router.use(requireAuth)
 
-// /requests routes come before /:userId so "requests" is never mistaken for a
-// user id.
+// Before /:userId, so "requests" is never read as a user id
 router.get('/requests', friends.listRequests)
 router.post(
   '/requests',

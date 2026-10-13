@@ -41,8 +41,7 @@ export async function removeAvatar() {
 
 export async function avatar(req, res, next) {
   const file = await profileService.getAvatar(req.valid.params.id)
-  // The URL carries ?v=<file id>. When it matches, this exact picture can
-  // never change, so the browser may cache it for a year.
+  // A matching ?v=<file id> means this exact picture, so it can be cached for a year
   const current = req.valid.query.v === String(file.fileId)
   sendStoredFile(req, res, next, {
     ...file,

@@ -4,10 +4,6 @@ import Button from './Button.jsx'
 import { AlertIcon } from './Icons.jsx'
 import Logo from './Logo.jsx'
 
-// The full-screen "Something went wrong" page. Used for two different
-// failures: the app crashing while drawing the screen (ErrorBoundary below),
-// and the very first "am I logged in?" check not reaching the server at all
-// (see AuthContext's bootError).
 export function ErrorScreen({ message, onRetry }) {
   return (
     <main className="auth-background flex min-h-dvh flex-col items-center justify-center gap-6 bg-slate-50 px-6 text-center">
@@ -26,9 +22,7 @@ export function ErrorScreen({ message, onRetry }) {
   )
 }
 
-// React only lets a CLASS component catch an error thrown while rendering
-// its children - there is no hook for this. Without it, one bug in one
-// component would leave the whole page blank white.
+// Only a class component can catch errors thrown while rendering; there is no hook for it.
 export class ErrorBoundary extends Component {
   state = { crashed: false }
 
@@ -37,8 +31,6 @@ export class ErrorBoundary extends Component {
   }
 
   componentDidCatch(error, info) {
-    // The detail stays in the browser console for developers; the user only
-    // sees the friendly screen.
     console.error('Unexpected error while rendering:', error, info.componentStack)
   }
 
@@ -47,8 +39,7 @@ export class ErrorBoundary extends Component {
       return (
         <ErrorScreen
           message="The page ran into a problem it could not recover from. Reloading usually fixes it."
-          // A full reload, not just re-rendering: whatever state caused the
-          // crash would most likely cause it again straight away.
+          // A full reload: just re-rendering would most likely crash again.
           onRetry={() => window.location.reload()}
         />
       )

@@ -8,12 +8,9 @@ import { ArrowDownIcon, DownloadIcon } from '../common/Icons.jsx'
 import Spinner from '../common/Spinner.jsx'
 import MessageBubble from './MessageBubble.jsx'
 
-// "Near the bottom" = within this many pixels of it.
 const NEAR_BOTTOM_PX = 120
 const LOAD_OLDER_PX = 80
-// Two messages from the same person within this long sit close together.
 const GROUP_WITHIN_MS = 5 * 60 * 1000
-// The floating date label stays this long after scrolling stops.
 const DAY_PILL_MS = 1400
 
 export default function MessageList({
@@ -31,47 +28,30 @@ export default function MessageList({
   const listRef = useRef(null)
   const nearBottom = useRef(true)
   const lastKey = useRef(null)
-  // Becomes true once the FIRST page of history has been shown. Read by
-  // MessageBubble (see there) to decide whether a message sliding into view
-  // is a genuine live arrival or just part of the initial/older history
-  // being painted - so opening a chat never animates in 30 bubbles at once.
+  // True once the first page is shown, so opening a chat doesn't slide in every bubble
   const historyShownRef = useRef(false)
-  // Set just before older messages load: the scroll position to restore.
   const restoreFrom = useRef(null)
   const [loadingOlder, setLoadingOlder] = useState(false)
   const [showNewPill, setShowNewPill] = useState(false)
-  const [viewing, setViewing] = useState(null) // the photo open full size
-  // The date of the messages at the top of the screen, shown in a small
-  // pill while the reader scrolls (and for a moment after) - so in a long
-  // history they always know which day they are in.
+  const [viewing, setViewing] = useState(null)
   const [floatingDay, setFloatingDay] = useState(null)
   const dayTimer = useRef(null)
-  // Scrolls the list does by itself (down to a new message, after photos
-  // load) are not the reader looking around - no floating date for them.
+  // Scrolls the list does by itself don't show the floating date
   const quietUntil = useRef(0)
   const scrollByCode = (ms = 400) => {
     quietUntil.current = Date.now() + ms
   }
   useEffect(() => () => clearTimeout(dayTimer.current), [])
 
-  // The keyboard opening makes the list shorter - keep the newest in view.
   useKeepBottomOnResize(listRef, nearBottom)
 
-  // Runs after React updates the DOM but BEFORE the browser paints, so any
-  // scroll adjustment is invisible - no jump.
   useLayoutEffect(() => {
     const el = listRef.current
     if (!el) return
-    // Runs after every render this effect fires for, including the very
-    // first one - so a bubble's OWN mount (which happens during render,
-    // before this line runs) always sees whatever this was on the PREVIOUS
-    // render, i.e. false for the initial page of history.
     historyShownRef.current = true
 
     if (restoreFrom.current) {
-      // Older messages were added ABOVE. Without this, the content would
-      // shift down and the user would lose their place. Keep the same
-      // distance from the bottom instead.
+      // Older messages were added above, so keep the same distance from the bottom
       scrollByCode()
       el.scrollTop = el.scrollHeight - restoreFrom.current.height + restoreFrom.current.top
       restoreFrom.current = null
@@ -80,13 +60,10 @@ export default function MessageList({
 
     const last = messages[messages.length - 1]
     const key = last?.clientId ?? null
-    if (key === lastKey.current) return // nothing new at the bottom
+    if (key === lastKey.current) return
 
     const isFirstRender = lastKey.current === null
     lastKey.current = key
-    // Auto-scroll only if the user is already near the bottom (or it is
-    // their own message). If they scrolled up to read, do not yank them
-    // down - show the "New messages" pill instead.
     if (isFirstRender || nearBottom.current || last?.senderId === myId) {
       scrollByCode()
       el.scrollTop = el.scrollHeight
@@ -102,8 +79,6 @@ export default function MessageList({
     if (nearBottom.current) setShowNewPill(false)
 
     if (Date.now() >= quietUntil.current) {
-      // Which day is at the top? The last date separator that has scrolled
-      // up to (or past) the top edge.
       const topEdge = el.getBoundingClientRect().top
       let day = null
       for (const separator of el.querySelectorAll('[data-day]')) {
@@ -119,16 +94,12 @@ export default function MessageList({
       setLoadingOlder(true)
       restoreFrom.current = { height: el.scrollHeight, top: el.scrollTop }
       const added = await fetchOlder(conversationId)
-      // Nothing was added (e.g. a network error), so there is no scroll
-      // position to restore - forget it so it cannot fire later by mistake.
       if (!added) restoreFrom.current = null
       setLoadingOlder(false)
     }
   }
 
-  // Photos and videos only get their real height once they load, AFTER the
-  // scroll-to-bottom above has run. If the user was at the bottom, keep them
-  // there.
+  // Photos and videos only get their real height once they load, so stay at the bottom
   function handleMediaLoad() {
     const el = listRef.current
     if (el && nearBottom.current) {
@@ -153,11 +124,8 @@ export default function MessageList({
         role="log"
         aria-label="Messages"
       >
-        {/* Positioned over the list rather than inside it, so showing it
-            does not change the content height the scroll restore relies on. */}
+        {/* Over the list, not in it, so it doesn't change the height the scroll restore relies on */}
         {floatingDay && (
-          // Decorative (the real separators are in the list), so hidden from
-          // screen readers; over the list, so it does not move anything.
           <div className="pointer-events-none absolute inset-x-0 top-2 z-10 flex justify-center" aria-hidden="true">
             <span className="animate-fade-in rounded-full bg-surface/95 px-3 py-1 text-xs font-medium text-slate-600 shadow-md ring-1 ring-slate-200">
               {floatingDay}
@@ -182,7 +150,6 @@ export default function MessageList({
           {messages.map((m, i) => {
             const previous = messages[i - 1]
             const newDay = !previous || !isSameDay(previous.createdAt, m.createdAt)
-            // A run of messages from one person, a few minutes apart.
             const grouped =
               Boolean(previous) &&
               !newDay &&
@@ -199,19 +166,12 @@ export default function MessageList({
                 )}
                 <MessageBubble
                   message={m}
-                  // Only the bubble that is CURRENTLY the last one in the
-                  // list, and only once initial history is already on
-                  // screen, counts as "just arrived" - so a live message
-                  // slides in, but the 30 bubbles from opening the chat, and
-                  // older ones loaded by scrolling up (never the last item),
-                  // do not.
                   isNew={historyShownRef.current && i === messages.length - 1}
                   mine={m.senderId === myId}
                   grouped={grouped}
                   myId={myId}
                   friendName={friendName}
-                  // Same-length hex ids compare correctly as strings. Read
-                  // implies delivered, so either pointer covering it counts.
+                  // Same-length hex ids compare correctly as strings; read implies delivered
                   read={Boolean(m.id && readUpTo && m.id <= readUpTo)}
                   delivered={Boolean(
                     m.id &&

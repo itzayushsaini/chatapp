@@ -3,8 +3,7 @@ import { describe, expect, it } from 'vitest'
 import { Message } from '../src/models/Message.js'
 import { makeFriends, registerUser } from './helpers.js'
 
-// Messages are only ever SENT over the socket, so these tests insert them
-// directly to have some history to page through.
+// messages are only sent over the socket, so insert some history directly
 async function insertMessages(conversationId, senderId, count) {
   const ids = []
   for (let i = 1; i <= count; i++) {

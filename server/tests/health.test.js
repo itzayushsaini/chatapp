@@ -1,8 +1,6 @@
 import request from 'supertest'
 import { describe, expect, it } from 'vitest'
 
-// Supertest starts the app on a random free port for each request, which is
-// only possible because app.js exports the app without calling listen().
 import app from '../src/app.js'
 
 describe('GET /api/health', () => {
@@ -14,7 +12,6 @@ describe('GET /api/health', () => {
   })
 
   it('needs no authentication', async () => {
-    // No cookie is sent, and it still succeeds.
     const res = await request(app).get('/api/health')
 
     expect(res.status).toBe(200)

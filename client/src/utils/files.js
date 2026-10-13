@@ -1,6 +1,4 @@
-// What the chat accepts, for quick feedback BEFORE uploading. The server
-// checks every file again by its actual bytes - this is only a convenience,
-// never the security check.
+// Only quick feedback before uploading - the server checks the real bytes.
 
 const MB = 1024 * 1024
 
@@ -10,7 +8,6 @@ const IMAGE_EXTENSIONS = ['jpg', 'jpeg', 'png', 'gif', 'webp']
 const VIDEO_EXTENSIONS = ['mp4', 'webm', 'mov']
 const FILE_EXTENSIONS = ['pdf', 'doc', 'docx', 'xls', 'xlsx', 'ppt', 'pptx', 'txt', 'zip']
 
-// For the file picker's accept="" - which files it offers to choose.
 export const ACCEPT = [...IMAGE_EXTENSIONS, ...VIDEO_EXTENSIONS, ...FILE_EXTENSIONS]
   .map((ext) => `.${ext}`)
   .join(',')
@@ -27,7 +24,6 @@ export function kindOf(file) {
   return 'file'
 }
 
-// Returns an error message, or null if the file looks fine.
 export function checkFile(file) {
   const ext = extensionOf(file.name)
   if (![...IMAGE_EXTENSIONS, ...VIDEO_EXTENSIONS, ...FILE_EXTENSIONS].includes(ext)) {
@@ -42,9 +38,7 @@ export function checkFile(file) {
   return null
 }
 
-// PingMe AI reads fewer kinds of file than a chat accepts (Gemini cannot
-// read GIFs or Office documents), all up to 10 MB. Again only a quick check
-// - the server looks at the real bytes.
+// Gemini can't read GIFs or Office documents
 const AI_EXTENSIONS = ['jpg', 'jpeg', 'png', 'webp', 'pdf', 'txt', 'mp4', 'webm', 'mov']
 const AI_MAX_BYTES = 10 * MB
 
@@ -60,14 +54,12 @@ export function checkAiFile(file) {
   return null
 }
 
-// 1536 -> "1.5 KB", 5242880 -> "5.0 MB"
 export function formatBytes(bytes) {
   if (bytes < 1024) return `${bytes} B`
   if (bytes < MB) return `${(bytes / 1024).toFixed(1)} KB`
   return `${(bytes / MB).toFixed(1)} MB`
 }
 
-// Short text for a sidebar preview, e.g. "📷 Photo" or "📄 notes.pdf".
 export function attachmentLabel(attachment, caption) {
   if (attachment.kind === 'audio') return '🎤 Voice message'
   if (attachment.kind === 'image') return `📷 ${caption || 'Photo'}`

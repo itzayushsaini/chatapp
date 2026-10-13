@@ -1,6 +1,5 @@
 import { ChatIcon } from '../common/Icons.jsx'
 
-// Shown on wide screens when no chat is open.
 export default function EmptyChat() {
   return (
     <div className="chat-background flex flex-1 flex-col items-center justify-center px-6 text-center">

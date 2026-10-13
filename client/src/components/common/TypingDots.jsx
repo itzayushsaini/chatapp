@@ -1,7 +1,3 @@
-// Three small dots that bounce in sequence, next to "typing…" - the same
-// idea WhatsApp and iMessage use so "someone is typing" reads as a live
-// signal rather than static text. Decorative (the text next to it already
-// says "typing…" for screen readers), so it is aria-hidden.
 export default function TypingDots({ className = '' }) {
   return (
     <span className={`inline-flex items-center gap-0.5 ${className}`} aria-hidden="true">

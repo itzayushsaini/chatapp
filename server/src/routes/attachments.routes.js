@@ -9,8 +9,6 @@ const router = Router()
 
 router.use(requireAuth)
 
-// Every download is checked: only the two people in the conversation get the
-// file (see attachmentService.getForDownload).
 router.get('/:id', validate({ params: z.object({ id: objectId }) }), attachments.download)
 
 export default router

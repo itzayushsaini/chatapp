@@ -9,8 +9,7 @@ const typingSchema = z.object({
   isTyping: z.boolean(),
 })
 
-// The client already throttles this to about one event every few seconds
-// while someone types; this is only a ceiling against a misbehaving client.
+// The client already throttles typing; this only caps a misbehaving client
 const RATE_LIMIT = 30
 const RATE_WINDOW_MS = 5000
 
@@ -25,13 +24,7 @@ function createRateLimiter() {
   }
 }
 
-// "typing..." is relayed to the OTHER participant only, and never stored -
-// it is only true for a few seconds, so there is nothing worth saving. The
-// same two checks as sending a message: I must be in the conversation, and
-// we must still be friends, so a stranger can never learn anything from it.
-//
-// Fire-and-forget: no ack. If one is lost, the other side's indicator simply
-// times out on its own a few seconds later.
+// Never stored and no ack: a lost event just times out on the other side
 export function registerTypingHandlers(socket) {
   const { userId } = socket.data
   const allow = createRateLimiter()

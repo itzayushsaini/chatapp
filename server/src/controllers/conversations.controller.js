@@ -10,7 +10,6 @@ export async function sharedAttachments(req, res) {
   res.json({ items: await messageService.listSharedAttachments(req.user._id, req.valid.params.id) })
 }
 
-// Both of these only affect ME, so only my own other tabs are told.
 export async function clear(req, res) {
   await messageService.clearConversation(req.user._id, req.valid.params.id)
   emitToUser(req.user._id, 'conversation:cleared', { conversationId: req.valid.params.id })
@@ -23,8 +22,7 @@ export async function mute(req, res) {
   res.json({ muted })
 }
 
-// Runs BEFORE the upload is read: a stranger to this conversation is turned
-// away without the server ever receiving their file.
+// Runs before multer, so a stranger can't make the server receive a file
 export async function checkCanUpload(req, res, next) {
   await attachmentService.assertCanUpload(req.user._id, req.valid.params.id)
   next()

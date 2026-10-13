@@ -15,14 +15,11 @@ const EMPTY = { username: '', displayName: '', email: '', password: '' }
 export default function RegisterPage() {
   const { register } = useAuth()
   const [fields, setFields] = useState(EMPTY)
-  // Kept out of `fields` on purpose: it is only ever compared here in the
-  // browser, never sent to the server.
+  // kept out of `fields` so it is never sent to the server
   const [confirmPassword, setConfirmPassword] = useState('')
   const [error, setError] = useState('')
   const [submitting, setSubmitting] = useState(false)
-  // Just a quick hint and an early "closed" message - the server enforces
-  // both regardless, so a stale or failed fetch here can never let through
-  // something the server would otherwise refuse.
+  // only a hint - the server enforces these settings anyway
   const [publicSettings, setPublicSettings] = useState(null)
 
   useEffect(() => {
@@ -36,16 +33,12 @@ export default function RegisterPage() {
   async function handleSubmit(event) {
     event.preventDefault()
     setError('')
-    // Only guards against a typo in a password nobody can see as they type
-    // it - so it is a browser-side check, with nothing for the server to do.
     if (fields.password !== confirmPassword) {
       setError('Passwords do not match')
       return
     }
     setSubmitting(true)
     try {
-      // The server validates everything again - the browser's checks are
-      // only there to give quicker feedback.
       await register(fields)
     } catch (err) {
       setError(errorMessage(err))

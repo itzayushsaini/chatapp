@@ -3,30 +3,20 @@ import { useRef, useState } from 'react'
 import { formatDuration } from '../../utils/time.js'
 import { SendIcon, TrashIcon } from '../common/Icons.jsx'
 
-// How far left the recording strip has to be dragged to cancel.
 const CANCEL_SWIPE_PX = 120
 
-// Replaces the composer while a voice note is being recorded: a red dot and
-// timer, the live waveform, and Cancel / Send.
-//
-// Swipe to cancel: drag the strip to the left (finger or mouse) and let go
-// past the line - or keep going - to throw the recording away. The strip
-// follows your finger and fades as it gets closer, so it is obvious what
-// letting go will do. The Cancel button and the Escape key do the same for
-// anyone who would rather not swipe.
 export default function VoiceRecorderBar({ elapsedMs, levels, onCancel, onSend }) {
   const [dragX, setDragX] = useState(0)
   const drag = useRef(null)
 
   function onPointerDown(event) {
     drag.current = { startX: event.clientX }
-    // Keep receiving moves even if the pointer leaves the strip.
     event.currentTarget.setPointerCapture(event.pointerId)
   }
 
   function onPointerMove(event) {
     if (!drag.current) return
-    const dx = Math.min(0, event.clientX - drag.current.startX) // left only
+    const dx = Math.min(0, event.clientX - drag.current.startX)
     if (dx <= -CANCEL_SWIPE_PX) {
       drag.current = null
       setDragX(0)
@@ -38,7 +28,7 @@ export default function VoiceRecorderBar({ elapsedMs, levels, onCancel, onSend }
 
   function onPointerEnd() {
     drag.current = null
-    setDragX(0) // not far enough: spring back
+    setDragX(0)
   }
 
   const fade = 1 - Math.min(1, -dragX / CANCEL_SWIPE_PX) * 0.7
@@ -69,8 +59,7 @@ export default function VoiceRecorderBar({ elapsedMs, levels, onCancel, onSend }
         onPointerMove={onPointerMove}
         onPointerUp={onPointerEnd}
         onPointerCancel={onPointerEnd}
-        // touch-action pan-y: a sideways drag belongs to us, not to the
-        // browser's own scrolling/back-swipe.
+        // touch-pan-y so a sideways drag isn't taken by the browser's scroll or back-swipe
         className={`flex min-w-0 flex-1 touch-pan-y items-center gap-3 rounded-3xl bg-surface px-4 py-2.5 shadow-sm select-none ${
           dragX === 0 ? 'transition-transform duration-200' : ''
         }`}
@@ -91,8 +80,6 @@ export default function VoiceRecorderBar({ elapsedMs, levels, onCancel, onSend }
         onClick={onSend}
         className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-brand-600 text-white transition-[background-color,transform] duration-150 hover:bg-brand-700 focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:ring-offset-2 focus-visible:outline-none active:scale-90"
         aria-label="Send voice note"
-        // Focus lands here when recording starts, so Enter sends and
-        // Escape (handled above) cancels without touching the mouse.
         autoFocus
       >
         <SendIcon className="h-5 w-5" />
@@ -101,9 +88,7 @@ export default function VoiceRecorderBar({ elapsedMs, levels, onCancel, onSend }
   )
 }
 
-// The last few seconds of loudness, newest on the right, as bars. The raw
-// readings are small numbers (normal speech is around 0.05-0.3), hence the
-// multiplier.
+// Speech readings are small (about 0.05 to 0.3), hence the multiplier
 function LiveWaveform({ levels }) {
   return (
     <span className="flex h-6 min-w-0 flex-1 items-center justify-end gap-0.5 overflow-hidden" aria-hidden="true">

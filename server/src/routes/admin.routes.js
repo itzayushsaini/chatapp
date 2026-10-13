@@ -51,8 +51,6 @@ const activityQuery = validate({
 
 const router = Router()
 
-// Every route here needs a real, logged-in isAdmin account - there is no
-// partial or read-only tier.
 router.use(requireAuth, requireAdmin)
 
 router.get('/settings', admin.getSettingsController)
@@ -66,9 +64,7 @@ router.delete('/users/:userId', adminLimiter, userIdParams, admin.deleteUser)
 router.get('/stats', admin.getStats)
 router.get('/stats/activity', activityQuery, admin.getActivity)
 
-// The "PingMe" updates channel. requireAuth + requireAdmin above run BEFORE
-// multer, so a non-admin can never make the server receive a file. The text
-// is validated after multer, because multer is what parses it.
+// requireAdmin runs before multer, so a non-admin can't make the server receive a file
 router.post(
   '/updates',
   adminLimiter,

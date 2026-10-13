@@ -1,8 +1,6 @@
 import * as aiService from '../services/aiService.js'
 import { sendStoredFile } from '../utils/sendStoredFile.js'
 
-// PingMe AI. Every handler only ever touches the logged-in user's OWN chat.
-
 export async function summary(req, res) {
   res.json(await aiService.getSummary(req.user._id))
 }
@@ -11,14 +9,13 @@ export async function history(req, res) {
   res.json(await aiService.getHistory(req.user._id, req.valid.query))
 }
 
-// Runs BEFORE an upload is read - see routes/ai.routes.js.
+// Runs before multer reads any upload
 export async function checkCanAsk(req, res, next) {
   await aiService.assertCanAsk(req.user._id)
   next()
 }
 
-// 202 Accepted: the question is saved and the answer is on its way - it
-// arrives over the socket (ai:delta, then ai:done), not in this response.
+// 202: the answer arrives over the socket (ai:delta, ai:done), not here
 export async function ask(req, res) {
   res.status(202).json(await aiService.ask(req.user._id, req.valid.body, req.file))
 }

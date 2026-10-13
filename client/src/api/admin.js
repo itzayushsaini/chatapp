@@ -17,12 +17,9 @@ export const deleteUser = (userId) => http.delete(`/admin/users/${userId}`)
 
 export const getStats = () => http.get('/admin/stats').then((r) => r.data)
 
-// New accounts, messages and AI answers per day, for the Overview charts.
 export const getActivity = (days = 14) =>
   http.get('/admin/stats/activity', { params: { days } }).then((r) => r.data.days)
 
-// A post in the "PingMe" updates channel: text and/or one photo. Sent as
-// multipart form data so the photo can go with it.
 export const postUpdate = ({ text, image }) => {
   const form = new FormData()
   form.append('text', text)

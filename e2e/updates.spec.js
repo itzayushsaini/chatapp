@@ -2,10 +2,6 @@ import { expect, test } from '@playwright/test'
 
 import { PNG, register } from './helpers.js'
 
-// The "PingMe" updates channel, end to end: a real admin posts from the
-// Admin panel, and a user who is already online sees it arrive live.
-// (start-server.js promotes accounts named "admin_e2e..." to admin.)
-
 test('an admin posts an update; an online user sees it live, reads it, and cannot reply', async ({ browser }) => {
   const adminContext = await browser.newContext()
   const userContext = await browser.newContext()
@@ -15,14 +11,11 @@ test('an admin posts an update; an online user sees it live, reads it, and canno
   await register(admin, 'admin_e2e_updates', 'Team PingMe')
   await register(user, 'riya_updates', 'Riya')
 
-  // The pinned row is there from the start, even with no friends and no posts.
   const row = user.getByRole('button', { name: /PingMe \(official account\)/ })
   await expect(row).toBeVisible()
   await expect(row).toContainText('Official updates from the PingMe team')
 
-  // The admin posts text + a photo from the Admin panel. The promotion
-  // happens a moment after registering, and the browser only learns about
-  // it from /auth/me - so reload until the Admin link appears.
+  // the test server promotes the admin a moment after sign-up, so reload until the link shows
   const adminLink = admin.getByRole('link', { name: 'Admin panel' })
   await expect(async () => {
     await admin.reload()
@@ -36,13 +29,10 @@ test('an admin posts an update; an online user sees it live, reads it, and canno
   await expect(admin.getByText('Posted - everyone can see it now.')).toBeVisible()
   await expect(admin.getByRole('listitem').filter({ hasText: 'New: voice notes are here 🎤' })).toBeVisible()
 
-  // The user, already online, sees it arrive live: preview + unread badge.
   await expect(row).toContainText('📷 New: voice notes are here 🎤')
   await expect(row.getByLabel('1 unread')).toBeVisible()
   await expect(user).toHaveTitle('(1) PingMe')
 
-  // Opening the channel shows the post, clears the badge - and there is no
-  // message box, only the read-only note.
   await row.click()
   const channel = user.getByRole('region', { name: 'PingMe updates' })
   const log = channel.getByRole('log', { name: 'Updates' })
@@ -53,12 +43,10 @@ test('an admin posts an update; an online user sees it live, reads it, and canno
   await expect(row.getByLabel(/unread/)).toHaveCount(0)
   await expect(user).toHaveTitle('PingMe')
 
-  // Still read after a reload - the read pointer is saved on the server.
   await user.reload()
   await expect(user.getByRole('button', { name: /PingMe \(official account\)/ })).toBeVisible()
   await expect(user.getByRole('button', { name: /PingMe \(official account\)/ }).getByLabel(/unread/)).toHaveCount(0)
 
-  // Deleting it removes it live from the user's chat list.
   await admin.getByRole('button', { name: 'Delete update' }).click()
   await admin.getByRole('button', { name: 'Delete for everyone' }).click()
   await expect(admin.getByText('Nothing posted yet.')).toBeVisible()

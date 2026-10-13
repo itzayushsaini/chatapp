@@ -17,11 +17,7 @@ import TypingDots from '../common/TypingDots.jsx'
 import { Attachment, UploadProgress } from '../chat/MessageBubble.jsx'
 import Markdown from './Markdown.jsx'
 
-// One message in the PingMe AI chat: my question on the right (like my own
-// chat messages), PingMe AI's answer on the left.
-//
-// `isNew` (it arrived after the chat was opened) is read once, at the first
-// render, so the slide-in plays once and never again as an answer streams.
+// isNew is read only on the first render, so the slide-in doesn't replay while an answer streams
 export default function AiBubble({ message, isNew, ...props }) {
   const [animateIn] = useState(() => isNew)
   const Bubble = message.role === 'user' ? Question : Answer
@@ -83,8 +79,7 @@ function Question({ message, animateIn, onOpenImage, onMediaLoad, onRetryQuestio
   )
 }
 
-// The last "**Heading**" in the reasoning so far - what Gemini is thinking
-// about right now (its thought summaries are written as headed paragraphs).
+// Gemini writes its thought summaries as **Heading** paragraphs; show the latest heading
 function currentThought(reasoning) {
   return [...reasoning.matchAll(/\*\*([^*\n]+)\*\*/g)].at(-1)?.[1] ?? null
 }
@@ -93,7 +88,6 @@ function Answer({ message, animateIn, isLatestAnswer, onOpenImage, onMediaLoad, 
   const { text, reasoning, status, error, attachment, mode } = message
   const [showReasoning, setShowReasoning] = useState(false)
   const addToast = useChatStore((s) => s.addToast)
-  // Still working it out: nothing of the answer itself has arrived yet.
   const thinking = status === 'streaming' && !text && !attachment
   const thought = thinking ? currentThought(reasoning) : null
 

@@ -8,15 +8,11 @@ import { singleFile } from '../middleware/upload.js'
 import { objectId, validate } from '../middleware/validate.js'
 import { BIO_MAX_LENGTH, USERNAME_REGEX } from '../models/User.js'
 
-// Normalised the same way as at registration, so "Aman " finds "aman".
 export const usernameInput = z.string().trim().toLowerCase().min(1, 'is required').max(20)
 
-// The browser crops pictures to 256x256 before uploading, so real uploads
-// are tiny. This limit only stops someone skipping the browser.
 const AVATAR_MAX_BYTES = 2 * 1024 * 1024
 
-// Every field is optional: send only what changed. Unknown fields (email,
-// password...) are stripped by zod and can never be changed through here.
+// zod strips unknown fields, so email and password can't be changed here
 const profileSchema = z.object({
   displayName: z.string().trim().min(1, 'is required').max(40, 'must be at most 40 characters').optional(),
   bio: z.string().trim().max(BIO_MAX_LENGTH, `must be at most ${BIO_MAX_LENGTH} characters`).optional(),
@@ -40,8 +36,7 @@ router.get(
   users.search,
 )
 
-// Search by name or username (any part of it). At least 3 characters, so
-// one letter can't list everyone; same rate limit as the exact search.
+// At least 3 characters, so one letter can't list everyone
 router.get(
   '/find',
   searchLimiter,
@@ -51,8 +46,7 @@ router.get(
 
 router.patch('/me', profileLimiter, validate({ body: profileSchema }), users.updateMe)
 
-// Blocking. /me/blocked is registered before /:id/... so "me" is never read
-// as a user id.
+// Before /:id routes, so "me" is never read as a user id
 router.get('/me/blocked', users.blocked)
 router.post('/:id/block', profileLimiter, validate({ params: z.object({ id: objectId }) }), users.block)
 router.delete('/:id/block', profileLimiter, validate({ params: z.object({ id: objectId }) }), users.unblock)

@@ -2,21 +2,10 @@ import { expect, test } from '@playwright/test'
 
 import { befriend, register } from './helpers.js'
 
-// Regression test: on a phone, opening the keyboard to type made the whole
-// screen slide up, and the chat header (the friend's photo and name)
-// disappeared off the top. Also: the announcement banner is not shown on
-// phones (the team's decision).
-//
-// A real keyboard cannot be opened in an automated browser, so the test
-// does what an iPhone keyboard does to the page: the VISIBLE area
-// (window.visualViewport) becomes shorter, and the browser says so with a
-// "resize" event. utils/viewport.js must then fit the chat into that area.
-
 const PHONE = { viewport: { width: 375, height: 740 }, hasTouch: true, isMobile: true }
 
-// Replaces window.visualViewport (before the app loads) with one the test
-// controls: window.__keyboard(400) "opens" a keyboard leaving 400px visible,
-// window.__keyboard(null) "closes" it.
+// a real keyboard can't be opened here, so fake visualViewport like iPhone Safari does:
+// window.__keyboard(400) leaves 400px visible, window.__keyboard(null) closes it
 async function fakeKeyboard(context) {
   await context.addInitScript(() => {
     const visible = new EventTarget()
@@ -40,8 +29,7 @@ test('with the phone keyboard open, the chat header and the newest message stay 
   await register(ravi, 'ravi_keyboard', 'Ravi Kumar')
   await befriend(sita, ravi, 'ravi_keyboard')
 
-  // Enough messages that the list scrolls - tall ones, because sending is
-  // limited to 10 messages per 5 seconds.
+  // tall messages, since sending is limited to 10 per 5 seconds
   await ravi.getByRole('button', { name: /Sita/ }).click()
   for (let i = 1; i <= 8; i++) {
     await ravi.getByLabel('Type a message').fill(`Message number ${i}\nsecond line\nthird line`)
@@ -53,20 +41,16 @@ test('with the phone keyboard open, the chat header and the newest message stay 
   await expect(log.getByText('Message number 8')).toBeInViewport()
   await sita.getByLabel('Type a message').click()
 
-  // The keyboard opens and covers all but the top 400px.
   await sita.evaluate(() => window.__keyboard(400))
 
-  // The whole chat now fits in those 400px...
   const header = sita.getByRole('button', { name: /Ravi Kumar/ }).first()
   await expect.poll(async () => (await header.boundingBox()).y).toBeGreaterThanOrEqual(0)
   await expect(header).toBeInViewport()
   const box = await sita.getByLabel('Type a message').boundingBox()
   expect(box.y + box.height).toBeLessThanOrEqual(400)
   expect(await sita.evaluate(() => window.scrollY)).toBe(0)
-  // ...and the newest message is still in view, above the text box.
   await expect(log.getByText('Message number 8')).toBeInViewport()
 
-  // Keyboard closed: back to the full screen.
   await sita.evaluate(() => window.__keyboard(null))
   await expect.poll(() => sita.evaluate(() => document.documentElement.style.getPropertyValue('--app-height'))).toBe('')
 
@@ -98,7 +82,6 @@ test('the announcement banner is shown on a computer, not on a phone', async ({ 
   await admin.goto('/login')
   await expect(admin.getByText(text)).toBeVisible()
 
-  // Leave the shared test server as it was.
   await admin.request.patch('/api/admin/settings', { data: { announcement: { enabled: false } } })
   await adminContext.close()
   await phoneContext.close()

@@ -4,13 +4,10 @@ export default defineConfig({
   test: {
     environment: 'node',
     setupFiles: ['./tests/setup.js'],
-    // Env values used only by tests. They are applied before any test file is
-    // imported, which matters because src/config/env.js validates the
-    // environment the moment it is loaded.
+    // set before any test file loads, since src/config/env.js validates on import
     env: {
       NODE_ENV: 'test',
-      // app.js never opens a database connection - tests/setup.js does that
-      // against an in-memory MongoDB - so this only has to satisfy validation.
+      // only has to pass validation: tests/setup.js connects to an in-memory MongoDB
       MONGO_URI: 'mongodb://127.0.0.1:27017/pingme-test',
       JWT_SECRET: 'test-secret-that-is-at-least-32-characters-long',
     },

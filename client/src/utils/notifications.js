@@ -1,20 +1,10 @@
-// Browser notifications for new messages.
-//
-// The ones in this file are shown by the OPEN app, from socket events - in
-// any tab, even minimised or in the background. While PingMe is closed, the
-// server sends a Web Push instead and the service worker shows it (see
-// utils/push.js and public/sw.js) - the same permission covers both.
-
 const supported = typeof window !== 'undefined' && 'Notification' in window
 
-// A per-device on/off switch, separate from the browser's own permission:
-// the browser's "Allow" can only be revoked from its settings, so this is
-// how the app itself lets someone turn notifications off again.
+// our own switch, because the browser's "Allow" can only be revoked in its settings
 const PREF_KEY = 'pingme:notifications'
 const PROMPT_DISMISSED_KEY = 'pingme:notification-prompt-dismissed'
 
-// localStorage can throw (private browsing, blocked storage) - fall back to
-// the default instead of breaking the page.
+// localStorage can throw in private browsing
 function readStorage(key) {
   try {
     return localStorage.getItem(key)
@@ -26,7 +16,7 @@ function writeStorage(key, value) {
   try {
     localStorage.setItem(key, value)
   } catch {
-    // Not saved - the preference simply lasts until the page is reloaded.
+    // not saved - lasts until the page is reloaded
   }
 }
 
@@ -50,8 +40,7 @@ export function dismissPrompt() {
   writeStorage(PROMPT_DISMISSED_KEY, 'yes')
 }
 
-// Must be called from a click: Firefox and Safari ignore a permission
-// request that the user did not directly ask for.
+// must be called from a click: Firefox and Safari ignore other permission requests
 export async function requestNotificationPermission() {
   if (!supported) return 'unsupported'
   const result = await Notification.requestPermission()
@@ -66,7 +55,6 @@ export function registerServiceWorker() {
   })
 }
 
-// Called when a notification is clicked, with the conversation to open.
 let clickHandler = () => {}
 export function onNotificationClick(handler) {
   clickHandler = handler
@@ -84,11 +72,8 @@ export async function showMessageNotification({ title, body, icon, conversationI
   const options = {
     body,
     icon: icon || '/icons/icon-192.png',
-    // The small white shape in an Android phone's status bar.
     badge: '/icons/badge-96.png',
-    // One notification per chat: a second message from the same person
-    // replaces the first instead of stacking up, and `renotify` makes it
-    // alert again rather than updating silently.
+    // one notification per chat; renotify makes the newer one alert again
     tag: `chat-${conversationId}`,
     renotify: true,
     data: { conversationId },
@@ -100,8 +85,7 @@ export async function showMessageNotification({ title, body, icon, conversationI
       await registration.showNotification(title, options)
       return
     }
-    // No service worker (e.g. it failed to register): desktop browsers still
-    // accept a plain notification.
+    // no service worker: desktop browsers still accept a plain notification
     const notification = new Notification(title, options)
     notification.onclick = () => {
       window.focus()

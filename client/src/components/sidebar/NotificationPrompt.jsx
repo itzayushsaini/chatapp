@@ -8,11 +8,7 @@ import {
 } from '../../utils/notifications.js'
 import { ensurePushSubscription } from '../../utils/push.js'
 
-// A one-line offer to turn on message notifications. Shown only while the
-// browser has not been asked yet ("default") - once allowed, blocked, or
-// dismissed here, it never comes back. The browser's own permission popup is
-// only opened from the Enable click, since browsers ignore (or quietly
-// block) a permission request the user did not ask for.
+// Permission is only requested from the Enable click; browsers block requests the user didn't ask for.
 export default function NotificationPrompt() {
   const [visible, setVisible] = useState(
     () => notificationPermission() === 'default' && !promptDismissed(),
@@ -22,7 +18,6 @@ export default function NotificationPrompt() {
   async function enable() {
     const result = await requestNotificationPermission()
     setVisible(false)
-    // Also while PingMe is closed, where this browser supports it.
     if (result === 'granted') ensurePushSubscription().catch(() => {})
   }
 

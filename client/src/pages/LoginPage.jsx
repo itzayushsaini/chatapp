@@ -9,9 +9,7 @@ import TextField from '../components/common/TextField.jsx'
 import AuthLayout from '../components/layout/AuthLayout.jsx'
 import { useAuth } from '../context/AuthContext.jsx'
 
-// The server's Google sign-in ends every failure with a redirect to
-// /login?error=<code> (see auth.controller.js googleCallback) - only these
-// known codes are ever shown, never text taken from the URL itself.
+// only these known codes are shown, never text taken from the URL
 const GOOGLE_ERRORS = {
   google_failed: "Google sign-in didn't work. Please try again.",
   google_unavailable: 'Google sign-in is not available right now.',
@@ -24,15 +22,11 @@ export default function LoginPage() {
   const [params] = useSearchParams()
   const [identifier, setIdentifier] = useState('')
   const [password, setPassword] = useState('')
-  // Ticked: stay logged in for 30 days, across browser restarts. Unticked:
-  // logged out when the browser is closed - the safer choice on a shared
-  // computer, so it is the default.
+  // unticked by default: safer on a shared computer
   const [rememberMe, setRememberMe] = useState(false)
   const [error, setError] = useState('')
   const [submitting, setSubmitting] = useState(false)
-  // Set by ResetPasswordPage after a successful reset (?reset=success).
   const justReset = params.get('reset') === 'success'
-  // Set by the server when "Continue with Google" did not work out.
   const googleError = GOOGLE_ERRORS[params.get('error')]
 
   async function handleSubmit(event) {
@@ -40,7 +34,6 @@ export default function LoginPage() {
     setError('')
     setSubmitting(true)
     try {
-      // On success the user is set, and the router sends us to the chat.
       await login(identifier, password, rememberMe)
     } catch (err) {
       setError(errorMessage(err))

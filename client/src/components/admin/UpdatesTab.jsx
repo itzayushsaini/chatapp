@@ -13,17 +13,15 @@ import Skeleton from '../common/Skeleton.jsx'
 const TEXT_MAX = 1000
 const PHOTO_MAX_BYTES = 10 * 1024 * 1024
 
-// Posting to the "PingMe" updates channel, and the list of past posts.
-// Everyone connected sees a new post at once (the server sends it live).
-// This page has no socket of its own, so its list refreshes after each change.
+// The admin page has no socket, so the list is reloaded after each change.
 export default function UpdatesTab() {
   const [text, setText] = useState('')
-  const [photo, setPhoto] = useState(null) // { file, url } - url is a blob: preview
+  const [photo, setPhoto] = useState(null)
   const [posting, setPosting] = useState(false)
-  const [message, setMessage] = useState(null) // { kind: 'error' | 'ok', text }
+  const [message, setMessage] = useState(null)
   const [posts, setPosts] = useState(null) // newest first
   const [hasMore, setHasMore] = useState(false)
-  const [toDelete, setToDelete] = useState(null) // the post the confirm dialog is about
+  const [toDelete, setToDelete] = useState(null)
   const fileInput = useRef(null)
 
   async function load() {
@@ -41,7 +39,6 @@ export default function UpdatesTab() {
     load()
   }, [])
 
-  // Free the preview's memory when the photo changes or the tab closes.
   useEffect(() => () => photo && URL.revokeObjectURL(photo.url), [photo])
 
   async function loadOlder() {
@@ -54,7 +51,7 @@ export default function UpdatesTab() {
     }
   }
 
-  // A quick check for instant feedback - the server checks the real bytes.
+  // Quick check for feedback only; the server checks the real bytes.
   function choosePhoto(event) {
     const file = event.target.files?.[0]
     event.target.value = '' // so choosing the same file again still fires

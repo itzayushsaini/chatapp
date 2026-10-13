@@ -12,9 +12,7 @@ const readSchema = z.object({
 const RATE_LIMIT = 20
 const RATE_WINDOW_MS = 5000
 
-// A small sliding window, same shape as message:send's. This event fires
-// automatically (opening a chat, a new message arriving while it is open),
-// not from a form, so it needs its own limit rather than sharing that one.
+// Its own limit: this event fires automatically, not from a user click
 function createRateLimiter() {
   let sentAt = []
   return () => {
@@ -30,9 +28,6 @@ export function registerReadHandlers(socket) {
   const { userId } = socket.data
   const allow = createRateLimiter()
 
-  // Fire-and-forget: the client does not need an ack for this, so `ack` is
-  // optional. It is only ever "I have read up to here" - not itself a
-  // message, so there is nothing to save that could be lost silently.
   socket.on('conversation:read', async (payload, ack) => {
     const reply = (result) => {
       if (typeof ack === 'function') ack(result)
@@ -45,8 +40,7 @@ export function registerReadHandlers(socket) {
 
       const otherId = await markRead(userId, parsed.data.conversationId, parsed.data.upToMessageId)
 
-      // null means the pointer did not actually move forward - nothing new
-      // to tell the other person.
+      // null means the pointer did not move forward
       if (otherId) {
         socket.to(`user:${otherId}`).emit('message:read', {
           conversationId: parsed.data.conversationId,

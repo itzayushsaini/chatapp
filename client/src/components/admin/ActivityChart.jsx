@@ -1,12 +1,5 @@
 import { utcDayShort } from '../../utils/time.js'
 
-// A small bar chart of one number per day - plain HTML and CSS, no chart
-// library: each day is a column whose height is its share of the busiest
-// day. Colours come from the theme variables, so dark mode works for free.
-//
-// Accessible: the whole chart is one image with a text summary, and every
-// bar has a tooltip ("12 Sep: 4 messages") for mouse users.
-
 export default function ActivityChart({ days, field, label, unit }) {
   const values = days.map((d) => d[field])
   const max = Math.max(...values, 1)
@@ -24,7 +17,6 @@ export default function ActivityChart({ days, field, label, unit }) {
                 className={`w-full rounded-t transition-colors duration-150 ${
                   v === 0 ? 'bg-slate-200' : 'bg-brand-500 group-hover:bg-brand-700'
                 }`}
-                // A day with nothing is a thin stub, not a missing bar.
                 style={{ height: v === 0 ? '2px' : `${Math.max(6, (v / max) * 100)}%` }}
               />
             </div>

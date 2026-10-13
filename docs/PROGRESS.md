@@ -2,7 +2,7 @@
 
 A new session should be able to read this file and carry on from it.
 
-Last updated: 2026-10-11 (Search by name, required profile photo, closing a chat - done and committed ("Feature: search by name, required profile photo, closing a chat"). Before that, a more professional look (4685326), bigger on phones (84cb813) and Phase 22: installable app (PWA) + push notifications while PingMe is closed - done and committed. Push needs VAPID keys on Render - docs/DEPLOY.md 1.8; the real-phone checks are M22 in TEST_CASES.md)
+Last updated: 2026-10-13 (Comments trimmed across the whole codebase - comments only, no code change (each file compiles to the same output as before); long explanations stay in EXPLAINED.md. Before that: search by name, required profile photo, closing a chat - done and committed ("Feature: search by name, required profile photo, closing a chat"). Before that, a more professional look (4685326), bigger on phones (84cb813) and Phase 22: installable app (PWA) + push notifications while PingMe is closed - done and committed. Push needs VAPID keys on Render - docs/DEPLOY.md 1.8; the real-phone checks are M22 in TEST_CASES.md)
 
 ---
 

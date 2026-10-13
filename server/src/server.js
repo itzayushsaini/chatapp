@@ -7,19 +7,14 @@ import { recoverInterrupted } from './services/aiService.js'
 import { deleteUnsentUploads } from './services/attachmentService.js'
 import { initSocket } from './socket/index.js'
 
-// Express is mounted on an explicit http.Server rather than app.listen(),
-// because Socket.IO has to attach to that same server: HTTP and WebSocket
-// traffic then share one port and one origin.
+// Socket.IO attaches to this same server, so HTTP and WebSocket share one port
 const server = http.createServer(app)
 const io = initSocket(server)
 
 async function start() {
-  // Connect first: if the database is unreachable, fail loudly at startup
-  // instead of accepting requests that are certain to fail.
   await connectDb()
 
-  // A PingMe AI answer that was being written when the server last stopped
-  // can never finish now - mark it failed, so its "Try again" button shows.
+  // AI answers cut off by a restart can never finish, so mark them failed
   const interrupted = await recoverInterrupted()
   if (interrupted > 0) console.log(`Marked ${interrupted} interrupted PingMe AI answer(s) as failed`)
 
@@ -27,8 +22,7 @@ async function start() {
     console.log(`Server listening on http://localhost:${env.PORT}  [${env.NODE_ENV}]`)
   })
 
-  // Every hour, delete files that were uploaded but never sent. unref() so
-  // this timer alone never keeps the process alive during shutdown.
+  // unref() so this timer never keeps the process alive on shutdown
   const cleanUp = () =>
     deleteUnsentUploads().catch((err) => console.error('Upload cleanup failed:', err.message))
   cleanUp()
@@ -40,8 +34,6 @@ start().catch((err) => {
   process.exit(1)
 })
 
-// Graceful shutdown: stop accepting new connections, let in-flight requests
-// finish, then close the database connection so no write is cut off mid-way.
 let shuttingDown = false
 
 async function shutdown(signal) {
@@ -49,15 +41,13 @@ async function shutdown(signal) {
   shuttingDown = true
   console.log(`\n${signal} received, shutting down...`)
 
-  // Never hang forever on a connection that refuses to close.
   const forceExit = setTimeout(() => {
     console.error('Shutdown timed out, exiting.')
     process.exit(1)
   }, 10_000)
   forceExit.unref()
 
-  // io.close() disconnects every socket and then closes the http server
-  // itself (so we must not call server.close() a second time).
+  // io.close() also closes the http server, so don't call server.close() too
   io.close(async () => {
     await disconnectDb()
     clearTimeout(forceExit)

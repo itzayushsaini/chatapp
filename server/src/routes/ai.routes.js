@@ -11,7 +11,6 @@ import { AI_FILE_MAX_BYTES } from '../services/aiService.js'
 
 const clientId = z.string().uuid('Invalid clientId')
 
-// Multipart text fields (multer is what parses them), so this runs after it.
 const askFields = z.object({
   text: z.string().trim().max(AI_TEXT_MAX, `must be at most ${AI_TEXT_MAX} characters`).default(''),
   clientId,
@@ -35,9 +34,7 @@ router.get(
   ai.history,
 )
 
-// Asking a question. The order matters, the same as a chat upload:
-// rate limit -> may I ask right now? (on, under my limit, not already
-// answering) -> only then read the file and the text that comes with it.
+// Check the user may ask right now before multer reads any file
 router.post(
   '/messages',
   aiLimiter,
@@ -49,7 +46,6 @@ router.post(
 router.post('/forward', aiLimiter, validate({ body: z.object({ messageId: objectId, clientId }) }), ai.forward)
 router.post('/retry', aiLimiter, ai.retry)
 router.post('/stop', ai.stop)
-// The same budget as clearing a friend chat.
 router.delete('/messages', profileLimiter, ai.clear)
 router.get('/files/:id', validate({ params: z.object({ id: objectId }) }), ai.file)
 

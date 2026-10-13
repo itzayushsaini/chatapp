@@ -17,7 +17,6 @@ describe('POST /api/auth/register', () => {
     const res = await request(app).post('/api/auth/register').send(valid)
 
     expect(res.status).toBe(201)
-    // Username and email are normalised to lowercase.
     expect(res.body.user).toEqual({
       id: expect.any(String),
       username: 'aman_01',
@@ -30,7 +29,6 @@ describe('POST /api/auth/register', () => {
       theme: 'light',
       authProvider: 'password',
       googleLinked: false,
-      // A new account must add a profile photo before using the app.
       photoRequired: true,
     })
 
@@ -150,7 +148,6 @@ describe('POST /api/auth/login', () => {
     const notRemembered = await request(app)
       .post('/api/auth/login')
       .send({ identifier: 'priya', password: 'password123' })
-    // No Max-Age and no Expires = deleted when the browser closes.
     expect(notRemembered.headers['set-cookie'][0]).not.toMatch(/Max-Age|Expires/i)
   })
 

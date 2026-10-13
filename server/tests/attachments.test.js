@@ -24,8 +24,6 @@ import {
 const MB = 1024 * 1024
 const storedFiles = () => mongoose.connection.db.collection('uploads.files').countDocuments()
 
-// Pretends a message has used this attachment. Sending itself happens over
-// the socket and is tested in socket.test.js.
 const markSent = (attachmentId) =>
   Attachment.updateOne({ _id: attachmentId }, { message: new mongoose.Types.ObjectId() })
 
@@ -301,6 +299,6 @@ describe('cleaning up uploads that were never sent', () => {
     const { a, conversationId } = await makeFriends('aman', 'priya')
     await upload(a.agent, conversationId, PNG, 'just-picked.png')
 
-    expect(await deleteUnsentUploads()).toBe(0) // default: older than 1 hour
+    expect(await deleteUnsentUploads()).toBe(0)
   })
 })

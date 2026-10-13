@@ -6,13 +6,6 @@ import { useAuth } from '../context/AuthContext.jsx'
 import { useChatStore } from '../store/useChatStore.js'
 import { cropToSquare } from '../utils/image.js'
 
-// Choosing and saving a profile picture, shared by the profile dialog, the
-// "Add your profile photo" screen and the reminder popup. The picture is
-// cropped to 256x256 in the browser and saved straight away; the new profile
-// replaces mine in AuthContext, so every avatar on screen updates.
-//
-// Render <input {...inputProps} /> somewhere (it is hidden) and call
-// choose() from a button. onSaved runs after a successful upload.
 export function useAvatarUpload({ onSaved } = {}) {
   const { updateUser } = useAuth()
   const addToast = useChatStore((s) => s.addToast)
@@ -22,7 +15,7 @@ export function useAvatarUpload({ onSaved } = {}) {
 
   async function handleChange(event) {
     const file = event.target.files[0]
-    event.target.value = '' // so choosing the same file again still fires
+    event.target.value = '' // so picking the same file again still fires onChange
     if (!file) return
     if (!file.type.startsWith('image/')) {
       setError('Please choose a picture (JPEG, PNG, WebP or GIF).')

@@ -11,8 +11,6 @@ import { User } from '../src/models/User.js'
 import { initSocket } from '../src/socket/index.js'
 import { PDF, PNG, SVG, makeAdmin, registerUser } from './helpers.js'
 
-// The "PingMe" updates channel: admins post, every logged-in user reads.
-
 async function registerAdmin(name = 'admin') {
   const admin = await registerUser(name)
   await makeAdmin(admin.user.id)
@@ -45,11 +43,10 @@ describe('posting an update', () => {
     expect(res.status).toBe(201)
     expect(res.body.update).toEqual({
       id: expect.any(String),
-      text: 'New: voice notes 🎤', // trimmed
+      text: 'New: voice notes 🎤',
       imageUrl: null,
       createdAt: expect.any(String),
     })
-    // The author is never sent to clients.
     expect(res.body.update).not.toHaveProperty('author')
   })
 
@@ -165,7 +162,6 @@ describe('unread count and the read pointer', () => {
     expect((await agent.post('/api/updates/read').send({ upToId: latest.id })).status).toBe(204)
     expect((await agent.get('/api/updates/summary')).body.unreadCount).toBe(0)
 
-    // A new post is unread again.
     await post(adminAgent, 'Three')
     expect((await agent.get('/api/updates/summary')).body.unreadCount).toBe(1)
   })
@@ -206,7 +202,6 @@ describe('deleting an update', () => {
     expect(await Update.exists({ _id: doomed.id })).toBeNull()
     expect(await storedFileCount()).toBe(0)
     expect((await agent.get(doomed.imageUrl)).status).toBe(404)
-    // The summary now points at the post before it.
     expect((await agent.get('/api/updates/summary')).body.latest).toEqual(older)
 
     expect((await agent.delete(`/api/admin/updates/${doomed.id}`)).status).toBe(404)
@@ -220,8 +215,6 @@ describe('deleting an update', () => {
     expect(await Update.exists({ _id: body.update.id })).not.toBeNull()
   })
 })
-
-// --- Live events --------------------------------------------------------------
 
 describe('live events', () => {
   let httpServer
@@ -310,7 +303,6 @@ describe('live events', () => {
     expect(await toMyOtherTab).toEqual({ upToId: body.update.id })
     expect(await silentForPriya).toBe(true)
 
-    // Reading the same post again moves nothing, so nothing is announced.
     const silentRepeat = staysSilent(amanOtherTab, 'updates:read')
     await aman.agent.post('/api/updates/read').send({ upToId: body.update.id })
     expect(await silentRepeat).toBe(true)

@@ -22,16 +22,13 @@ export default [
       'react-refresh': reactRefresh,
     },
     rules: {
-      // Catches the classic React mistakes: a missing dependency in
-      // useEffect, or a hook called inside a condition.
       ...reactHooks.configs.recommended.rules,
       // useAuth / useSocket live next to their provider on purpose.
       'react-refresh/only-export-components': [
         'warn',
         { allowConstantExport: true, allowExportNames: ['useAuth', 'useSocket'] },
       ],
-      // Core ESLint does not count <App /> as a use of App, so names starting
-      // with a capital letter (components) are exempt - as in Vite's template.
+      // core ESLint doesn't count <App /> as using App, so capitalised names are exempt
       'no-unused-vars': ['error', { argsIgnorePattern: '^_', varsIgnorePattern: '^[A-Z_]' }],
     },
   },

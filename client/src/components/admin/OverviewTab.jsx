@@ -6,8 +6,6 @@ import { ChatIcon, SparklesIcon, UsersIcon, ZapIcon } from '../common/Icons.jsx'
 import Skeleton from '../common/Skeleton.jsx'
 import ActivityChart from './ActivityChart.jsx'
 
-// `recent` names the field of the daily numbers that says how many of this
-// were added in the last 7 days (shown small, under the big number).
 const CARDS = [
   { key: 'totalUsers', label: 'Total users', icon: UsersIcon, recent: 'users', recentLabel: 'new this week' },
   { key: 'totalMessages', label: 'Messages sent', icon: ChatIcon, recent: 'messages', recentLabel: 'this week' },
@@ -27,8 +25,6 @@ export default function OverviewTab() {
     getStats().then(setStats).catch((err) => setError(errorMessage(err)))
   }, [])
 
-  // The charts reload when the range changes; the old ones stay on screen
-  // meanwhile (no flash back to a loading state).
   useEffect(() => {
     getActivity(range).then(setDays).catch((err) => setError(errorMessage(err)))
   }, [range])

@@ -17,17 +17,8 @@ const DECLINE_COOLDOWN_MS = 7 * 24 * 60 * 60 * 1000
 
 const sameId = (a, b) => String(a) === String(b)
 
-// The User fields publicUser() needs, for populate() calls.
 const PUBLIC_FIELDS = 'username displayName bio avatarFileId'
 
-// ---------------------------------------------------------------------------
-// Response shapes
-// ---------------------------------------------------------------------------
-
-// A pending request as shown in a list. `user` is the OTHER person.
-//
-// We report updatedAt, not createdAt: a declined request that is sent again
-// reuses the same document, and its last update is when it became pending.
 function requestItem(friendship, otherUser) {
   return {
     id: String(friendship._id),
@@ -42,17 +33,12 @@ function lastMessageView(lastMessage) {
     text: lastMessage.text,
     senderId: String(lastMessage.sender),
     createdAt: lastMessage.createdAt,
-    // Enough for a "📷 Photo" / "📄 report.pdf" preview in the sidebar.
     attachment: lastMessage.attachment?.kind
       ? { kind: lastMessage.attachment.kind, name: lastMessage.attachment.name }
       : null,
   }
 }
 
-// One row of the Chats list. online/lastSeen are only ever built here, and
-// this is only ever sent to a friend - never to strangers. `meId` is whose
-// list this row is for (mute is per person). `hidePreview` is set when the
-// preview message is one I deleted "for me" or cleared from this chat.
 function friendItem(friendUser, conversation, meId, hidePreview = false) {
   return {
     friend: publicUser(friendUser),
@@ -64,12 +50,7 @@ function friendItem(friendUser, conversation, meId, hidePreview = false) {
   }
 }
 
-// ---------------------------------------------------------------------------
-// Enforcement - every message read or write MUST go through these
-// ---------------------------------------------------------------------------
-
-// Returns the conversation if `userId` is in it. Otherwise 404, not 403, so
-// that an outsider cannot even learn that the conversation exists.
+// 404, not 403, so outsiders can't tell the chat exists
 export async function assertParticipant(conversationId, userId) {
   const conversation = mongoose.isValidObjectId(conversationId)
     ? await Conversation.findOne({ _id: conversationId, participants: userId })
@@ -83,8 +64,6 @@ export async function assertFriends(userA, userB) {
   if (!friends) throw new AppError(403, 'You can only message friends')
 }
 
-// Looked up fresh every time it is needed (presence), rather than cached, so
-// it can never be out of date after an accept or an unfriend.
 export async function getFriendIds(userId) {
   const friendships = await Friendship.find(
     { status: 'accepted', $or: [{ requester: userId }, { recipient: userId }] },
@@ -95,8 +74,6 @@ export async function getFriendIds(userId) {
   )
 }
 
-// Friends AND people with a pending request either way - everyone who has
-// this user in one of their lists and so needs to hear about a profile change.
 export async function getContactIds(userId) {
   const friendships = await Friendship.find(
     {
@@ -110,32 +87,17 @@ export async function getContactIds(userId) {
   )
 }
 
-// ---------------------------------------------------------------------------
-// Search
-// ---------------------------------------------------------------------------
-
-// EXACT match only. A partial or prefix search would let anyone list every
-// account by searching "a", "b", "c"... which is what this app must prevent.
 export async function searchByUsername(meId, username) {
   const user = await User.findOne({ username })
-  // Blocked either way looks exactly like "no such user" - neither side can
-  // tell a block from a typo, so a block can never be discovered this way.
+  // a block looks exactly like "no such user", so it can't be discovered
   if (!user || (await isBlockedEitherWay(meId, user._id))) throw new AppError(404, 'No user found')
 
   return { user: publicUser(user), relationship: await relationshipWith(meId, user._id) }
 }
 
-// How many people a name search returns at most.
+// Capped results (plus the route's 3-char minimum and rate limit) stop this dumping the user list
 export const FIND_LIMIT = 20
 
-// Search by name: anyone whose display name OR username CONTAINS the text
-// (any case). The team chose this in addition to the exact username search;
-// the limits keep it from becoming a way to download the whole user list:
-// at least 3 characters (checked by the route), at most FIND_LIMIT results,
-// and the per-user search rate limit. Never myself, never a suspended
-// account, and never anyone blocked either way - a block stays invisible.
-// Results come back in a useful order: an exact username first, then names
-// or usernames that START with the text, then the rest by name.
 export async function findUsers(meId, text) {
   const pattern = new RegExp(escapeRegex(text), 'i')
   const blocks = await Block.find({ $or: [{ blocker: meId }, { blocked: meId }] }, { blocker: 1, blocked: 1 })
@@ -148,15 +110,13 @@ export async function findUsers(meId, text) {
   })
     .collation({ locale: 'en' })
     .sort({ displayName: 1, _id: 1 })
-    .limit(FIND_LIMIT * 3) // a few spare, so the best ones survive the ranking below
+    .limit(FIND_LIMIT * 3)
 
   const lower = text.toLowerCase()
   const rank = (u) =>
     u.username === lower ? 0 : u.username.startsWith(lower) || u.displayName.toLowerCase().startsWith(lower) ? 1 : 2
-  // Array.sort is stable, so equal ranks keep the alphabetical order.
   const top = users.sort((a, b) => rank(a) - rank(b)).slice(0, FIND_LIMIT)
 
-  // Every relationship in one query instead of one per person.
   const friendships = await Friendship.find({ pairKey: { $in: top.map((u) => pairKey(meId, u._id)) } })
   const byKey = new Map(friendships.map((f) => [f.pairKey, f]))
   return {
@@ -167,10 +127,8 @@ export async function findUsers(meId, text) {
   }
 }
 
-// The relationship I have with someone, from our Friendship (or none).
 function relationshipFrom(meId, friendship) {
-  // A declined request is shown as 'none' to BOTH sides, so the requester is
-  // never told that they were declined.
+  // declined shows as 'none' so the requester is never told they were declined
   if (!friendship || friendship.status === 'declined') return 'none'
   if (friendship.status === 'accepted') return 'friends'
   return sameId(friendship.requester, meId) ? 'pending_outgoing' : 'pending_incoming'
@@ -181,13 +139,6 @@ async function relationshipWith(meId, otherId) {
   return relationshipFrom(meId, await Friendship.findOne({ pairKey: pairKey(meId, otherId) }))
 }
 
-// ---------------------------------------------------------------------------
-// Requests
-// ---------------------------------------------------------------------------
-
-// Returns { request } for a new request, or { friend } if it turned into an
-// accept (they had already asked me). The checks run in the order the spec
-// lists them.
 export async function sendRequest(meId, username) {
   const target = await User.findOne({ username })
   if (!target || (await isBlockedEitherWay(meId, target._id))) throw new AppError(404, 'No user found')
@@ -207,27 +158,22 @@ export async function sendRequest(meId, username) {
         status: 'pending',
       })
     } catch (err) {
-      // Two requests for the same pair at the same instant: the unique index
-      // lets exactly one through, and the loser lands here.
+      // the unique pairKey index lets only one of two racing requests through
       if (err.code === 11000) throw new AppError(409, 'Request already sent')
       throw err
     }
   } else if (existing.status === 'pending') {
     if (sameId(existing.requester, meId)) throw new AppError(409, 'Request already sent')
-    // They already asked me - my request means "yes".
     return { friend: await acceptRequest(meId, existing._id) }
   } else if (existing.status === 'accepted') {
     throw new AppError(409, 'Already friends')
   } else {
-    // Declined. If they declined MY request recently, make me wait, so a
-    // declined request cannot be used to pester someone.
     const recentlyDeclined =
       sameId(existing.requester, meId) &&
       existing.respondedAt > new Date(Date.now() - DECLINE_COOLDOWN_MS)
     if (recentlyDeclined) throw new AppError(429, 'You can send another request later')
 
-    // Otherwise reuse the same document as a fresh request from me. The
-    // status: 'declined' condition makes this safe against a double click.
+    // the status: 'declined' filter makes a double click harmless
     friendship = await Friendship.findOneAndUpdate(
       { _id: existing._id, status: 'declined' },
       {
@@ -241,15 +187,13 @@ export async function sendRequest(meId, username) {
 
   const me = await User.findById(meId)
   emitToUser(target._id, 'friend:request:new', { request: requestItem(friendship, me) })
-  notifyFriendRequest(target._id, me) // a push, if they have PingMe closed
+  notifyFriendRequest(target._id, me)
 
   return { request: requestItem(friendship, target) }
 }
 
 export async function acceptRequest(meId, requestId) {
-  // ONE atomic operation. The filter does the security work:
-  //   recipient: me      -> only the person who was asked can accept
-  //   status: 'pending'  -> a double click cannot accept twice
+  // One atomic update: only the recipient can accept, and a double click can't accept twice
   const friendship = await Friendship.findOneAndUpdate(
     { _id: requestId, recipient: meId, status: 'pending' },
     { status: 'accepted', respondedAt: new Date() },
@@ -257,8 +201,6 @@ export async function acceptRequest(meId, requestId) {
   )
   if (!friendship) throw new AppError(404, 'Request not found')
 
-  // Upsert: create the conversation the first time, reuse the old one (and
-  // its history) if this pair were friends before.
   const participants = [friendship.requester, friendship.recipient].sort((a, b) =>
     String(a).localeCompare(String(b)),
   )
@@ -275,14 +217,10 @@ export async function acceptRequest(meId, requestId) {
   const itemForMe = friendItem(requester, conversation, me._id)
   const itemForRequester = friendItem(me, conversation, requester._id)
 
-  // The requester learns they have a new friend. My own other tabs get the
-  // same news (the tab that clicked Accept also gets the HTTP response, and
-  // the client ignores a friend it already has).
   emitToUser(requester._id, 'friend:request:accepted', { friend: itemForRequester })
   emitToUser(me._id, 'friend:request:accepted', { friend: itemForMe })
-  notifyRequestAccepted(requester._id, me, conversation._id) // a push, if PingMe is closed
+  notifyRequestAccepted(requester._id, me, conversation._id)
 
-  // Now that they are friends, each may see the other's presence.
   if (isOnline(requester._id)) {
     emitToUser(me._id, 'presence:update', { userId: String(requester._id), online: true })
   }
@@ -299,11 +237,10 @@ export async function declineRequest(meId, requestId) {
     { status: 'declined', respondedAt: new Date() },
   )
   if (!friendship) throw new AppError(404, 'Request not found')
-  // Deliberately no notification: the requester is not told.
+  // deliberately no event: the requester is not told
 }
 
 export async function cancelRequest(meId, requestId) {
-  // Only the requester can cancel, and only while it is still pending.
   const friendship = await Friendship.findOneAndDelete({
     _id: requestId,
     requester: meId,
@@ -321,15 +258,10 @@ export async function unfriend(meId, otherUserId) {
   })
   if (!friendship) throw new AppError(404, 'Friend not found')
 
-  // The Conversation and its messages are kept. Sending checks friendship,
-  // so the chat simply becomes read-only.
+  // the conversation is kept; it becomes read-only because sending checks friendship
   emitToUser(meId, 'friend:removed', { userId: String(otherUserId) })
   emitToUser(otherUserId, 'friend:removed', { userId: String(meId) })
 }
-
-// ---------------------------------------------------------------------------
-// Lists
-// ---------------------------------------------------------------------------
 
 export async function listFriends(meId) {
   const friendships = await Friendship.find({
@@ -338,7 +270,6 @@ export async function listFriends(meId) {
   })
   if (friendships.length === 0) return []
 
-  // Two queries for the whole list, not two per friend.
   const friendIds = friendships.map((f) =>
     sameId(f.requester, meId) ? f.recipient : f.requester,
   )
@@ -349,9 +280,7 @@ export async function listFriends(meId) {
   const userById = new Map(users.map((u) => [String(u._id), u]))
   const conversationByKey = new Map(conversations.map((c) => [c.pairKey, c]))
 
-  // The preview is shared by both people, but a message I deleted "for me"
-  // (or cleared along with the whole chat) must not show in MY list. One
-  // query for the whole list finds which previews those are.
+  // the preview is shared, so hide it from me if I deleted that message for me
   const previewIds = conversations.map((c) => c.lastMessage?.messageId).filter(Boolean)
   const hiddenFromMe = new Set(
     (await Message.find({ _id: { $in: previewIds }, deletedFor: meId }, { _id: 1 })).map((m) =>
@@ -369,8 +298,6 @@ export async function listFriends(meId) {
     })
     .filter(Boolean)
 
-  // Most recent message first. Friends with no messages yet go last, newest
-  // friendship first.
   rows.sort((a, b) => {
     const aTime = a.item.lastMessage?.createdAt
     const bTime = b.item.lastMessage?.createdAt
@@ -393,16 +320,11 @@ export async function listRequests(meId) {
       .populate('recipient', PUBLIC_FIELDS),
   ])
 
-  // populate() gives null if that account has since been deleted - skip it.
   return {
     incoming: incoming.filter((f) => f.requester).map((f) => requestItem(f, f.requester)),
     outgoing: outgoing.filter((f) => f.recipient).map((f) => requestItem(f, f.recipient)),
   }
 }
-
-// ---------------------------------------------------------------------------
-// Blocking
-// ---------------------------------------------------------------------------
 
 export async function isBlockedEitherWay(userA, userB) {
   return Boolean(
@@ -415,11 +337,6 @@ export async function isBlockedEitherWay(userA, userB) {
   )
 }
 
-// Blocking ends any friendship or pending request between us (they vanish
-// live from both lists, through the same events as an unfriend or a
-// cancelled request), and from then on neither of us can find the other by
-// username or send a request. The conversation and its history are kept,
-// exactly as after an unfriend - it simply becomes read-only.
 export async function blockUser(meId, otherId) {
   if (sameId(meId, otherId)) throw new AppError(400, "You can't block yourself")
   if (!(await User.exists({ _id: otherId }))) throw new AppError(404, 'User not found')
@@ -435,7 +352,6 @@ export async function blockUser(meId, otherId) {
     emitToUser(meId, 'friend:removed', { userId: String(otherId) })
     emitToUser(otherId, 'friend:removed', { userId: String(meId) })
   } else if (friendship?.status === 'pending') {
-    // Gone from whichever side's Requests list it was in.
     const requestId = String(friendship._id)
     emitToUser(meId, 'friend:request:cancelled', { requestId })
     emitToUser(otherId, 'friend:request:cancelled', { requestId })
@@ -446,11 +362,9 @@ export async function unblockUser(meId, otherId) {
   await Block.deleteOne({ blocker: meId, blocked: otherId })
 }
 
-// The people I have blocked, for the Settings page - newest first.
 export async function listBlocked(meId) {
   const blocks = await Block.find({ blocker: meId })
     .sort({ createdAt: -1 })
     .populate('blocked', PUBLIC_FIELDS)
-  // populate() gives null if that account has since been deleted.
   return blocks.filter((b) => b.blocked).map((b) => publicUser(b.blocked))
 }

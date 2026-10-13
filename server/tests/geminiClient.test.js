@@ -3,10 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { env } from '../src/config/env.js'
 import { AiError, RETRY_PAUSE_MS, createImage, streamReply } from '../src/services/geminiClient.js'
 
-// geminiClient.js is the one file that talks to Google. Here Google's own
-// SDK is replaced with a fake, so these tests check OUR handling of what it
-// returns - streaming, falling back to another model, turning errors into
-// readable reasons - without any network at all.
+// Google's SDK is faked, so these check our own handling of it with no network
 const sdk = vi.hoisted(() => ({ generateContentStream: vi.fn(), generateContent: vi.fn() }))
 
 vi.mock('@google/genai', async (importOriginal) => ({
@@ -18,7 +15,6 @@ vi.mock('@google/genai', async (importOriginal) => ({
   },
 }))
 
-// What the SDK's stream yields: one response object per piece.
 async function* streamOf(...chunks) {
   for (const chunk of chunks) yield chunk
 }
@@ -138,7 +134,6 @@ describe('streamReply', () => {
     const result = await ask({ onUpdate: (u) => updates.push(u) })
 
     expect(result.text).toBe('A whole answer')
-    // The screen goes back to "Thinking..." before the new answer streams in.
     expect(updates).toEqual([
       { text: 'Half an ans', reasoning: '' },
       { text: '', reasoning: '' },

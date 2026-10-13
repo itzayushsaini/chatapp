@@ -4,17 +4,13 @@ import { formatDuration } from '../../utils/time.js'
 import { PauseIcon, PlayIcon } from '../common/Icons.jsx'
 
 const SPEEDS = [1, 1.5, 2]
-// A voice note sent without a waveform (e.g. an .m4a file) still gets bars,
-// just flat ones.
+// For a voice note sent without a waveform (e.g. an .m4a file)
 const FLAT_WAVEFORM = Array(48).fill(30)
 const SEEK_STEP_S = 5
 
-// Only one voice note plays at a time, anywhere in the app: starting one
-// pauses whichever was playing before - the same as WhatsApp.
+// Only one voice note plays at a time, app-wide
 let playingNow = null
 
-// A voice note inside a message bubble (and in Contact info). `attachment`
-// is the usual attachment payload plus durationMs / waveform.
 export default function VoicePlayer({ attachment, mine = false, compact = false }) {
   const audioRef = useRef(null)
   const [playing, setPlaying] = useState(false)
@@ -22,8 +18,7 @@ export default function VoicePlayer({ attachment, mine = false, compact = false 
   const [speed, setSpeed] = useState(1)
   const [mediaDuration, setMediaDuration] = useState(null)
 
-  // Prefer the file's own length; many recordings (Chrome's WebM) do not
-  // state one, and then the length measured while recording is used.
+  // Chrome's WebM recordings often don't state their length, so fall back to the recorded one
   const duration = mediaDuration ?? (attachment.durationMs ? attachment.durationMs / 1000 : 0)
   const bars = attachment.waveform?.length ? attachment.waveform : FLAT_WAVEFORM
   const progress = duration ? Math.min(1, position / duration) : 0
@@ -74,7 +69,6 @@ export default function VoicePlayer({ attachment, mine = false, compact = false 
     audioRef.current.playbackRate = next
   }
 
-  // Colours that read on both bubble colours, in both themes.
   const played = mine ? 'bg-slate-700' : 'bg-brand-600'
   const unplayed = 'bg-slate-400/60'
 
@@ -111,8 +105,6 @@ export default function VoicePlayer({ attachment, mine = false, compact = false 
       </button>
 
       <div className="min-w-0 flex-1">
-        {/* The waveform doubles as the seek bar: click anywhere on it, or
-            use the arrow keys (5 s at a time), Home and End. */}
         <div
           role="slider"
           tabIndex={0}
@@ -123,8 +115,7 @@ export default function VoicePlayer({ attachment, mine = false, compact = false 
           aria-valuetext={`${formatDuration(position * 1000)} of ${formatDuration(duration * 1000)}`}
           onClick={onBarsClick}
           onKeyDown={onBarsKey}
-          // Thinner bars and gaps below `sm`: 48 bars at 2px + 2px gaps need
-          // 190px, more than a bubble has on a 320px phone.
+          // Thinner bars below sm: 48 bars at 2px plus 2px gaps don't fit a 320px phone
           className="flex h-7 cursor-pointer items-center gap-px rounded sm:gap-[2px] focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:outline-none"
         >
           {bars.map((height, i) => (

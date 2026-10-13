@@ -1,20 +1,11 @@
 import { useEffect, useRef, useState } from 'react'
 
-// Recording a voice note, with nothing but what the browser itself provides:
-//   - getUserMedia asks for the microphone,
-//   - MediaRecorder turns it into a compressed audio file,
-//   - an AnalyserNode (Web Audio) measures how loud it is 10 times a second,
-//     which is what draws the waveform - live while recording, and as the
-//     saved shape of the finished note.
-
 export const MAX_VOICE_MS = 5 * 60 * 1000
 const LEVEL_EVERY_MS = 100
 const WAVEFORM_BARS = 48
 const LIVE_BARS = 40
 
-// Browsers each record in their own format. The first one this browser can
-// make wins: WebM (Chrome, Edge), Ogg (Firefox), MP4 (Safari). The server
-// checks the file's real bytes either way - this only picks the file name.
+// Chrome/Edge record WebM, Firefox Ogg, Safari MP4; the server checks the real bytes anyway.
 const FORMATS = [
   { mime: 'audio/webm;codecs=opus', ext: 'webm' },
   { mime: 'audio/ogg;codecs=opus', ext: 'ogg' },
@@ -30,9 +21,7 @@ export function voiceNotesSupported() {
   )
 }
 
-// One loudness reading per 100 ms, squeezed (or stretched) into a fixed
-// number of bars and scaled so the loudest bar is 100. Every bar is at
-// least 4, so silence still shows as a thin line rather than nothing.
+// Loudest bar is 100; minimum 4 so silence still shows as a thin line.
 export function toWaveform(levels, bars = WAVEFORM_BARS) {
   if (!levels.length) return []
   const out = []
@@ -46,7 +35,6 @@ export function toWaveform(levels, bars = WAVEFORM_BARS) {
   return out.map((v) => Math.max(4, Math.round((v / peak) * 100)))
 }
 
-// Turns a failure to get the microphone into something a person can act on.
 function micError(err) {
   if (err?.name === 'NotAllowedError' || err?.name === 'SecurityError') {
     return 'Microphone access is blocked. Allow it in your browser’s site settings to send voice notes.'
@@ -55,16 +43,12 @@ function micError(err) {
   return 'Could not start the microphone.'
 }
 
-// Stops everything a recording holds on to: the timer, the microphone (so
-// the browser's "recording" indicator goes away) and the audio context.
 function release(session) {
   clearInterval(session.timer)
   session.stream.getTracks().forEach((track) => track.stop())
   session.audioContext.close().catch(() => {})
 }
 
-// `onLimit` is called once when the 5-minute limit is reached, so the
-// caller can stop and send.
 export function useVoiceRecorder({ onLimit } = {}) {
   const [recording, setRecording] = useState(false)
   const [elapsedMs, setElapsedMs] = useState(0)
@@ -82,9 +66,7 @@ export function useVoiceRecorder({ onLimit } = {}) {
     setLiveLevels([])
   }
 
-  // Must be called from a click: browsers only show the microphone prompt
-  // for something the user actually did. Throws an Error with a readable
-  // message if it cannot start.
+  // must be called from a click, or browsers won't show the microphone prompt
   async function start() {
     if (session.current) return
     if (!voiceNotesSupported()) throw new Error('Voice notes are not supported in this browser.')
@@ -114,8 +96,7 @@ export function useVoiceRecorder({ onLimit } = {}) {
     let limitReached = false
 
     const timer = setInterval(() => {
-      // Loudness = root-mean-square of the current slice of sound. The
-      // samples are 0-255 with silence at 128.
+      // loudness as RMS; samples are 0-255 with silence at 128
       analyser.getByteTimeDomainData(samples)
       let sum = 0
       for (const value of samples) {
@@ -133,19 +114,15 @@ export function useVoiceRecorder({ onLimit } = {}) {
       }
     }, LEVEL_EVERY_MS)
 
-    // Hand over a chunk every 250 ms rather than one blob at the end, so a
-    // long note is never held as a single piece until the very last moment.
     recorder.start(250)
     session.current = { stream, recorder, chunks, audioContext, timer, levels, startedAt, format }
     setRecording(true)
   }
 
-  // Finishes the recording. Resolves to { file, durationMs, waveform }, or
-  // null if nothing was being recorded.
   function stop() {
     const s = session.current
     if (!s) return Promise.resolve(null)
-    session.current = null // a second stop() (e.g. the limit AND a click) does nothing
+    session.current = null // so a second stop() (the limit AND a click) does nothing
     return new Promise((resolve) => {
       s.recorder.onstop = () => {
         const durationMs = Math.min(Date.now() - s.startedAt, MAX_VOICE_MS)
@@ -160,7 +137,6 @@ export function useVoiceRecorder({ onLimit } = {}) {
     })
   }
 
-  // Throws the recording away.
   function cancel() {
     const s = session.current
     if (!s) return
@@ -170,8 +146,7 @@ export function useVoiceRecorder({ onLimit } = {}) {
     reset()
   }
 
-  // Leaving the chat (this component unmounts) mid-recording must still let
-  // go of the microphone.
+  // release the microphone if the chat closes mid-recording
   useEffect(
     () => () => {
       const s = session.current

@@ -27,7 +27,6 @@ export default function Sidebar({ className = '' }) {
   const [profileOpen, setProfileOpen] = useState(false)
   const [confirmLogout, setConfirmLogout] = useState(false)
 
-  // Arrow keys move between tabs - the standard keyboard pattern for tabs.
   function handleTabKey(event) {
     const index = TABS.findIndex((t) => t.id === tab)
     const step = event.key === 'ArrowRight' ? 1 : event.key === 'ArrowLeft' ? -1 : 0
@@ -39,8 +38,6 @@ export default function Sidebar({ className = '' }) {
 
   return (
     <aside className={`flex-col border-r border-slate-200 bg-surface ${className}`}>
-      {/* My avatar (opens my profile) on the left, log out on the right -
-          the same top-bar layout WhatsApp uses, instead of a footer. */}
       <div className="flex items-center justify-between bg-slate-100 px-3 py-2.5">
         <button
           type="button"
@@ -124,9 +121,7 @@ export default function Sidebar({ className = '' }) {
         })}
       </div>
 
-      {/* key={tab} remounts this panel on every tab switch, which is what
-          gives it a fresh fade-in each time instead of just swapping content
-          in place. */}
+      {/* key={tab} remounts the panel so it fades in again on every switch. */}
       <div
         key={tab}
         id={`panel-${tab}`}

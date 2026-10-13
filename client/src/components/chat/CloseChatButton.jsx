@@ -1,10 +1,7 @@
 import { useChatStore } from '../../store/useChatStore.js'
 import { XIcon } from '../common/Icons.jsx'
 
-// The ✕ at the right of a chat's header (friend chats, PingMe AI and the
-// PingMe updates channel): closes the chat and goes back to "Select a
-// conversation". Only from 768px up - on a phone the back arrow on the left
-// already does exactly this.
+// Hidden on phones, where the back arrow already does this
 export default function CloseChatButton() {
   return (
     <button

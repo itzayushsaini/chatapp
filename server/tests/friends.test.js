@@ -96,12 +96,10 @@ describe('GET /api/users/find (search by name)', () => {
     const res = await find(agent, 'SHARMA')
     expect(res.status).toBe(200)
     expect(names(res).sort()).toEqual(['priya_s', 'psharma'])
-    // Only the public profile, plus how we are related.
     expect(res.body.users[0]).toEqual({
       user: { id: expect.any(String), username: expect.any(String), displayName: expect.any(String), bio: '', avatarUrl: null },
       relationship: 'none',
     })
-    // A part of a username works too.
     expect(names(await find(agent, 'hul'))).toEqual(['rahul'])
   })
 
@@ -121,9 +119,9 @@ describe('GET /api/users/find (search by name)', () => {
     const d = await registerUser('kumar_d', { displayName: 'Kumar D' })
     await registerUser('kumar_e', { displayName: 'Kumar E' })
     await User.updateOne({ username: 'kumar_b' }, { suspended: true })
-    await agent.post(`/api/users/${c.user.id}/block`) // I blocked C
+    await agent.post(`/api/users/${c.user.id}/block`)
     const me = (await agent.get('/api/auth/me')).body.user
-    await d.agent.post(`/api/users/${me.id}/block`) // D blocked me
+    await d.agent.post(`/api/users/${me.id}/block`)
 
     expect(names(await find(agent, 'kumar'))).toEqual(['kumar_e'])
   })
@@ -131,9 +129,9 @@ describe('GET /api/users/find (search by name)', () => {
   it('shows the right relationship for each person', async () => {
     const { a, b } = await makeFriends('anil_x', 'anil_y')
     const c = await registerUser('anil_z')
-    await send(c.agent, 'anil_x') // C asked A
+    await send(c.agent, 'anil_x')
     const w = await registerUser('anil_w')
-    await send(a.agent, 'anil_w') // A asked W
+    await send(a.agent, 'anil_w')
 
     const res = await find(a.agent, 'anil')
     const rel = Object.fromEntries(res.body.users.map((r) => [r.user.username, r.relationship]))
@@ -380,7 +378,7 @@ describe('GET /api/friends and unfriend', () => {
     await send(aman.agent, 'rahul')
     const req = (await rahul.agent.get('/api/friends/requests')).body.incoming[0]
     await rahul.agent.post(`/api/friends/requests/${req.id}/accept`)
-    await registerUser('sneha') // not a friend - must not appear
+    await registerUser('sneha')
 
     await Conversation.updateOne(
       { _id: withPriya },

@@ -12,8 +12,7 @@ import { removeAllFor as removePushSubscriptions } from './pushService.js'
 
 const sameId = (a, b) => String(a) === String(b)
 
-// More detail than PublicUser/SelfUser - this is for the admin's own list,
-// never sent to anyone else.
+// Only for the admin's own user list, never sent to anyone else
 function adminUserView(user) {
   return {
     id: String(user._id),
@@ -28,13 +27,7 @@ function adminUserView(user) {
   }
 }
 
-// Unlike the exact-only username search everyone else uses (see
-// friendService.searchByUsername), an admin's own search is deliberately a
-// partial, case-insensitive match on username OR email - that is the whole
-// point of an admin user list, and it is only ever reachable by an account
-// with isAdmin already true.
-// How the admin's user list can be ordered. A fixed list (never a field name
-// taken from the request), so the sort can only ever be one of these.
+// A fixed list, so the request can never pick an arbitrary field to sort on
 const USER_SORTS = {
   newest: { createdAt: -1, _id: -1 },
   oldest: { createdAt: 1, _id: 1 },
@@ -54,7 +47,7 @@ export async function listUsers({ search, page = 1, limit = 20, sort = 'newest' 
 
   const skip = (Math.max(page, 1) - 1) * limit
   const [users, total] = await Promise.all([
-    // The collation makes "name" ignore upper/lower case (Zoya after aman).
+    // collation makes the name sort case-insensitive
     User.find(filter).collation({ locale: 'en' }).sort(USER_SORTS[sort]).skip(skip).limit(limit),
     User.countDocuments(filter),
   ])
@@ -68,9 +61,7 @@ export async function suspendUser(meId, userId) {
   const user = await User.findByIdAndUpdate(userId, { suspended: true }, { new: true })
   if (!user) throw new AppError(404, 'User not found')
 
-  // Ends their session on every open tab right now - otherwise they could
-  // keep chatting until whatever token they are holding expires on its own.
-  // Their devices also stop getting push notifications.
+  // Kick open sockets now, otherwise they could keep chatting on an open tab
   disconnectUser(userId)
   await removePushSubscriptions(userId)
   return adminUserView(user)
@@ -82,15 +73,7 @@ export async function unsuspendUser(userId) {
   return adminUserView(user)
 }
 
-// A genuinely destructive, hard delete of the account. Their Friendships are
-// removed too, so they vanish live from every friend's Chats/Requests list -
-// exactly the same client-side path already used for an ordinary unfriend
-// (friend:removed) or a cancelled request (friend:request:cancelled), reused
-// here rather than inventing a new event. Their past MESSAGES and
-// CONVERSATIONS are deliberately left alone: the other participant's history
-// is not destroyed, the same principle as an ordinary unfriend keeping the
-// conversation (see friendService.unfriend). Their PingMe AI chat, on the
-// other hand, is private to them alone, so it goes with the account.
+// Messages and conversations are kept on purpose, so the other person's history survives
 export async function deleteUser(meId, userId) {
   if (sameId(meId, userId)) throw new AppError(400, "You can't delete your own account")
 
@@ -109,10 +92,6 @@ export async function deleteUser(meId, userId) {
     if (f.status === 'accepted') {
       emitToUser(otherId, 'friend:removed', { userId: String(userId) })
     } else if (f.status === 'pending' && sameId(f.requester, userId)) {
-      // The deleted account had sent this request - tell the recipient it's
-      // gone. (A pending request where the deleted account was the
-      // RECIPIENT has no live event to send - the requester's own outgoing
-      // list simply reflects it on next refetch, same as an expired one.)
       emitToUser(otherId, 'friend:request:cancelled', { requestId: String(f._id) })
     }
   }
@@ -132,18 +111,12 @@ export async function getStats() {
 
 const DAY_MS = 24 * 60 * 60 * 1000
 
-// How many new accounts, messages and PingMe AI answers there were on each of
-// the last `days` days (today included), oldest first - the numbers behind
-// the charts on the admin Overview. Days are UTC days, so the same chart is
-// shown whatever time zone the admin is in; a day with nothing is 0, not
-// missing, so the chart has no gaps.
+// Counts per UTC day; empty days are 0 (not missing) so the charts have no gaps
 export async function getActivity(days = 14) {
   const now = new Date()
   const today = Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate())
   const start = new Date(today - (days - 1) * DAY_MS)
 
-  // One grouped query per collection: documents since `start`, counted per
-  // "YYYY-MM-DD". The createdAt indexes are not needed at this size.
   const perDay = async (Model, extra = {}) => {
     const rows = await Model.aggregate([
       { $match: { createdAt: { $gte: start }, ...extra } },
@@ -170,10 +143,6 @@ export async function getActivity(days = 14) {
   return { days: series }
 }
 
-// There is no single "list everyone online" call in presenceService (it only
-// answers "is THIS one user online"), so this counts by checking every user -
-// fine at this app's scale, and avoids adding a second, parallel tracking
-// structure just for a number shown on one admin screen.
 async function countOnlineUsers() {
   const ids = await User.find({}, { _id: 1 })
   return ids.reduce((count, u) => count + (isOnline(u._id) ? 1 : 0), 0)

@@ -7,26 +7,16 @@ import { AI_CHAT_ID, UPDATES_CHAT_ID, useChatStore } from '../store/useChatStore
 import { attachmentLabel } from '../utils/files.js'
 import { onNotificationClick, showMessageNotification } from '../utils/notifications.js'
 
-// If a "stopped typing" event never arrives (their connection dropped), the
-// indicator clears itself after this long. Their client re-sends "typing"
-// every few seconds while they keep typing, so this never cuts off early.
+// clears "typing..." if their stop event never arrives (they re-send every 3 s)
 const TYPING_TIMEOUT_MS = 6000
 
-// EVERY socket listener in the app is registered here, in one place, and
-// removed again in the cleanup. React StrictMode runs effects twice in
-// development: without socket.off() every event would be handled twice and
-// every message would appear twice.
-//
-// Handlers read the store with useChatStore.getState() so they always see
-// the latest state without having to re-register on every change.
+// Every listener is removed in the cleanup: StrictMode runs effects twice, so
+// without socket.off() every message would appear twice.
 export function useSocketEvents() {
   const socket = useSocket()
   const { user, updateUser } = useAuth()
-  // Only my id, not the whole user object: editing my profile changes the
-  // object, and that must not tear down and re-add every listener.
+  // only the id, so editing my profile doesn't re-register every listener
   const myId = user?.id
-  // Kept in a ref so the listeners below do not have to be torn down and
-  // re-added whenever the router hands us a new navigate function.
   const navigate = useNavigate()
   const navigateRef = useRef(navigate)
   useEffect(() => {
@@ -39,7 +29,6 @@ export function useSocketEvents() {
 
     let hasConnectedBefore = false
 
-    // The latest saved (has an .id) message in a conversation, or null.
     function latestMessageId(conversationId) {
       const messages = store().messagesByConversation[conversationId]?.messages ?? []
       for (let i = messages.length - 1; i >= 0; i--) {
@@ -48,9 +37,6 @@ export function useSocketEvents() {
       return null
     }
 
-    // Tells the server (and so the other person) that I have now read up to
-    // the latest message in this conversation - only meaningful while it is
-    // the one actually on screen.
     function markRead(conversationId) {
       const upToMessageId = latestMessageId(conversationId)
       if (upToMessageId) socket.emit('conversation:read', { conversationId, upToMessageId })
@@ -58,8 +44,7 @@ export function useSocketEvents() {
 
     async function onConnect() {
       store().setConnection('connected')
-      // After a RE-connect we may have missed events while offline. MongoDB
-      // is the source of truth, so simply fetch everything again.
+      // after a reconnect we may have missed events, so refetch everything
       if (hasConnectedBefore) {
         store().fetchFriends()
         store().fetchRequests()
@@ -68,11 +53,9 @@ export function useSocketEvents() {
         store().fetchAiSummary()
         if (store().ai.status === 'ready') store().fetchAiMessages()
         const open = store().activeConversationId
-        // The updates channel and PingMe AI are not conversations - they
-        // refreshed above.
         if (open && open !== UPDATES_CHAT_ID && open !== AI_CHAT_ID) {
           await store().fetchLatest(open)
-          markRead(open) // catches up on anything that arrived while offline
+          markRead(open)
         }
       }
       hasConnectedBefore = true
@@ -82,7 +65,6 @@ export function useSocketEvents() {
       store().setConnection('reconnecting')
     }
 
-    // conversationId -> timer that clears a stale "typing..." indicator.
     const typingTimers = new Map()
 
     function clearTyping(conversationId) {
@@ -96,13 +78,10 @@ export function useSocketEvents() {
       const fromThem = message.senderId !== myId
       if (!fromThem) return
 
-      // Their message has arrived, so they have stopped typing it.
       clearTyping(message.conversationId)
 
       const isOpen = message.conversationId === store().activeConversationId
-      // Actually looking at this chat when it arrived: mark it read at once.
-      // Open in a hidden or minimised tab does NOT count - it stays
-      // "delivered" (grey) until the tab is shown again (see ChatWindow).
+      // a chat open in a hidden tab is not "read" yet
       if (isOpen && !document.hidden) {
         socket.emit('conversation:read', {
           conversationId: message.conversationId,
@@ -110,9 +89,6 @@ export function useSocketEvents() {
         })
       }
 
-      // Notify unless they are looking at this exact chat right now. A chat
-      // "open" in a tab that is hidden or minimised still counts as unseen.
-      // A chat I muted never pops up a notification.
       const item = store().friends.find((f) => f.conversationId === message.conversationId)
       if ((!isOpen || document.hidden) && !item?.muted) {
         showMessageNotification({
@@ -142,17 +118,12 @@ export function useSocketEvents() {
       )
     }
 
-    // Clicking a notification opens what it was about (a chat, the
-    // Requests tab, PingMe AI or the updates channel) - leaving the
-    // Settings page first, if that is where I was.
     onNotificationClick((target) => {
       if (!target) return
       store().openTarget(target)
       navigateRef.current('/')
     })
 
-    // Clear chat / mute only ever change MY view, so these come only from
-    // my own other tabs.
     function onConversationCleared({ conversationId }) {
       store().clearConversation(conversationId)
     }
@@ -161,8 +132,7 @@ export function useSocketEvents() {
       store().setMuted(conversationId, muted)
     }
 
-    // `lastMessage` is only present when the deleted message WAS the
-    // sidebar preview - its absence means "nothing to update" there.
+    // no lastMessage means "nothing to update", not "cleared to null"
     function onMessageDeleted(payload) {
       const { conversationId, messageId, mode } = payload
       store().applyMessageDeleted(conversationId, messageId, mode)
@@ -183,8 +153,7 @@ export function useSocketEvents() {
     }
 
     function onRequestAccepted({ friend }) {
-      // Toast only when it was MY request that got accepted - not when this
-      // event is just my other tab reporting that I accepted someone.
+      // no toast when it's just my other tab saying I accepted someone
       const wasMyRequest = store().requests.outgoing.some((r) => r.user.id === friend.friend.id)
       store().addFriend(friend)
       if (wasMyRequest) store().addToast(`${friend.friend.displayName} accepted your friend request`)
@@ -198,15 +167,11 @@ export function useSocketEvents() {
       store().removeFriend(userId)
     }
 
-    // Someone changed their name, bio or picture. If it is me (from another
-    // tab), update my own profile; otherwise update them in every list.
     function onUserUpdated({ user: changed }) {
       if (changed.id === myId) updateUser(changed)
       else store().updateUser(changed)
     }
 
-    // A new post in the "PingMe" updates channel. Notify unless the channel
-    // is open in a visible tab - the same rule as a chat message.
     function onUpdateNew({ update }) {
       store().receiveUpdate(update)
       const isOpen = store().activeConversationId === UPDATES_CHAT_ID
@@ -224,26 +189,18 @@ export function useSocketEvents() {
       store().removeUpdate(id)
     }
 
-    // I read the channel on another tab - clear the badge here too.
     function onUpdatesRead({ upToId }) {
       store().applyUpdatesRead(upToId)
     }
 
-    // ----- PingMe AI. Only ever from the server to MY OWN tabs. -----
-
-    // A question and its (still empty) answer - from this tab or another.
     function onAiNew({ messages }) {
       store().addAiMessages(messages)
     }
 
-    // The whole answer so far, as it is being written.
     function onAiDelta(delta) {
       store().applyAiDelta(delta)
     }
 
-    // The answer is finished (or stopped, or failed). Notify unless the
-    // PingMe AI chat is open in a visible tab - someone who asked and
-    // switched to another chat gets told when the answer is ready.
     function onAiDone({ message }) {
       store().addAiMessages([message])
       if (message.status === 'error') return
@@ -287,7 +244,7 @@ export function useSocketEvents() {
     socket.on('ai:done', onAiDone)
     socket.on('ai:cleared', onAiCleared)
 
-    // The socket may have connected before this effect ran.
+    // the socket may have connected before this effect ran
     if (socket.connected) onConnect()
 
     return () => {

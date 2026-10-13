@@ -9,10 +9,6 @@ import Logo from '../common/Logo.jsx'
 import LogoutDialog from '../common/LogoutDialog.jsx'
 import Spinner from '../common/Spinner.jsx'
 
-// Shown INSTEAD of the app to a new account (photoRequired) that has no
-// profile photo yet - right after signing up. Once the photo is saved,
-// AuthContext has an avatarUrl and LoggedInLayout shows the app.
-// The only other way out is logging out.
 export default function PhotoRequiredScreen() {
   const { user } = useAuth()
   const upload = useAvatarUpload()

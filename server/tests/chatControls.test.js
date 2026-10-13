@@ -7,8 +7,6 @@ import { Friendship } from '../src/models/Friendship.js'
 import { Message } from '../src/models/Message.js'
 import { makeFriends, PNG, PDF, registerUser, upload } from './helpers.js'
 
-// Messages are only ever SENT over the socket, so these tests insert them
-// directly (see conversations.test.js for the same approach).
 function insertMessage(conversationId, senderId, extra = {}) {
   return Message.create({
     conversation: conversationId,
@@ -19,7 +17,6 @@ function insertMessage(conversationId, senderId, extra = {}) {
   })
 }
 
-// An uploaded file that has been sent in a message.
 async function sendFile(agent, conversationId, senderId, buffer, filename) {
   const up = await upload(agent, conversationId, buffer, filename)
   const message = await insertMessage(conversationId, senderId, { text: '', attachment: up.body.attachment.id })
@@ -37,7 +34,6 @@ describe('blocking', () => {
     expect(await Friendship.countDocuments()).toBe(0)
     expect(await Conversation.exists({ _id: conversationId })).toBeTruthy()
 
-    // Both directions look exactly like "no such user".
     const aSearch = await a.agent.get('/api/users/search?username=priya')
     const bSearch = await b.agent.get('/api/users/search?username=aman')
     expect(aSearch.status).toBe(404)
@@ -68,7 +64,6 @@ describe('blocking', () => {
     expect(list.body.users).toEqual([
       { id: b.user.id, username: 'priya', displayName: 'priya', bio: '', avatarUrl: null },
     ])
-    // Being blocked is not something the blocked person can see.
     const theirList = await b.agent.get('/api/users/me/blocked')
     expect(theirList.body.users).toEqual([])
 
@@ -110,7 +105,6 @@ describe('POST /api/conversations/:id/clear', () => {
     expect(mine.body.messages).toEqual([])
     expect(theirs.body.messages).toHaveLength(2)
 
-    // New messages after the clear still show up.
     await insertMessage(conversationId, b.user.id, { text: 'after' })
     const later = await a.agent.get(`/api/conversations/${conversationId}/messages`)
     expect(later.body.messages.map((m) => m.text)).toEqual(['after'])
@@ -174,7 +168,7 @@ describe('GET /api/conversations/:id/attachments', () => {
     const gone = await sendFile(a.agent, conversationId, a.user.id, PNG, 'gone.png')
     await Message.updateOne({ _id: gone.message._id }, { deletedForEveryone: true })
     await upload(a.agent, conversationId, PNG, 'never-sent.png')
-    await insertMessage(conversationId, a.user.id) // text only
+    await insertMessage(conversationId, a.user.id)
 
     const res = await a.agent.get(`/api/conversations/${conversationId}/attachments`)
     expect(res.status).toBe(200)

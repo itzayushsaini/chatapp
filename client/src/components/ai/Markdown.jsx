@@ -2,18 +2,8 @@ import { useState } from 'react'
 
 import { CheckIcon, CopyIcon } from '../common/Icons.jsx'
 
-// Shows PingMe AI's answers, which are written in Markdown (**bold**, lists,
-// tables, code...). A small renderer of our own instead of a library, and
-// one that is SAFE by construction: it never produces an HTML string, only
-// React elements, so React escapes every piece of text - nothing the AI (or
-// someone tricking it) writes can ever run as code on our page. There is
-// still no dangerouslySetInnerHTML anywhere in the app. Links are only made
-// for http(s) addresses, never `javascript:`.
-//
-// It reads the text line by line into blocks (paragraph, heading, list,
-// table, code, quote), then each block's text for inline styles. While an
-// answer is still streaming in, unfinished markup (a "**" with no closing
-// pair yet) simply shows as typed until the rest arrives.
+// Builds React elements only, never an HTML string, so nothing the AI writes can run as code.
+// Links are only made for http(s) addresses, never javascript:.
 
 const FENCE = /^\s*```\s*([\w+#.-]*)\s*$/
 const HEADING = /^\s*(#{1,6})\s+(.*)$/
@@ -38,14 +28,13 @@ function renderBlocks(lines, keyPrefix) {
       continue
     }
 
-    // ```code``` - everything up to the closing fence, exactly as written.
-    // An unclosed fence (still streaming) runs to the end.
+    // An unclosed fence (answer still streaming) runs to the end
     const fence = FENCE.exec(line)
     if (fence) {
       const code = []
       i++
       while (i < lines.length && !FENCE.test(lines[i])) code.push(lines[i++])
-      i++ // the closing fence
+      i++
       blocks.push(<CodeBlock key={key} language={fence[1]} code={code.join('\n')} />)
       continue
     }
@@ -78,7 +67,6 @@ function renderBlocks(lines, keyPrefix) {
       continue
     }
 
-    // A table: a row of cells, then a "---|---" divider line.
     if (line.includes('|') && TABLE_DIVIDER.test(lines[i + 1] ?? '')) {
       const header = cells(line)
       const rows = []
@@ -100,7 +88,6 @@ function renderBlocks(lines, keyPrefix) {
       continue
     }
 
-    // A paragraph: lines until a blank line or the start of another block.
     const paragraph = [line]
     i++
     while (i < lines.length && lines[i].trim() && !startsBlock(lines, i)) paragraph.push(lines[i++])
@@ -125,7 +112,6 @@ function startsBlock(lines, i) {
   )
 }
 
-// "| a | b |" -> ['a', 'b']
 function cells(row) {
   return row
     .trim()
@@ -135,8 +121,6 @@ function cells(row) {
     .map((cell) => cell.trim())
 }
 
-// Every line of one list: its items (with how far each is indented, for
-// nesting) and any wrapped lines that belong to the item above.
 function readListItems(lines, i) {
   const items = []
   while (i < lines.length) {
@@ -156,8 +140,6 @@ function readListItems(lines, i) {
   return { items, next: i }
 }
 
-// Items indented further than the first one become a list inside the item
-// before them.
 function buildList(items, start) {
   const base = items[start].indent
   const list = { ordered: items[start].ordered, start: items[start].number, items: [] }
@@ -199,10 +181,7 @@ function List({ list, keyPrefix }) {
 
 function Table({ header, rows }) {
   return (
-    // Wide tables scroll sideways inside the bubble instead of stretching it.
-    // wrap-normal: words in a cell never break mid-word ("Da / y 1") - the
-    // break-anywhere rule for long links in the rest of the answer must not
-    // squeeze table columns.
+    // wrap-normal undoes the answer's wrap-anywhere, so cell words don't break mid-word
     <div className="overflow-x-auto">
       <table className="w-full border-collapse text-left text-xs wrap-normal sm:text-sm">
         <thead>
@@ -263,9 +242,7 @@ function CodeBlock({ language, code }) {
   )
 }
 
-// Inline styles, found one at a time: whichever pattern starts EARLIEST in
-// the remaining text wins (the first in this list, on a tie), and the text
-// inside bold/italic/links is read again for styles nested in it.
+// The pattern that starts earliest wins (the first in this list on a tie)
 const INLINE = [
   { type: 'code', re: /`([^`\n]+)`/ },
   { type: 'bold', re: /\*\*(?=\S)([^\n]+?)\*\*/ },
@@ -329,7 +306,6 @@ function renderInline(text, keyPrefix) {
   return out
 }
 
-// Plain text, keeping its line breaks.
 function pushText(out, text, keyPrefix) {
   text.split('\n').forEach((part, i) => {
     if (i > 0) out.push(<br key={`${keyPrefix}-${i}`} />)

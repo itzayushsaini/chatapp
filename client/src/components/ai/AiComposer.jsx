@@ -15,7 +15,6 @@ const MIN_VOICE_MS = 500
 const ROUND_BUTTON =
   'inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-brand-600 text-white transition-[background-color,transform] duration-150 hover:bg-brand-700 focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:ring-offset-2 focus-visible:outline-none active:scale-90 disabled:bg-brand-300 disabled:active:scale-100'
 
-// A small on/off "chip" above the text box.
 function ModeChip({ on, onClick, icon, children, title }) {
   const ChipIcon = icon
   return (
@@ -36,13 +35,6 @@ function ModeChip({ on, onClick, icon, children, title }) {
   )
 }
 
-// The message box of the PingMe AI chat - like a chat's, plus two modes:
-//   "Think deeper" - Gemini reasons for longer before answering (slower,
-//                    better for maths, code and planning).
-//   "Imagine"      - create a picture (only when an admin has turned it on).
-// While an answer is being written, the round button becomes Stop.
-//
-// onSend({ text, file, voice, mode }) - `file` and `voice` only when used.
 export default function AiComposer({ onSend, onStop, answering, imageGeneration }) {
   const [text, setText] = useState('')
   const [file, setFile] = useState(null)
@@ -84,7 +76,7 @@ export default function AiComposer({ onSend, onStop, answering, imageGeneration 
 
   function toggleMode(next) {
     setMode((current) => (current === next ? 'chat' : next))
-    // Imagine can only use a photo - drop anything else that was picked.
+    // Imagine only works with a photo
     if (next === 'imagine' && file && kindOf(file) !== 'image') setFile(null)
     textareaRef.current?.focus()
   }

@@ -12,20 +12,12 @@ import { getSettings } from './settingsService.js'
 
 const BCRYPT_COST = 12
 const DAY_MS = 24 * 60 * 60 * 1000
-// "Remember me" off: the cookie is a browser-session cookie (gone when the
-// browser closes), and the token itself stops working after this many days
-// even if a browser is simply never closed.
 const SESSION_DAYS = 7
-// "Remember me" on: the cookie survives browser restarts for this long.
 const REMEMBER_DAYS = 30
 
 export const SESSION_COOKIE = 'token'
 
-// httpOnly: page JavaScript cannot read the cookie, so an XSS bug cannot
-//   steal the session.
-// sameSite 'lax': the browser does not send it on cross-site POSTs, which
-//   blocks CSRF.
-// secure in production: only ever sent over HTTPS.
+// httpOnly so XSS can't read it; sameSite lax blocks CSRF from cross-site POSTs
 export const baseCookieOptions = {
   httpOnly: true,
   sameSite: 'lax',
@@ -33,18 +25,13 @@ export const baseCookieOptions = {
   path: '/',
 }
 
-// No maxAge at all is what makes a cookie a "session cookie" - the browser
-// deletes it when it closes.
 export function sessionCookieOptions(remember) {
   return remember ? { ...baseCookieOptions, maxAge: REMEMBER_DAYS * DAY_MS } : { ...baseCookieOptions }
 }
 
-// Used to make a failed login for an unknown user take as long as a wrong
-// password. Without it, the response time would reveal which usernames exist.
+// Makes an unknown user take as long as a wrong password, so timing can't reveal who exists
 const DUMMY_HASH = bcrypt.hashSync('timing-equaliser-not-a-real-password', BCRYPT_COST)
 
-// Both checks are admin-editable settings, not hardcoded, so either can be
-// changed from the admin panel without a code change or a deploy.
 async function assertRegistrationAllowed(email) {
   const settings = await getSettings()
 
@@ -63,9 +50,7 @@ export async function register({ username, displayName, email, password }) {
 
   const passwordHash = await bcrypt.hash(password, BCRYPT_COST)
 
-  // No "does this username exist?" check first: two sign-ups at the same
-  // moment could both pass it. The unique index is the only reliable guard,
-  // so we just insert and translate the duplicate-key error (code 11000).
+  // No "check then insert": the unique index is the only race-safe guard
   try {
     return await User.create({ username, displayName, email, passwordHash, photoRequired: true })
   } catch (err) {
@@ -78,45 +63,28 @@ export async function register({ username, displayName, email, password }) {
 }
 
 export async function login({ identifier, password }) {
-  // The identifier is already lowercased by zod. A username can never contain
-  // "@", so one query covers both cases.
   const user = await User.findOne({
     $or: [{ username: identifier }, { email: identifier }],
   }).select('+passwordHash')
 
-  // An account made with Google has no password at all: compare against the
-  // dummy hash, which can never match, so it gets the same 401 (and takes the
-  // same time) as a wrong password.
   const ok = await bcrypt.compare(password, user?.passwordHash ?? DUMMY_HASH)
 
-  // Same status and message for "no such user" and "wrong password", so the
-  // login form cannot be used to discover which accounts exist.
+  // Same error for unknown user and wrong password, so nobody can tell which accounts exist
   if (!user || !ok) throw new AppError(401, 'Invalid credentials')
 
-  // Checked AFTER the password, so this can never be used to discover
-  // whether an unknown identifier belongs to a suspended account either.
+  // checked after the password so it doesn't leak which accounts are suspended
   if (user.suspended) throw new AppError(403, 'Your account has been suspended')
 
   return user
 }
 
 export function signToken(userId, { remember = true } = {}) {
-  // `ts` is our own millisecond-precision issued-at time. JWT's own `iat` is
-  // only ever whole seconds, which is not fine enough here: a cookie
-  // reissued moments after a password change (to keep the current tab
-  // logged in) could round down to the very second `passwordChangedAt`
-  // falls in, making the two indistinguishable. `ts` never has that problem.
-  //
-  // `rm` records the "Remember me" choice, so a cookie reissued later (after
-  // a password change) keeps the same lifetime the user originally picked.
+  // ts is in ms because JWT's iat is whole seconds, too coarse to compare with passwordChangedAt
   return jwt.sign({ sub: String(userId), ts: Date.now(), rm: remember }, env.JWT_SECRET, {
     expiresIn: `${remember ? REMEMBER_DAYS : SESSION_DAYS}d`,
   })
 }
 
-// Returns the decoded payload { sub, ts, ... } for a valid token, or null
-// for a missing, expired or forged one. Pinning the algorithm stops a token
-// claiming a weaker one.
 export function verifyToken(token) {
   if (!token) return null
   try {
@@ -126,8 +94,6 @@ export function verifyToken(token) {
   }
 }
 
-// Shared by requireAuth (REST) and socketAuth (Socket.IO), so both check a
-// session in exactly the same way. A deleted user's old token stops working.
 export async function userFromToken(token) {
   const decoded = verifyToken(token)
   if (!decoded) return null
@@ -135,37 +101,22 @@ export async function userFromToken(token) {
   const user = await User.findById(decoded.sub)
   if (!user) return null
 
-  // A suspended account's existing sessions stop working the instant an
-  // admin suspends it, not just at its next login (see adminService and
-  // socket/emitter.js's disconnectUser, which closes any ALREADY-open socket
-  // at the same moment - this covers a fresh REST call or socket handshake).
+  // suspension ends existing sessions right away, not just at the next login
   if (user.suspended) return null
 
-  // A token issued before the password was last changed or reset is stale -
-  // this is what signs out every OTHER device the moment the password
-  // changes, without needing a server-side list of valid tokens. Both sides
-  // are compared to the millisecond (see signToken's `ts`), so a cookie
-  // reissued immediately after the change is never mistaken for an old one.
+  // a token from before the last password change is stale; this signs out other devices
   if (user.passwordChangedAt && decoded.ts < user.passwordChangedAt.getTime()) {
     return null
   }
   return user
 }
 
-// ---------------------------------------------------------------------------
-// Password reset ("forgot password")
-// ---------------------------------------------------------------------------
+const RESET_TOKEN_TTL_MS = 60 * 60 * 1000
 
-const RESET_TOKEN_TTL_MS = 60 * 60 * 1000 // 1 hour
-
-// Never store the raw token - only its hash, the same reasoning as
-// passwordHash. A stolen database still can't be used to reset accounts.
+// Only the hash is stored, so a leaked database can't be used to reset accounts
 const hashResetToken = (token) => crypto.createHash('sha256').update(token).digest('hex')
 
-// Always resolves, whether or not the email belongs to an account - the
-// controller sends the same response either way, so this can never be used
-// to check who has an account (the same reasoning as login's identical 401
-// for "wrong password" and "no such user").
+// Behaves the same whether or not the email has an account, so it can't reveal who does
 export async function requestPasswordReset(email) {
   const user = await User.findOne({ email })
   if (!user) return
@@ -191,18 +142,11 @@ export async function resetPassword({ email, token, password }) {
 
   user.passwordHash = await bcrypt.hash(password, BCRYPT_COST)
   user.passwordChangedAt = new Date()
-  // Cleared, not just expired-in-place: a link can only ever be used once.
   user.resetPasswordTokenHash = null
   user.resetPasswordExpires = null
   await user.save()
-  // Every device is signed out, so none may keep receiving push
-  // notifications either (it subscribes again when it logs in).
   await removeAllFor(user._id)
 }
-
-// ---------------------------------------------------------------------------
-// Change password (while logged in, from the profile)
-// ---------------------------------------------------------------------------
 
 export async function changePassword(meId, { currentPassword, newPassword }) {
   const user = await User.findById(meId).select('+passwordHash')
@@ -214,19 +158,13 @@ export async function changePassword(meId, { currentPassword, newPassword }) {
     )
   }
 
-  // 400, not 401: the request already passed requireAuth, so the SESSION is
-  // valid - this is a rejected form value, not an authentication failure.
-  // The client treats any other 401 as "your session expired, log out",
-  // which would otherwise sign the user out instead of showing this inline.
+  // 400, not 401: the client treats a 401 as an expired session and logs out
   const ok = await bcrypt.compare(currentPassword, user.passwordHash)
   if (!ok) throw new AppError(400, 'Current password is incorrect')
 
   user.passwordHash = await bcrypt.hash(newPassword, BCRYPT_COST)
   user.passwordChangedAt = new Date()
   await user.save()
-  // The other devices are signed out, so they must stop receiving push
-  // notifications too - e.g. a phone that was stolen. This device
-  // subscribes again straight after (the client does that).
   await removeAllFor(user._id)
   return user
 }

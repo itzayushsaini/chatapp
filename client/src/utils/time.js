@@ -1,23 +1,18 @@
-// All dates arrive from the server as ISO strings in UTC. The browser's
-// locale functions convert them to the user's own time zone.
-
 function startOfDay(date) {
   const d = new Date(date)
   d.setHours(0, 0, 0, 0)
   return d
 }
 
-// 0 = today, 1 = yesterday, 2 = the day before, ...
+// 0 = today, 1 = yesterday, ... (round, because a DST day isn't exactly 24 h)
 function daysAgo(date) {
   return Math.round((startOfDay(new Date()) - startOfDay(date)) / 86_400_000)
 }
 
-// "10:24 AM"
 export function formatTime(date) {
   return new Date(date).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })
 }
 
-// Date separators in a chat: "Today", "Yesterday", then "12 September 2026".
 export function dayLabel(date) {
   const days = daysAgo(date)
   if (days === 0) return 'Today'
@@ -29,7 +24,6 @@ export function isSameDay(a, b) {
   return startOfDay(a).getTime() === startOfDay(b).getTime()
 }
 
-// Short time for the sidebar: "10:24 AM", "Yesterday" or "12/09/26".
 export function previewTime(date) {
   const days = daysAgo(date)
   if (days === 0) return formatTime(date)
@@ -37,7 +31,7 @@ export function previewTime(date) {
   return new Date(date).toLocaleDateString([], { day: '2-digit', month: '2-digit', year: '2-digit' })
 }
 
-// A length of time as a clock: 4200 ms -> "0:04", 75000 ms -> "1:15".
+// 75000 ms -> "1:15"
 export function formatDuration(ms) {
   const totalSeconds = Math.max(0, Math.floor((ms || 0) / 1000))
   const minutes = Math.floor(totalSeconds / 60)
@@ -45,7 +39,6 @@ export function formatDuration(ms) {
   return `${minutes}:${seconds}`
 }
 
-// For the chat header: "Last seen today at 10:24 AM".
 export function lastSeenLabel(date) {
   const days = daysAgo(date)
   if (days === 0) return `Last seen today at ${formatTime(date)}`
@@ -53,9 +46,7 @@ export function lastSeenLabel(date) {
   return `Last seen ${new Date(date).toLocaleDateString([], { day: 'numeric', month: 'short' })}`
 }
 
-// "2026-09-12" -> "12 Sep", for the admin charts. The server's days are UTC
-// days, so the label is formatted in UTC too - otherwise a day could read as
-// the one before it for someone west of Greenwich.
+// formatted in UTC because the server's days are UTC days
 export function utcDayShort(isoDate) {
   return new Date(`${isoDate}T00:00:00Z`).toLocaleDateString([], { day: 'numeric', month: 'short', timeZone: 'UTC' })
 }

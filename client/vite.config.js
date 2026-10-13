@@ -6,10 +6,7 @@ export default defineConfig({
   plugins: [react(), tailwindcss()],
   server: {
     port: 5173,
-    // In development the browser only ever talks to localhost:5173. Vite
-    // forwards these paths to the Express server on port 5000, so the browser
-    // sees a single origin: no CORS setup, and the session cookie stays
-    // first-party - the same situation as production.
+    // one origin in development too: no CORS, and the session cookie stays first-party
     proxy: {
       '/api': {
         target: 'http://localhost:5000',
@@ -17,7 +14,7 @@ export default defineConfig({
       },
       '/socket.io': {
         target: 'http://localhost:5000',
-        ws: true, // Socket.IO upgrades to a WebSocket, which needs this
+        ws: true,
       },
     },
   },

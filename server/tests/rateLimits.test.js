@@ -3,10 +3,7 @@ import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest'
 
 import app from '../src/app.js'
 
-// Rate limits are skipped under NODE_ENV=test (see middleware/rateLimits.js)
-// so the rest of the suite does not lock itself out. This file turns them
-// back on. Vitest runs each test file in isolation, so this cannot leak into
-// the other files.
+// limits are off under NODE_ENV=test; this file turns them back on (each test file runs isolated)
 beforeAll(() => vi.stubEnv('ENABLE_RATE_LIMITS', 'true'))
 afterAll(() => vi.unstubAllEnvs())
 

@@ -2,10 +2,6 @@ import { expect, test } from '@playwright/test'
 
 import { befriend, register } from './helpers.js'
 
-// The "professional UI" polish pass: the login page's brand panel, runs of
-// messages from one person, the floating date label, and the admin
-// dashboard (charts, sorting, the delete dialog).
-
 test('the login page has a brand panel on a wide screen and not on a phone', async ({ browser }) => {
   const wide = await browser.newContext({ viewport: { width: 1280, height: 800 } })
   const page = await wide.newPage()
@@ -42,19 +38,15 @@ test('a run of messages from one person sits together, and only its first bubble
 
   const log = ravi.getByRole('log', { name: 'Messages' })
   await expect(log.getByText('three')).toBeVisible()
-  // Three messages in a row from Sita: one tail, on the first.
   await expect(log.locator('.bubble-tail-theirs')).toHaveCount(1)
   await expect(log.locator('.bubble-tail-theirs')).toContainText('one')
-  // The 2nd and 3rd are pulled up closer to the one before them.
   await expect(log.getByRole('listitem').filter({ hasText: 'two' })).toHaveClass(/-mt-1/)
   await expect(log.getByRole('listitem').filter({ hasText: 'three' })).toHaveClass(/-mt-1/)
   await expect(log.getByRole('listitem').filter({ hasText: 'one' })).not.toHaveClass(/-mt-1/)
 
-  // Ravi answers: that is a new run, so his bubble has its own tail...
   await send(ravi, 'hello Sita')
   await expect(log.getByText('hello Sita')).toBeVisible()
   await expect(log.locator('.bubble-tail-mine')).toHaveCount(1)
-  // ...and so does Sita's next message after it.
   await send(sita, 'four')
   await expect(log.getByText('four')).toBeVisible()
   await expect(log.locator('.bubble-tail-theirs')).toHaveCount(2)
@@ -72,8 +64,7 @@ test('scrolling a long chat shows the date for a moment; new messages do not', a
   await register(ravi, 'ravi_daypill', 'Ravi Kumar')
   await befriend(sita, ravi, 'ravi_daypill')
 
-  // Tall messages (sending is limited to 10 per 5 seconds), enough that the
-  // list scrolls.
+  // tall messages, since sending is limited to 10 per 5 seconds
   await ravi.getByRole('button', { name: /Sita/ }).click()
   for (let i = 1; i <= 8; i++) {
     await ravi.getByLabel('Type a message').fill(`Message ${i}\nsecond line\nthird line\nfourth line`)
@@ -83,17 +74,13 @@ test('scrolling a long chat shows the date for a moment; new messages do not', a
   const log = sita.getByRole('log', { name: 'Messages' })
   await expect(log.getByText('Message 8')).toBeInViewport()
 
-  // The floating label is the hidden-from-screen-readers copy of the day.
   const pill = log.locator('xpath=..').locator('div[aria-hidden="true"] span', { hasText: 'Today' })
-  // Messages arriving and scrolling the list down by themselves: no label.
   await ravi.getByLabel('Type a message').fill('one more')
   await ravi.getByLabel('Type a message').press('Enter')
   await expect(log.getByText('one more')).toBeVisible()
   await expect(pill).toHaveCount(0)
 
-  // The reader scrolls up: the label appears, then goes away by itself.
-  // (A moment later - right after a message the list ignores scrolls, because
-  // they may be its own auto-scroll.)
+  // wait out the 400 ms quiet window after a message, when scrolls are taken as auto-scroll
   await sita.waitForTimeout(700)
   await log.hover()
   await sita.mouse.wheel(0, -250)
@@ -115,7 +102,6 @@ test('the admin dashboard: charts, sorting the user list, and the delete dialog'
     others.push(context)
   }
 
-  // The test server promotes admin_e2e... a moment after registering.
   const adminLink = admin.getByRole('link', { name: 'Admin panel' })
   await expect(async () => {
     await admin.reload()
@@ -123,20 +109,16 @@ test('the admin dashboard: charts, sorting the user list, and the delete dialog'
   }).toPass({ timeout: 10_000 })
   await adminLink.click()
 
-  // Overview: the cards and the three charts (each one image with a text summary).
   await expect(admin.getByText('Total users')).toBeVisible()
   await expect(admin.getByRole('img', { name: /^New accounts: \d+ in the last 14 days/ })).toBeVisible()
   await expect(admin.getByRole('img', { name: /^Messages sent: \d+ in the last 14 days/ })).toBeVisible()
   await expect(admin.getByRole('img', { name: /^PingMe AI answers: \d+ in the last 14 days/ })).toBeVisible()
-  // Today's new accounts include these three, so the chart is not empty.
   const summary = await admin.getByRole('img', { name: /^New accounts:/ }).getAttribute('aria-label')
   expect(Number(summary.match(/: (\d+) in/)[1])).toBeGreaterThanOrEqual(3)
-  // Another range reloads the charts.
   await admin.getByRole('button', { name: '30 days' }).click()
   await expect(admin.getByRole('img', { name: /^New accounts: \d+ in the last 30 days/ })).toBeVisible()
   await expect(admin.getByRole('button', { name: '30 days' })).toHaveAttribute('aria-pressed', 'true')
 
-  // Users: search, then sort by name (case does not matter).
   await admin.getByRole('tab', { name: 'Users' }).click()
   await admin.getByLabel('Search users').fill('_dash')
   await admin.getByRole('button', { name: 'Search' }).click()
@@ -149,7 +131,6 @@ test('the admin dashboard: charts, sorting the user list, and the delete dialog'
   await admin.getByLabel('Sort').selectOption('oldest')
   await expect(rows.nth(0)).toContainText('Team Dash')
 
-  // Delete asks first, in the app's own dialog - Cancel keeps the account.
   const zed = rows.filter({ hasText: 'Zed' })
   await zed.getByRole('button', { name: 'Delete' }).click()
   const dialog = admin.getByRole('dialog', { name: 'Delete this account?' })
@@ -182,7 +163,6 @@ test('the home page shows real screenshots with a light/dark switch, and a foote
   await expect(laptopLight).toBeHidden()
   await expect.poll(() => laptopDark.evaluate((el) => el.complete && el.naturalWidth > 0)).toBe(true)
 
-  // The footer has real columns of links.
   const footer = page.getByRole('contentinfo')
   await expect(footer.getByRole('link', { name: 'Create an account' })).toHaveAttribute('href', '/register')
   await expect(footer.getByRole('link', { name: 'Forgot password' })).toHaveAttribute('href', '/forgot-password')

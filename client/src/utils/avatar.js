@@ -1,19 +1,15 @@
-// No image uploads: an avatar is the user's initials on a coloured circle.
-//
-// Every colour here is dark enough for white text to pass WCAG contrast.
+// all dark enough for white text to pass WCAG contrast
 const COLORS = [
-  '#1D4ED8', // blue
-  '#6D28D9', // violet
-  '#BE185D', // pink
-  '#B91C1C', // red
-  '#C2410C', // orange
-  '#047857', // emerald
-  '#0F766E', // teal
-  '#4338CA', // indigo
+  '#1D4ED8',
+  '#6D28D9',
+  '#BE185D',
+  '#B91C1C',
+  '#C2410C',
+  '#047857',
+  '#0F766E',
+  '#4338CA',
 ]
 
-// The colour is worked out from the username, so the same person always has
-// the same colour on every screen and every device - nothing is stored.
 export function avatarColor(username) {
   let hash = 0
   for (const char of username) hash = (hash * 31 + char.charCodeAt(0)) >>> 0

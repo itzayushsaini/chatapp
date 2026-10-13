@@ -5,8 +5,6 @@ import { errorMessage } from '../../api/http.js'
 import Button from '../common/Button.jsx'
 import Spinner from '../common/Spinner.jsx'
 
-// A checkbox with its label wired together, since every toggle here needs
-// exactly the same "click the label, flips the box" pairing.
 function Toggle({ label, checked, onChange }) {
   return (
     <label className="flex items-center gap-2.5 text-sm text-slate-800">
@@ -42,13 +40,8 @@ export default function SettingsTab() {
     setSaved(false)
   }
 
-  // A dedicated updater for the nested `announcement` object. Building the
-  // merged object outside setForm's updater (e.g. `{ ...form.announcement, enabled: v }`
-  // passed to `set`) closes over whatever `form` was at render time - if the
-  // checkbox and the text field are both changed in quick succession, the
-  // second call's stale closure can silently clobber the first one's update.
-  // Merging entirely inside the functional updater, against the latest state
-  // React actually has, avoids that regardless of timing.
+  // Merge inside the updater, not from `form`, so two quick edits can't
+  // overwrite each other with stale state.
   function setAnnouncement(patch) {
     setForm((f) => ({ ...f, announcement: { ...f.announcement, ...patch } }))
     setSaved(false)

@@ -2,9 +2,7 @@ import { expect, test } from '@playwright/test'
 
 import { befriend, register } from './helpers.js'
 
-// Chromium can be given a FAKE microphone (it plays a test tone) and told to
-// accept the permission prompt on its own - so this records a real voice
-// note, with the real MediaRecorder, and sends it through the real upload.
+// Chromium's fake microphone (a test tone) with the permission prompt auto-accepted
 test.use({
   launchOptions: {
     args: ['--use-fake-device-for-media-stream', '--use-fake-ui-for-media-stream'],
@@ -27,7 +25,6 @@ test('record, send and play a voice note - with speed, swipe-to-cancel and Conta
   await a.getByRole('button', { name: /Priya Sharma/ }).click()
   await expect(a.getByLabel('Type a message')).toBeEnabled()
 
-  // --- The round button is a mic until you type -----------------------------
   const mic = a.getByRole('button', { name: 'Record a voice note' })
   await expect(mic).toBeVisible()
   await a.getByLabel('Type a message').fill('x')
@@ -35,7 +32,6 @@ test('record, send and play a voice note - with speed, swipe-to-cancel and Conta
   await expect(a.getByRole('button', { name: 'Send message' })).toBeVisible()
   await a.getByLabel('Type a message').fill('')
 
-  // --- Record and send ------------------------------------------------------
   await mic.click()
   const recorder = a.getByRole('group', { name: 'Recording a voice note' })
   await expect(recorder).toBeVisible()
@@ -46,10 +42,8 @@ test('record, send and play a voice note - with speed, swipe-to-cancel and Conta
   const aLog = a.getByRole('log', { name: 'Messages' })
   await expect(aLog.getByRole('button', { name: 'Play voice message' })).toBeVisible()
   await expect(a.getByText('You: 🎤 Voice message')).toBeVisible()
-  // Saved and delivered, not stuck uploading or failed.
   await expect(aLog.getByText('Delivered', { exact: true })).toBeVisible()
 
-  // --- Swipe to cancel: nothing is sent -------------------------------------
   await mic.click()
   await expect(recorder).toBeVisible()
   const strip = recorder.getByText('‹ Slide to cancel')
@@ -61,8 +55,7 @@ test('record, send and play a voice note - with speed, swipe-to-cancel and Conta
   await expect(recorder).toHaveCount(0)
   await expect(aLog.getByRole('button', { name: 'Play voice message' })).toHaveCount(1)
 
-  // --- Priya receives it: the SERVER recognised the recording as audio ------
-  // (only a kind: 'audio' attachment is drawn as a voice player).
+  // only a kind: 'audio' attachment gets a voice player, so this checks the server's type detection
   const p = priya.page
   await p.getByRole('button', { name: /Aman Kumar/ }).click()
   const pLog = p.getByRole('log', { name: 'Messages' })
@@ -70,7 +63,6 @@ test('record, send and play a voice note - with speed, swipe-to-cancel and Conta
   await expect(play).toBeVisible()
   await expect(pLog.getByRole('slider', { name: 'Voice message position' })).toBeVisible()
 
-  // Speed: 1× -> 1.5× -> 2× -> 1×.
   const speed = pLog.getByRole('button', { name: /Playback speed/ })
   await expect(speed).toHaveText('1×')
   await speed.click()
@@ -83,7 +75,6 @@ test('record, send and play a voice note - with speed, swipe-to-cancel and Conta
   await play.click()
   await expect(pLog.getByRole('button', { name: 'Pause voice message' })).toBeVisible()
 
-  // --- Contact info lists it ------------------------------------------------
   await p.getByRole('heading', { name: 'Aman Kumar' }).getByRole('button').click()
   const info = p.getByRole('complementary', { name: 'Contact info' })
   await expect(info.getByText('Voice messages (1)')).toBeVisible()
@@ -105,7 +96,7 @@ test('a voice note too short to be real is not sent', async ({ browser }) => {
   await expect(a.getByLabel('Type a message')).toBeEnabled()
 
   await a.getByRole('button', { name: 'Record a voice note' }).click()
-  await a.getByRole('button', { name: 'Send voice note' }).click() // straight away
+  await a.getByRole('button', { name: 'Send voice note' }).click()
   await expect(a.getByText(/too short/)).toBeVisible()
   await expect(a.getByRole('log', { name: 'Messages' }).getByRole('button', { name: 'Play voice message' })).toHaveCount(0)
 

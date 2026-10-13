@@ -19,8 +19,6 @@ import {
   ZIP,
 } from './helpers.js'
 
-// These run without HTTP: pure functions, checked directly.
-
 describe('detectFileType - trusts the bytes, not the name', () => {
   it.each([
     ['PNG', PNG, 'x.png', 'image/png', 'image'],
@@ -39,9 +37,6 @@ describe('detectFileType - trusts the bytes, not the name', () => {
     expect(detectFileType(bytes, name)).toEqual({ mime, kind })
   })
 
-  // Voice notes come in whatever container the browser's recorder uses -
-  // and WebM / MP4 are ALSO video containers, so what decides it is whether
-  // the file has a picture track, not its name.
   it.each([
     ['a Chrome voice note (WebM, Opus only)', WEBM_AUDIO, 'voice-note.webm', 'audio/webm', 'audio'],
     ['a Firefox voice note (Ogg Opus)', OGG_OPUS, 'voice-note.ogg', 'audio/ogg', 'audio'],
@@ -88,12 +83,12 @@ describe('parseRange', () => {
     ['bytes=0-99', { start: 0, end: 99 }],
     ['bytes=100-', { start: 100, end: 999 }],
     ['bytes=-100', { start: 900, end: 999 }],
-    ['bytes=900-5000', { start: 900, end: 999 }], // clipped to the file
-    ['bytes=1000-', 'invalid'], // starts past the end
+    ['bytes=900-5000', { start: 900, end: 999 }],
+    ['bytes=1000-', 'invalid'],
     ['bytes=50-10', 'invalid'],
     ['bytes=-', 'invalid'],
     ['items=0-10', 'invalid'],
-    ['bytes=0-10,20-30', 'invalid'], // multiple ranges are not supported
+    ['bytes=0-10,20-30', 'invalid'],
   ])('%s on a 1000-byte file -> %j', (header, expected) => {
     expect(parseRange(header, 1000)).toEqual(expected)
   })

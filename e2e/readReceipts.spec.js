@@ -18,25 +18,20 @@ test('one grey tick while they are offline, two grey once they come online, blue
   const amanChat = aman.getByRole('region', { name: 'Chat with Priya Sharma' })
   const amanLog = aman.getByRole('log', { name: 'Messages' })
 
-  // Priya goes offline (closes the page, keeping her login cookie). Waiting
-  // for Aman to SEE her go offline proves the server knows it too, before
-  // anything is sent.
+  // close Priya's page (keeping her cookie) and wait until Aman sees her offline, so the server knows too
   const priyaUrl = priya.url()
   await priya.close()
   await expect(amanChat.getByText(/Last seen/)).toBeVisible()
   await aman.getByLabel('Type a message').fill('Are you there?')
   await aman.getByLabel('Type a message').press('Enter')
 
-  // She is offline: saved, but not delivered - one grey tick.
   await expect(amanLog.getByText('Sent', { exact: true })).toBeVisible()
 
-  // She comes back online (without opening the chat): two grey ticks, live.
   const priyaAgain = await priyaContext.newPage()
   await priyaAgain.goto(priyaUrl)
   await expect(amanLog.getByText('Delivered', { exact: true })).toBeVisible()
   await expect(amanLog.getByText('Read', { exact: true })).toBeHidden()
 
-  // She opens it - the ticks turn blue, live, with no reload on Aman's side.
   await priyaAgain.getByRole('button', { name: /Aman Kumar/ }).click()
   await expect(amanLog.getByText('Read', { exact: true })).toBeVisible()
 
@@ -54,7 +49,6 @@ test('a message sent while the chat is already open is read immediately', async 
   await register(priya, 'priya_read2', 'Priya Sharma')
   await befriend(aman, priya, 'priya_read2')
 
-  // Priya already has the chat open when Aman's message arrives.
   await priya.getByRole('button', { name: /Aman Kumar/ }).click()
   await aman.getByRole('button', { name: /Priya Sharma/ }).click()
 
@@ -85,7 +79,6 @@ test('shows "typing…" to the other person while someone types', async ({ brows
   await aman.getByLabel('Type a message').pressSequentially('Hello the')
   await expect(priyaChat.getByText('typing…')).toBeVisible()
 
-  // Sending ends it.
   await aman.getByLabel('Type a message').press('Enter')
   await expect(priyaChat.getByText('typing…')).toBeHidden()
 

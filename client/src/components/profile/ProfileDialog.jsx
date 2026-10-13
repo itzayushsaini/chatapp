@@ -15,7 +15,6 @@ import TextField from '../common/TextField.jsx'
 
 const BIO_MAX = 160
 
-// Editing MY profile: picture, display name, username and bio.
 export default function ProfileDialog({ open, onClose }) {
   return (
     <Dialog open={open} onClose={onClose} title="Your profile">
@@ -34,7 +33,6 @@ function ProfileForm({ onDone }) {
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
 
-  // Is a username change allowed right now? (null = any time)
   const lockedUntil =
     user.usernameChangeAllowedAt && new Date(user.usernameChangeAllowedAt) > new Date()
       ? new Date(user.usernameChangeAllowedAt)
@@ -44,7 +42,6 @@ function ProfileForm({ onDone }) {
     event.preventDefault()
     setError('')
 
-    // Send only what actually changed.
     const changes = {}
     if (displayName.trim() !== user.displayName) changes.displayName = displayName
     if (bio.trim() !== (user.bio ?? '')) changes.bio = bio
@@ -134,8 +131,6 @@ function ProfileForm({ onDone }) {
   )
 }
 
-// Its own form with its own Save button: unrelated fields and validation to
-// the profile form above, so a mistake in one never blocks the other.
 function ChangePasswordSection() {
   const { user } = useAuth()
   const addToast = useChatStore((s) => s.addToast)
@@ -164,9 +159,7 @@ function ChangePasswordSection() {
       const message = await authApi.changePassword(currentPassword, newPassword)
       addToast(message)
       clear()
-      // The server stopped push notifications to EVERY device (the others
-      // were just signed out) - this one is still logged in, so sign it up
-      // again.
+      // The server removed every device's push subscription; this one is still logged in.
       ensurePushSubscription().catch(() => {})
     } catch (err) {
       setError(errorMessage(err))
@@ -179,8 +172,6 @@ function ChangePasswordSection() {
     <form onSubmit={handleSubmit} className="space-y-4">
       <h3 className="text-sm font-semibold text-slate-900">Change password</h3>
       {user.authProvider === 'google' && (
-        // Their account was made by "Continue with Google", so unless they
-        // have since set one, there is no current password to type here.
         <p className="rounded-lg bg-slate-100 px-3 py-2 text-xs text-slate-600">
           You signed up with Google, so you may not have a password yet. To set one, log out and use
           &quot;Forgot password?&quot; on the login page with {user.email}.
@@ -253,8 +244,7 @@ function BioField({ value, onChange }) {
   )
 }
 
-// The picture is saved as soon as it is chosen (no need to press Save).
-// Every account must have one, so it can be changed but not removed.
+// Saved as soon as it is chosen; it can be changed but never removed.
 function PictureEditor() {
   const { user } = useAuth()
   const { busy, choose, inputProps } = useAvatarUpload()

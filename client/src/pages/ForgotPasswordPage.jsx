@@ -12,9 +12,7 @@ export default function ForgotPasswordPage() {
   const [email, setEmail] = useState('')
   const [error, setError] = useState('')
   const [submitting, setSubmitting] = useState(false)
-  // The server always answers the same way, whether or not the email is
-  // registered - so the message shown here can never be used to check who
-  // has an account.
+  // same message whether or not the email has an account, so it can't be used to check
   const [sent, setSent] = useState(false)
 
   async function handleSubmit(event) {

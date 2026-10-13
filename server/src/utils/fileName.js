@@ -1,6 +1,4 @@
-// An uploaded file's name, made safe to show and to send back in a download
-// header: only the base name (a browser may send a full path), no control
-// characters, at most 200 characters.
+// Base name only, since a browser may send a full path
 export function cleanFileName(original, fallback = 'file') {
   return (
     String(original ?? '')

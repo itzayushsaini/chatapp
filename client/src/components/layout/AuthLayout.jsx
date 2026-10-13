@@ -4,16 +4,12 @@ import AnnouncementBanner from '../common/AnnouncementBanner.jsx'
 import { ChatIcon, LockIcon, SparklesIcon, ZapIcon } from '../common/Icons.jsx'
 import Logo from '../common/Logo.jsx'
 
-// Shown beside the form on wide screens (from 1024px up). On a phone the
-// form needs every pixel, so the panel is not there at all.
 const POINTS = [
   { icon: LockIcon, title: 'Private by design', text: 'Anyone can find you, but only people you accept can message you.' },
   { icon: ZapIcon, title: 'Instant', text: 'Messages arrive the moment they are sent, with read receipts and typing.' },
   { icon: SparklesIcon, title: 'PingMe AI built in', text: 'Ask questions, share a photo or a PDF - right inside the app.' },
 ]
 
-// The page shared by login, register, forgot- and reset-password: the form
-// card on the right, and - on a wide screen - a green brand panel on the left.
 export default function AuthLayout({ title, subtitle, children, footer }) {
   return (
     <main className="auth-background flex min-h-dvh flex-col bg-slate-50">
@@ -22,7 +18,6 @@ export default function AuthLayout({ title, subtitle, children, footer }) {
         <div className="flex flex-1 items-center justify-center px-4 py-10">
           <div className="w-full max-w-sm">
             <div className="mb-6 flex justify-center">
-              {/* Back to the public home page. */}
               <Link
                 to="/"
                 className="rounded-xl focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:outline-none"
@@ -40,11 +35,7 @@ export default function AuthLayout({ title, subtitle, children, footer }) {
           </div>
         </div>
 
-        {/* After the form in the page, so a screen reader reads the form
-            first; lg:order-first puts it on the left for everyone else.
-            Fixed hex colours on purpose: a green panel with white text must
-            look the same in light and dark mode (the theme's brand-700 turns
-            light teal in dark mode). */}
+        {/* After the form so screen readers read the form first; fixed hex colours so dark mode doesn't change it. */}
         <aside className="relative hidden w-[44%] max-w-xl shrink-0 overflow-hidden bg-gradient-to-br from-[#00a884] to-[#014d41] p-12 text-white lg:order-first lg:flex lg:flex-col lg:justify-between">
           <span className="pointer-events-none absolute -top-24 -right-24 h-72 w-72 rounded-full bg-white/10" aria-hidden="true" />
           <span className="pointer-events-none absolute -bottom-32 -left-20 h-96 w-96 rounded-full bg-white/5" aria-hidden="true" />

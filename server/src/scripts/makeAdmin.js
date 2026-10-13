@@ -1,11 +1,4 @@
-// npm run make-admin -- <username> - the one-off bootstrap for the very
-// first admin. There is no admin panel to grant isAdmin from before someone
-// already has it, so this exists purely to break that chicken-and-egg
-// problem. Every admin after the first can be made one from inside the
-// panel itself (not built as a UI action here on purpose - promoting
-// another admin is rare enough that a script is fine, and keeps the panel's
-// own user-management screen focused on suspend/delete, not privilege
-// escalation).
+// npm run make-admin -- <username>: there is no panel to grant the first admin from
 import { connectDb, disconnectDb } from '../config/db.js'
 import { User } from '../models/User.js'
 

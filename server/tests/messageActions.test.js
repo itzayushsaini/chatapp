@@ -9,7 +9,6 @@ import { Message } from '../src/models/Message.js'
 import { initSocket } from '../src/socket/index.js'
 import { PNG, WEBM_AUDIO, makeFriends, registerUser, upload } from './helpers.js'
 
-// Same real http server + Socket.IO setup as socket.test.js.
 let httpServer
 let io
 let url
@@ -74,8 +73,6 @@ const send = (socket, payload) =>
 const del = (socket, payload) => socket.emitWithAck('message:delete', payload)
 const forward = (socket, payload) => socket.emitWithAck('message:forward', payload)
 
-// Friends up an ALREADY-registered pair without creating new accounts - for
-// scenarios where the same user needs a second, separate friend.
 async function friendUp(requesterAgent, recipientUsername, recipientAgent) {
   const sent = await requesterAgent.post('/api/friends/requests').send({ username: recipientUsername })
   const accepted = await recipientAgent.post(`/api/friends/requests/${sent.body.request.id}/accept`)
@@ -89,8 +86,6 @@ describe('replying to a message', () => {
     const { socket: bSocket } = await connect(b.cookie)
 
     const original = await send(aSocket, { conversationId, text: 'are we still on for lunch?' })
-    // b is the one replying, so it's a (the OTHER participant) who gets the
-    // live event - the sender itself only gets the ack.
     const toA = waitFor(aSocket, 'message:new')
     const reply = await send(bSocket, {
       conversationId,
@@ -153,8 +148,6 @@ describe('message:delete', () => {
 
     const ack = await del(aSocket, { conversationId, messageId: sent.message.id, mode: 'everyone' })
     expect(ack.ok).toBe(true)
-    // It was the only message, so the preview is recomputed to null, not
-    // just left alone.
     expect(await bHears).toEqual({
       conversationId,
       messageId: sent.message.id,
@@ -184,9 +177,7 @@ describe('message:delete', () => {
     const { a, conversationId } = await makeFriends('aman', 'priya')
     const { socket: aSocket } = await connect(a.cookie)
 
-    // createdAt is immutable once set, so an old message is inserted
-    // directly (as conversations.test.js does for history) rather than sent
-    // and then backdated.
+    // createdAt can't be changed later, so insert an old message directly
     const old = await Message.create({
       conversation: conversationId,
       sender: a.user.id,
@@ -292,7 +283,7 @@ describe('message:forward', () => {
 
   it('reports a per-target failure without blocking the other targets', async () => {
     const { a, conversationId: abId } = await makeFriends('aman', 'priya')
-    const outsiders = await makeFriends('chetan', 'divya') // a is not part of this one
+    const outsiders = await makeFriends('chetan', 'divya')
 
     const { socket: aSocket } = await connect(a.cookie)
     const original = await send(aSocket, { conversationId: abId, text: 'hello' })

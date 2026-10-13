@@ -7,7 +7,6 @@ import app from '../src/app.js'
 import { initSocket } from '../src/socket/index.js'
 import { makeFriends, registerUser } from './helpers.js'
 
-// Same real http server + Socket.IO setup as socket.test.js.
 let httpServer
 let io
 let url
@@ -75,12 +74,11 @@ describe('delivered receipts (grey double tick)', () => {
     const delivered = waitFor(aSocket, 'message:delivered')
     const ack = await send(aSocket, conversationId)
 
-    // Reaches the SENDING tab too - that is where the ticks are drawn.
     expect(await delivered).toEqual({ conversationId, upToMessageId: ack.message.id })
 
     const history = await a.agent.get(`/api/conversations/${conversationId}/messages`)
     expect(history.body.theirDeliveredUpTo).toBe(ack.message.id)
-    expect(history.body.theirReadUpTo).toBeNull() // delivered is not read
+    expect(history.body.theirReadUpTo).toBeNull()
   })
 
   it('waits while the recipient is offline, then announces it the moment they connect', async () => {
@@ -116,7 +114,6 @@ describe('delivered receipts (grey double tick)', () => {
     const aSocket = await connect(a.cookie)
     await send(aSocket, conversationId)
 
-    // Reconnecting as the sender must not mark my own message delivered.
     const quiet = staysSilent(aSocket, 'message:delivered')
     await connect(a.cookie)
     expect(await quiet).toBe(true)

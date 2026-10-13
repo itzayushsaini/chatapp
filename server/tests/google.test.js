@@ -6,8 +6,7 @@ import { env } from '../src/config/env.js'
 import { User } from '../src/models/User.js'
 import { makeAdmin, registerUser } from './helpers.js'
 
-// Google itself is never contacted: fetch() is replaced for each test with a
-// fake that answers the token and profile requests the way Google would.
+// a fake fetch answers the token and profile requests, so Google is never contacted
 function fakeGoogle(profile, { tokenOk = true } = {}) {
   return vi.spyOn(globalThis, 'fetch').mockImplementation(async (url) => {
     if (String(url).includes('oauth2.googleapis.com/token')) {
@@ -22,9 +21,6 @@ function fakeGoogle(profile, { tokenOk = true } = {}) {
 
 const NEHA = { sub: 'google-123', email: 'Neha.Sharma@gmail.com', email_verified: true, name: 'Neha Sharma' }
 
-// Runs the whole round trip in one "browser" (a supertest agent keeps
-// cookies): start -> Google (skipped) -> callback. Returns the agent and the
-// callback's response.
 async function signInWithGoogle(profile, options) {
   const agent = request.agent(app)
   const start = await agent.get('/api/auth/google')
@@ -81,7 +77,6 @@ describe('GET /api/auth/google/callback', () => {
       email: 'neha.sharma@gmail.com',
       authProvider: 'google',
       googleLinked: true,
-      // A new Google account must add a profile photo too.
       photoRequired: true,
     })
   })
@@ -160,7 +155,7 @@ describe('GET /api/auth/google/callback', () => {
   })
 
   it('respects "registration closed" for NEW accounts, but existing ones still get in', async () => {
-    await signInWithGoogle(NEHA) // Neha already has an account
+    await signInWithGoogle(NEHA)
     const admin = await registerUser('boss')
     await makeAdmin(admin.user.id)
     await admin.agent.patch('/api/admin/settings').send({ registrationOpen: false })

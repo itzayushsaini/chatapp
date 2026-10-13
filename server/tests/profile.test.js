@@ -104,7 +104,6 @@ describe('PATCH /api/users/me - username', () => {
     expect(tooSoon.status).toBe(429)
     expect(tooSoon.body.message).toMatch(/You can change your username again on \d{4}-\d{2}-\d{2}/)
 
-    // Pretend the first change was 31 days ago.
     await User.updateOne({ _id: user.id }, { usernameChangedAt: new Date(Date.now() - 31 * DAY) })
     const later = await agent.patch('/api/users/me').send({ username: 'aman_two' })
     expect(later.status).toBe(200)
@@ -189,11 +188,10 @@ describe('profile picture', () => {
     expect(me.body.user.photoRequired).toBe(true)
     expect(me.body.user.avatarUrl).toBeNull()
 
-    // An account from before the rule (no flag stored at all).
+    // an account from before the rule has no flag stored at all
     await User.collection.updateOne({ _id: new mongoose.Types.ObjectId(user.id) }, { $unset: { photoRequired: '' } })
     expect((await agent.get('/api/auth/me')).body.user.photoRequired).toBe(false)
 
-    // Never part of what other users see.
     const { agent: other } = await registerUser('priya')
     const found = await other.get('/api/users/search').query({ username: 'aman' })
     expect(found.body.user).not.toHaveProperty('photoRequired')

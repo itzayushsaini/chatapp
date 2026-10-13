@@ -8,17 +8,13 @@ import { registerReadHandlers } from './handlers/readHandlers.js'
 import { registerTypingHandlers } from './handlers/typingHandlers.js'
 import { socketAuth } from './socketAuth.js'
 
-// Attaches Socket.IO to the SAME http.Server as Express, on the default path
-// /socket.io. The browser loads the page and opens the socket from one
-// origin, so no CORS settings are needed.
+// Same server and origin as Express, so no CORS settings are needed
 export function initSocket(httpServer) {
   const io = new Server(httpServer)
 
   io.use(socketAuth)
 
   io.on('connection', (socket) => {
-    // One room per user. All of a user's tabs are in it, so we always emit to
-    // the room and never have to track individual socket ids.
     socket.join(`user:${socket.data.userId}`)
 
     registerMessageHandlers(socket)
@@ -28,7 +24,6 @@ export function initSocket(httpServer) {
     registerDeliveryHandlers(socket)
   })
 
-  // From now on, services' emitToUser calls actually reach clients.
   setIo(io)
   return io
 }

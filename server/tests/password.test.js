@@ -8,9 +8,7 @@ import { registerUser } from './helpers.js'
 
 const PASSWORD = 'password123'
 
-// Pulls the ?token=...&email=... out of the reset link inside the last
-// email sent - emailService captures every email here in test mode instead
-// of calling Brevo, so this never touches the real network.
+// in tests emailService keeps sent emails instead of calling Brevo
 function lastResetLink() {
   const email = sentEmails.at(-1)
   const match = /\/reset-password\?token=([a-f0-9]{64})&email=([^"'<>\s]+)/.exec(email.html)
@@ -150,7 +148,6 @@ describe('PATCH /api/auth/password', () => {
 
     expect(res.status).toBe(200)
     expect(res.body).toEqual({ message: 'Password changed. Your other devices have been logged out.' })
-    // A fresh cookie was issued - this same agent is still logged in.
     expect((await agent.get('/api/auth/me')).status).toBe(200)
 
     const oldLogin = await request(app)
@@ -175,8 +172,7 @@ describe('PATCH /api/auth/password', () => {
       .patch('/api/auth/password')
       .send({ currentPassword: 'totally-wrong', newPassword: 'new-password-456' })
 
-    // 400, not 401 - a wrong current password must never be treated by the
-    // client as an expired session and trigger an auto logout.
+    // 400, not 401, so the client doesn't treat it as an expired session
     expect(res.status).toBe(400)
     expect(res.body).toEqual({ message: 'Current password is incorrect' })
     expect((await request(app).post('/api/auth/login').send({ identifier: 'aman', password: PASSWORD })).status).toBe(200)

@@ -8,10 +8,6 @@ import Dialog from '../common/Dialog.jsx'
 import { ImageIcon } from '../common/Icons.jsx'
 import Spinner from '../common/Spinner.jsx'
 
-// For an OLDER account with no profile photo (photos became required after
-// it was made): a popup every time PingMe is opened or reloaded, until a
-// photo is added. "Later" closes it - only until the next time.
-// (LoggedInLayout renders this only while the account has no photo.)
 export default function PhotoReminder() {
   const { user } = useAuth()
   const [open, setOpen] = useState(true)

@@ -5,13 +5,10 @@ import Sidebar from '../components/sidebar/Sidebar.jsx'
 import UpdatesChannel from '../components/updates/UpdatesChannel.jsx'
 import { AI_CHAT_ID, UPDATES_CHAT_ID, useChatStore } from '../store/useChatStore.js'
 
-// The sidebar and the open chat. The socket, its listeners, the banners and
-// the toasts live one level up, in LoggedInLayout.
 export default function ChatPage() {
   const activeConversationId = useChatStore((s) => s.activeConversationId)
 
-  // Below 768px (Tailwind's `md`) only one of the two panels is visible:
-  // the list, or - once a chat is open - the chat, with a back button.
+  // below 768px only one panel shows: the list, or the open chat
   const chatOpen = Boolean(activeConversationId)
 
   return (

@@ -4,9 +4,7 @@ import { emitToAll } from '../socket/emitter.js'
 
 const SINGLETON_KEY = 'singleton'
 
-// There is always exactly one Setting document. Upserting on the first read
-// means no separate "seed the settings" step is ever needed - a brand new
-// database just gets the schema's defaults the first time anything asks.
+// Upserts on first read, so a new database just gets the defaults (no seed step)
 export async function getSettings() {
   const settings = await Setting.findOneAndUpdate(
     { singletonKey: SINGLETON_KEY },
@@ -16,8 +14,7 @@ export async function getSettings() {
   return settings
 }
 
-// The subset safe to show to anyone, logged in or not - used by the
-// register/login pages and the announcement banner.
+// Shown to anyone, even logged out, so only these fields
 export function publicSettingsView(settings) {
   return {
     registrationOpen: settings.registrationOpen,
@@ -26,7 +23,6 @@ export function publicSettingsView(settings) {
   }
 }
 
-// Everything, for the admin panel itself.
 export function adminSettingsView(settings) {
   return {
     allowedEmailDomains: settings.allowedEmailDomains,
@@ -38,15 +34,10 @@ export function adminSettingsView(settings) {
     aiEnabled: settings.aiEnabled,
     aiDailyLimit: settings.aiDailyLimit,
     aiImageGenerationEnabled: settings.aiImageGenerationEnabled,
-    // Read-only: whether the server has a GEMINI_API_KEY at all. Without
-    // one, PingMe AI stays hidden whatever the switch above says.
     aiConfigured: isAiConfigured(),
   }
 }
 
-// `patch` has already been through zod (see routes/admin.routes.js), so every
-// field here is the right type and within range - this just applies whatever
-// was actually sent, leaving anything omitted unchanged.
 export async function updateSettings(patch) {
   const settings = await getSettings()
 
@@ -71,8 +62,6 @@ export async function updateSettings(patch) {
 
   await settings.save()
 
-  // Every connected client (logged in or not) picks up the new banner /
-  // registration state live, without needing to reload.
   emitToAll('settings:updated', publicSettingsView(settings))
 
   return settings

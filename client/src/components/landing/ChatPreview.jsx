@@ -9,18 +9,8 @@ import {
 } from '../common/Icons.jsx'
 import TypingDots from '../common/TypingDots.jsx'
 
-// The picture of PingMe on the home page: a laptop window and a phone,
-// each showing a chat. It is NOT a screenshot - it is built from the same
-// colours, bubble shapes, ticks and avatars as the real app, so it follows
-// dark mode automatically and can never go out of date with the design.
-//
-// It is only a picture: nothing in it can be clicked, and the whole thing is
-// hidden from screen readers (aria-hidden) and described in one sentence
-// instead. The people in it are made up.
-//
-// The bubbles appear one after another (`landing-pop`, delayed by --delay),
-// and the ticks on my messages turn blue a moment later (`landing-tick`) -
-// both CSS only, see index.css, and both skipped for "reduce motion".
+// Built from the app's own classes, not a screenshot, so it follows dark mode.
+// It is aria-hidden, so it must never contain anything focusable.
 
 const AMAN = { username: 'aman_verma', displayName: 'Aman Verma' }
 const SNEHA = { username: 'sneha.k', displayName: 'Sneha Kapoor' }
@@ -32,20 +22,17 @@ const CHATS = [
   { user: { username: 'priya_s', displayName: 'Priya Sharma' }, preview: '📷 Photo', time: 'Mon', online: false },
 ]
 
-// A made-up voice-note shape (0-100), like a real one's saved waveform.
 const WAVEFORM = [30, 55, 80, 45, 90, 60, 35, 70, 95, 50, 40, 75, 60, 30, 55, 85, 45, 65, 35, 50, 70, 40]
 
 export default function ChatPreview() {
   return (
-    // sm:pb-56 makes room for the phone, which hangs below the laptop window.
+    // The bottom padding makes room for the phone hanging below the laptop window.
     <div className="relative mx-auto w-full max-w-xl sm:pb-60 lg:max-w-none">
       <p className="sr-only">
         A preview of PingMe: a list of chats, and a conversation with messages, blue read ticks, a
         voice note and a friend typing.
       </p>
       <div aria-hidden="true" className="select-none">
-        {/* The laptop window - from `sm` up. On a phone-sized screen only the
-            phone is shown, big enough to read. */}
         <div className="hidden overflow-hidden rounded-2xl bg-surface shadow-2xl ring-1 ring-slate-200 sm:ml-14 sm:block">
           <div className="flex items-center gap-1.5 border-b border-slate-200 bg-slate-100 px-3 py-2">
             <span className="h-2.5 w-2.5 rounded-full bg-red-400" />
@@ -77,10 +64,7 @@ export default function ChatPreview() {
           </div>
         </div>
 
-        {/* The phone - on its own on small screens. From `sm` up it overlaps
-            the laptop window's bottom-left corner, where the chat list has
-            empty space below its four chats - NOT the right side, where it
-            would hide "my" bubbles and their ticks. It gently floats. */}
+        {/* Overlaps the empty bottom-left of the chat list, not the right where it would hide my bubbles. */}
         <div className="animate-float relative mx-auto w-60 sm:absolute sm:top-72 sm:left-0 sm:w-44">
           <div className="overflow-hidden rounded-[2rem] border-[6px] border-neutral-800 bg-surface shadow-2xl">
             <div className="mx-auto mt-1.5 h-1.5 w-12 rounded-full bg-neutral-800" />
@@ -196,7 +180,6 @@ function TypingBubble({ delay }) {
   )
 }
 
-// A stand-in "photo": a little landscape drawn with CSS and one SVG path.
 function PhotoThumb() {
   return (
     <div className="relative mb-1 h-20 overflow-hidden rounded-md bg-linear-to-br from-sky-300 to-brand-300">

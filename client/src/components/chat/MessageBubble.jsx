@@ -22,13 +22,9 @@ import ForwardDialog from './ForwardDialog.jsx'
 import VoicePlayer from './VoicePlayer.jsx'
 
 const ACK_TIMEOUT_MS = 10_000
-// Matches the server's own window (messageService.js) - purely to decide
-// whether to SHOW the "Delete for everyone" option; the server is what
-// actually enforces it.
+// Only decides whether to show "Delete for everyone"; the server enforces the real window
 const DELETE_FOR_EVERYONE_WINDOW_MS = 60 * 60 * 1000
 
-// A short label for a quoted reply's preview, when the original had no text
-// of its own (a photo, video or plain file).
 function attachmentSnippetLabel(kind) {
   if (kind === 'image') return '📷 Photo'
   if (kind === 'video') return '🎥 Video'
@@ -37,21 +33,7 @@ function attachmentSnippetLabel(kind) {
   return 'Message'
 }
 
-// Message text is rendered as a plain React text node, which React always
-// escapes - so a message containing <script> just shows those characters.
-// There is no dangerouslySetInnerHTML anywhere in the app.
-// `whitespace-pre-wrap` keeps the user's line breaks (Shift+Enter).
-// `wrap-anywhere` (not `break-words`) lets a long link or unbroken word wrap
-// INSIDE the bubble: `break-words` only breaks it after the bubble has already
-// grown to the word's full width, which pushed a phone's chat off-screen.
-//
-// `grouped` is true when the message before this one is from the same person
-// a moment earlier: the two sit closer together, and only the FIRST of a run
-// has the little speech-bubble tail and the squared corner - like WhatsApp.
-//
-// `delivered` and `read` are only meaningful when `mine` is true: has the
-// OTHER person's app received this message yet, and have they read it?
-// Together they drive the single grey / double grey / double blue tick.
+// Text uses wrap-anywhere, not break-words, which lets a long link widen the bubble off a phone screen
 export default function MessageBubble({
   message,
   mine,
@@ -73,12 +55,7 @@ export default function MessageBubble({
   const [menuOpen, setMenuOpen] = useState(false)
   const [deleteChoiceOpen, setDeleteChoiceOpen] = useState(false)
   const [forwardOpen, setForwardOpen] = useState(false)
-  // Read only ONCE, at this bubble's own first render - `<Fragment
-  // key={m.clientId}>` in MessageList means this component mounts exactly
-  // once per message, so whatever `isNew` was AT THAT MOMENT is baked in
-  // for good. Later prop updates (a tick changing colour, an edit to
-  // `isNew` itself) never replay the slide-in, which is the point: it
-  // should play once, when the message truly appears, not on every re-render.
+  // Read once, so the slide-in plays only when the message first appears
   const [animateIn] = useState(() => isNew)
 
   if (deletedForEveryone) {
@@ -122,10 +99,7 @@ export default function MessageBubble({
     mine && Boolean(message.id) && Date.now() - new Date(message.createdAt).getTime() < DELETE_FOR_EVERYONE_WINDOW_MS
 
   return (
-    // While the actions menu is open, the whole row is lifted above the rows
-    // after it (`relative z-20`). The slide-in animation leaves a transform on
-    // each new row, which traps the menu's own z-index inside that row - so
-    // without this, later bubbles were drawn on top of the menu.
+    // The slide-in leaves a transform that traps the menu's z-index, so lift the row while the menu is open
     <li
       className={`group flex ${mine ? 'justify-end' : 'justify-start'} ${grouped ? '-mt-1' : ''} ${animateIn ? 'animate-message-in' : ''} ${
         menuOpen ? 'relative z-20' : ''
@@ -165,8 +139,6 @@ export default function MessageBubble({
             <p className={`whitespace-pre-wrap wrap-anywhere ${attachment ? 'px-2 pt-1.5' : ''}`}>{text}</p>
           )}
 
-          {/* Time and tick sit INSIDE the bubble, bottom-right - the same
-              place WhatsApp puts them, rather than as a caption below it. */}
           <div className={`flex items-center justify-end gap-1 text-[0.6875rem] text-meta ${attachment && !text ? 'px-2 pb-1' : ''}`}>
             <span>{formatTime(message.createdAt)}</span>
             {mine && (
@@ -175,10 +147,7 @@ export default function MessageBubble({
           </div>
         </div>
 
-        {/* Hidden by default on desktop (appears on hover), so it never
-            blocks reading the message text. On a touch screen there is no
-            hover, so it is always shown there ([@media(hover:none)]) - it
-            used to be tappable but invisible. */}
+        {/* Always visible on touch screens, which have no hover */}
         {message.id && (
           <div className="relative shrink-0 self-center">
             <button
@@ -234,7 +203,6 @@ export default function MessageBubble({
   )
 }
 
-// A tiny dropdown, closed by clicking anywhere else or picking an item.
 function ActionsMenu({ items, onClose, align }) {
   const ref = useRef(null)
 
@@ -242,8 +210,7 @@ function ActionsMenu({ items, onClose, align }) {
     function onOutside(event) {
       if (!ref.current?.contains(event.target)) onClose()
     }
-    // Escape closes the menu - and only the menu (preventDefault tells the
-    // chat's own Escape handler that this one was used).
+    // preventDefault tells the chat's own Escape handler that this one was used
     function onEscape(event) {
       if (event.key !== 'Escape') return
       event.preventDefault()
@@ -289,10 +256,6 @@ function ActionsMenu({ items, onClose, align }) {
   )
 }
 
-// The little status icon after my own message's timestamp: a clock while it
-// is on its way, then the WhatsApp ticks - one grey (saved), two grey
-// (reached their app), two blue (they opened the chat) - or a Retry link if
-// it failed.
 function MessageStatus({ status, read, delivered, onRetry }) {
   if (status === 'sending' || status === 'uploading') {
     return (
@@ -342,10 +305,6 @@ function MessageStatus({ status, read, delivered, onRetry }) {
   )
 }
 
-// Photos and videos are shown inside the chat; documents are a card with a
-// download link. The url is our own /api/attachments/:id route (which checks
-// permissions), or - while still uploading - a temporary blob: URL of the
-// file on this computer.
 export function Attachment({ attachment, mine, onOpenImage, onMediaLoad }) {
   const { kind, url, name, size } = attachment
 
@@ -383,8 +342,6 @@ export function Attachment({ attachment, mine, onOpenImage, onMediaLoad }) {
     )
   }
 
-  // At least 14rem wide - but never wider than the bubble, so on a narrow
-  // phone the name truncates instead of the download icon being cut off.
   return (
     <a
       href={url}

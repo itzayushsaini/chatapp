@@ -4,7 +4,7 @@ import { previewTime } from '../../utils/time.js'
 import TypingDots from '../common/TypingDots.jsx'
 import AiAvatar from './AiAvatar.jsx'
 
-// A one-line preview of the latest message, without Markdown symbols.
+// Strip Markdown symbols for the one-line preview
 function previewOf(message) {
   if (message.status === 'error') return message.error
   const text = message.text.replace(/[*_`#>|~]/g, '').replace(/\s+/g, ' ').trim()
@@ -12,9 +12,6 @@ function previewOf(message) {
   return text || 'Ask me anything'
 }
 
-// The pinned "PingMe AI" row at the top of the Chats list - only shown
-// while PingMe AI is available (the server has a key and an admin has not
-// switched it off).
 export default function AiRow() {
   const latest = useChatStore((s) => s.ai.latest)
   const isActive = useChatStore((s) => s.activeConversationId === AI_CHAT_ID)

@@ -19,7 +19,6 @@ const SORTS = [
   { value: 'lastSeen', label: 'Last seen' },
 ]
 
-// "12 Sep 2026" - when the account was created.
 const joined = (date) => new Date(date).toLocaleDateString([], { day: 'numeric', month: 'short', year: 'numeric' })
 
 function Badge({ tone, children }) {
@@ -34,7 +33,7 @@ function Badge({ tone, children }) {
 export default function UsersTab() {
   const { user: me } = useAuth()
   const [search, setSearch] = useState('')
-  const [searched, setSearched] = useState('') // the search the list on screen is for
+  const [searched, setSearched] = useState('')
   const [sort, setSort] = useState('newest')
   const [page, setPage] = useState(1)
   const [result, setResult] = useState(null)
@@ -42,9 +41,7 @@ export default function UsersTab() {
   const [busyId, setBusyId] = useState(null)
   const [toDelete, setToDelete] = useState(null)
 
-  // Reloads whenever the page, the sort or the submitted search changes.
-  // Typing alone does not refetch on every keystroke: `searched` only
-  // changes when the form is submitted.
+  // `searched` only changes on submit, so typing doesn't refetch every keystroke.
   useEffect(() => {
     let current = true
     listUsers({ search: searched || undefined, sort, page, limit: PAGE_SIZE })

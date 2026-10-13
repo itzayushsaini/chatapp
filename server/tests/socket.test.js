@@ -10,8 +10,6 @@ import { User } from '../src/models/User.js'
 import { initSocket } from '../src/socket/index.js'
 import { PDF, PNG, makeFriends, registerUser, upload } from './helpers.js'
 
-// A real http server + Socket.IO on a random free port, and real
-// socket.io-client connections - the same code path a browser uses.
 let httpServer
 let io
 let url
@@ -32,9 +30,7 @@ afterAll(async () => {
   await io.close()
 })
 
-// Opens a socket with the given session cookie (like a browser tab).
-// Listeners passed in are attached BEFORE connecting, so the very first
-// events (presence:snapshot) are not missed.
+// listeners are attached before connecting, so presence:snapshot is not missed
 function connect(cookie, listenFor = []) {
   const socket = connectClient(url, {
     transports: ['websocket'],
@@ -61,7 +57,6 @@ function waitFor(socket, event, ms = 2000) {
   })
 }
 
-// Resolves true if the event did NOT arrive within `ms`.
 function staysSilent(socket, event, ms = 300) {
   return new Promise((resolve) => {
     const onEvent = () => resolve(false)
@@ -115,7 +110,7 @@ describe('message:send', () => {
       id: expect.any(String),
       conversationId,
       senderId: a.user.id,
-      text: 'hi priya', // trimmed
+      text: 'hi priya',
       clientId: payload.clientId,
       attachment: null,
       replyTo: null,
@@ -149,7 +144,7 @@ describe('message:send', () => {
     const { socket: bTab } = await connect(b.cookie)
     const payload = newMessage(conversationId)
 
-    // Listen BEFORE sending: the event may arrive before the ack does.
+    // listen before sending: the event may arrive before the ack
     const delivered = waitFor(bTab, 'message:new')
     const first = await sendMessage(socket, payload)
     await delivered
@@ -158,7 +153,7 @@ describe('message:send', () => {
 
     expect(retry).toEqual(first)
     expect(await Message.countDocuments()).toBe(1)
-    expect(await bSilent).toBe(true) // the retry is not delivered twice
+    expect(await bSilent).toBe(true)
   })
 
   it('refuses a conversation I am not in, with 404 wording, and emits nothing', async () => {
@@ -207,7 +202,7 @@ describe('message:send', () => {
     const { a, conversationId } = await makeFriends('aman', 'priya')
     const { socket } = await connect(a.cookie)
 
-    socket.emit('message:send', newMessage(conversationId)) // no ack
+    socket.emit('message:send', newMessage(conversationId))
     const bad = await sendMessage(socket, null)
     const good = await sendMessage(socket, newMessage(conversationId))
 
@@ -347,7 +342,6 @@ describe('friend events from REST', () => {
 })
 
 describe('message:send with an attachment', () => {
-  // Uploads a file as `who` and returns its attachment view.
   async function uploaded(who, conversationId, bytes = PNG, name = 'photo.png') {
     const res = await upload(who.agent, conversationId, bytes, name)
     return res.body.attachment
@@ -369,7 +363,6 @@ describe('message:send with an attachment', () => {
     expect(ack.message).toMatchObject({ text: 'Look at this', attachment })
     expect(await toB).toEqual(ack.message)
 
-    // The other person can now download it.
     expect((await b.agent.get(attachment.url)).status).toBe(200)
 
     const history = await b.agent.get(`/api/conversations/${conversationId}/messages`)
@@ -484,7 +477,6 @@ describe('user:updated', () => {
     }
     expect(await toFriend).toEqual({ user: publicShape })
     expect(await toPending).toEqual({ user: publicShape })
-    // My own tabs also get my private fields.
     expect((await toMe).user).toMatchObject({ ...publicShape, email: 'aman@gmail.com' })
     expect(await strangerSilent).toBe(true)
   })

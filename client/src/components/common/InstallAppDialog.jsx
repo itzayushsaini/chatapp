@@ -8,8 +8,7 @@ const STEPS = [
   { icon: SmartphoneIcon, text: 'Tap "Add". PingMe is now on your Home Screen - open it from there.' },
 ]
 
-// iPhones and iPads have no install button a website can show - Apple only
-// allows installing from Safari's Share menu - so these are the steps.
+// iOS has no install prompt a website can show; Safari's Share menu is the only way.
 export default function InstallAppDialog({ open, onClose }) {
   return (
     <Dialog open={open} onClose={onClose} title="Install PingMe on your iPhone">

@@ -6,51 +6,25 @@ import { getFriends, getRequests } from '../api/friends.js'
 import { errorMessage } from '../api/http.js'
 import { getUpdates, getUpdatesSummary } from '../api/updates.js'
 
-// activeConversationId for the pinned "PingMe" updates channel and the
-// PingMe AI chat. Never a real conversation id (those are 24 hex
-// characters), so they can't clash.
+// never a real conversation id (24 hex characters), so they can't clash
 export const UPDATES_CHAT_ID = 'pingme-updates'
 export const AI_CHAT_ID = 'pingme-ai'
 
-// All chat state lives here, in one zustand store. Any component can read
-// just the slice it needs, e.g. useChatStore((s) => s.friends), and only
-// re-renders when that slice changes.
-//
-// Remember: MongoDB is the source of truth. Socket events only patch this
-// store, and the fetch* actions can always rebuild it from the server.
-
 const initialState = {
-  friends: [], // FriendListItem[], sorted for the Chats tab
-  friendsStatus: 'loading', // 'loading' | 'ready' | 'error'
+  friends: [],
+  friendsStatus: 'loading',
   requests: { incoming: [], outgoing: [] },
-  // conversationId -> { messages, hasMore, status: 'loading' | 'ready' | 'error' }
   messagesByConversation: {},
-  presence: {}, // userId -> { online, lastSeen }
-  // conversationId -> the OTHER participant's read pointer (a message id, or
-  // null). Every message in that conversation with an id <= this one has
-  // been seen by them - what draws a blue vs. grey double tick.
+  presence: {},
   readUpTo: {},
-  // The same, one step earlier: how far the other person's APP has received
-  // messages (they were online), read or not - the grey double tick.
   deliveredUpTo: {},
-  // conversationId -> true while the other person is typing there. Cleared
-  // on their "stopped" event, when their message arrives, or by a timeout in
-  // useSocketEvents if a "stopped" event never comes (they went offline).
   typing: {},
   activeConversationId: null,
-  // conversationId -> number. Kept in the browser only: the spec has no
-  // "read" state on the server, so counts start from zero after a reload.
   unreadCounts: {},
-  sidebarTab: 'chats', // 'chats' | 'requests' | 'add'
-  connection: 'connecting', // 'connecting' | 'connected' | 'reconnecting'
+  sidebarTab: 'chats',
+  connection: 'connecting',
   toasts: [],
-  // The "PingMe" updates channel. `latest` and `unreadCount` come from the
-  // summary (loaded at start, for the pinned row); `items` only once the
-  // channel is opened.
   updates: { items: [], hasMore: false, status: 'idle', latest: null, unreadCount: 0 },
-  // PingMe AI. The first five come from the summary (loaded at start, for
-  // the pinned row); `items` only once the chat is opened. `latest` is the
-  // newest message, which also tells whether an answer is being written.
   ai: {
     available: false,
     imageGeneration: false,
@@ -63,30 +37,19 @@ const initialState = {
   },
 }
 
-// ---------------------------------------------------------------------------
-// Pure helpers (no state) - easy to reason about in isolation
-// ---------------------------------------------------------------------------
-
-// Every message has a clientId - the browser's own for a message still being
-// sent, and the same one echoed back by the server once saved - so it is the
-// one stable key for a message from the moment it is typed.
-//
-// Merging by clientId is what removes duplicates: a message that arrives
-// twice (ack + reconnect refetch, or two tabs) replaces itself.
+// Merged by clientId (the one key a message has from the moment it is typed),
+// so a message that arrives twice replaces itself.
 function mergeMessages(existing, incoming) {
   const byClientId = new Map(existing.map((m) => [m.clientId, m]))
   for (const m of incoming) byClientId.set(m.clientId, m)
 
   const all = [...byClientId.values()]
-  // Saved messages (they have a server id) in id order - MongoDB ids grow
-  // over time and compare correctly as strings. Unsaved ones stay at the end.
+  // MongoDB ids grow over time and compare correctly as strings
   const saved = all.filter((m) => m.id).sort((a, b) => (a.id < b.id ? -1 : 1))
   const unsaved = all.filter((m) => !m.id)
   return [...saved, ...unsaved]
 }
 
-// Chats order: most recent message first; friends without messages after,
-// in their existing order. Array sort is stable, so ties keep their order.
 function sortFriends(friends) {
   return [...friends].sort((a, b) => {
     const aTime = a.lastMessage?.createdAt
@@ -98,7 +61,6 @@ function sortFriends(friends) {
   })
 }
 
-// Updates the sidebar preview for the friend in this conversation.
 function withLastMessage(friends, message) {
   const updated = friends.map((f) => {
     if (f.conversationId !== message.conversationId) return f
@@ -119,19 +81,14 @@ function withLastMessage(friends, message) {
   return sortFriends(updated)
 }
 
-// Update posts merged by id and kept oldest -> newest - ids grow over time
-// and compare correctly as strings, the same as messages.
 function mergeUpdates(existing, incoming) {
   const byId = new Map(existing.map((u) => [u.id, u]))
   for (const u of incoming) byId.set(u.id, u)
   return [...byId.values()].sort((a, b) => (a.id < b.id ? -1 : 1))
 }
 
-// The same PingMe AI message can arrive more than once - in the HTTP
-// response, in ai:new / ai:done, in a refetch - and not always in that
-// order. Keep the copy the server saved LAST (updatedAt). For the same saved
-// version, an answer still being written may already have more text here,
-// from ai:delta, so that one wins.
+// The same AI message can arrive several times, in any order: keep the latest
+// updatedAt, or for a streaming answer the copy with more text (from ai:delta).
 function isNewerAiCopy(current, incoming) {
   if (!current) return true
   const diff = new Date(incoming.updatedAt) - new Date(current.updatedAt)
@@ -140,8 +97,6 @@ function isNewerAiCopy(current, incoming) {
   return incoming.text.length + incoming.reasoning.length > current.text.length + current.reasoning.length
 }
 
-// Saved messages by id, in id order; a question still being sent (no id yet)
-// by its clientId, at the end - replaced by the saved copy once it is back.
 function mergeAiMessages(existing, incoming) {
   const byKey = new Map(existing.map((m) => [m.id ?? `pending:${m.clientId}`, m]))
   for (const m of incoming) {
@@ -157,7 +112,6 @@ function mergeAiMessages(existing, incoming) {
   return [...saved, ...all.filter((m) => !m.id)]
 }
 
-// The newest saved message, given what arrived.
 function latestAiMessage(current, incoming) {
   let latest = current
   for (const m of incoming) {
@@ -180,30 +134,21 @@ function patchConversation(state, conversationId, patch) {
 
 let nextToastId = 1
 
-// ---------------------------------------------------------------------------
-// The store
-// ---------------------------------------------------------------------------
-
 export const useChatStore = create((set, get) => ({
   ...initialState,
 
   reset: () => set(initialState),
 
-  // ----- UI ---------------------------------------------------------------
-
   setSidebarTab: (sidebarTab) => set({ sidebarTab }),
   setConnection: (connection) => set({ connection }),
 
-  // Opening a chat clears its unread badge. null closes it (mobile "back").
   setActiveConversation: (conversationId) =>
     set((s) => ({
       activeConversationId: conversationId,
       unreadCounts: conversationId ? { ...s.unreadCounts, [conversationId]: 0 } : s.unreadCounts,
     })),
 
-  // A notification was tapped (or PingMe was opened from one): show what it
-  // was about. `target` comes from the URL or the service worker, so only
-  // the shapes we ever send are accepted.
+  // `target` comes from the URL, so only the shapes we send are accepted
   openTarget: (target) => {
     if (target === 'requests') set({ sidebarTab: 'requests', activeConversationId: null })
     else if (/^[a-f0-9]{24}$/.test(target ?? '') || target === AI_CHAT_ID || target === UPDATES_CHAT_ID) {
@@ -218,13 +163,10 @@ export const useChatStore = create((set, get) => ({
   },
   dismissToast: (id) => set((s) => ({ toasts: s.toasts.filter((t) => t.id !== id) })),
 
-  // ----- Friends ----------------------------------------------------------
-
   fetchFriends: async () => {
     try {
       get().setFriends(await getFriends())
     } catch (err) {
-      // Keep showing an already-loaded list if a background refetch fails.
       if (get().friendsStatus !== 'ready') set({ friendsStatus: 'error' })
       get().addToast(errorMessage(err), 'error')
     }
@@ -237,8 +179,6 @@ export const useChatStore = create((set, get) => ({
       return { friends: sortFriends(friends), friendsStatus: 'ready', presence }
     }),
 
-  // A new friend (I accepted, they accepted, or an auto-accept). Also removes
-  // any request between us, which is now settled.
   addFriend: (item) =>
     set((s) => {
       const userId = item.friend.id
@@ -264,8 +204,6 @@ export const useChatStore = create((set, get) => ({
       }
     }),
 
-  // A friend (or someone with a pending request) changed their name, bio or
-  // picture - update every place their public profile appears.
   updateUser: (user) =>
     set((s) => {
       const patch = (u) => (u.id === user.id ? { ...u, ...user } : u)
@@ -277,8 +215,6 @@ export const useChatStore = create((set, get) => ({
         },
       }
     }),
-
-  // ----- Requests ---------------------------------------------------------
 
   fetchRequests: async () => {
     try {
@@ -310,15 +246,10 @@ export const useChatStore = create((set, get) => ({
       },
     })),
 
-  // ----- Presence ---------------------------------------------------------
-
-  // Sent on every (re)connect: exactly these friends are online right now.
   setPresenceSnapshot: (onlineIds) =>
     set((s) => {
       const online = new Set(onlineIds)
       const presence = { ...s.presence }
-      // The friends list may not have loaded yet, so mark the online ones
-      // directly, then everyone else we know about as offline.
       for (const id of online) presence[id] = { ...presence[id], online: true }
       for (const f of s.friends) {
         const id = f.friend.id
@@ -335,11 +266,7 @@ export const useChatStore = create((set, get) => ({
       },
     })),
 
-  // ----- Read receipts ------------------------------------------------------
-
-  // A message:read event: the other person has now read up to this message.
-  // Same-length hex ids compare correctly as strings, and the pointer only
-  // ever moves forward - a stale, out-of-order event can never move it back.
+  // only moves forward, so a late, out-of-order event can't move it back
   setReadUpTo: (conversationId, upToMessageId) =>
     set((s) => {
       const current = s.readUpTo[conversationId]
@@ -347,7 +274,6 @@ export const useChatStore = create((set, get) => ({
       return { readUpTo: { ...s.readUpTo, [conversationId]: upToMessageId } }
     }),
 
-  // A message:delivered event - same forward-only rule as setReadUpTo.
   setDeliveredUpTo: (conversationId, upToMessageId) =>
     set((s) => {
       const current = s.deliveredUpTo[conversationId]
@@ -364,11 +290,7 @@ export const useChatStore = create((set, get) => ({
       return { typing }
     }),
 
-  // ----- Messages ---------------------------------------------------------
-
-  // The latest page. Used when a chat is first opened and after a reconnect,
-  // when it is MERGED into what we have, so older pages already loaded and
-  // messages still being sent are kept.
+  // merged (not replaced) after a reconnect, so older pages and pending messages stay
   fetchLatest: async (conversationId) => {
     if (!get().messagesByConversation[conversationId]) {
       set((s) => ({
@@ -402,8 +324,6 @@ export const useChatStore = create((set, get) => ({
     }
   },
 
-  // The page before the oldest message we have (scrolling up). Resolves to
-  // true if messages were added, so the list knows to restore its scroll.
   fetchOlder: async (conversationId) => {
     const entry = get().messagesByConversation[conversationId]
     const oldest = entry?.messages.find((m) => m.id)
@@ -424,7 +344,6 @@ export const useChatStore = create((set, get) => ({
     }
   },
 
-  // Optimistic sending, step 1: show the bubble at once, marked 'sending'.
   addPendingMessage: (message) =>
     set((s) =>
       patchConversation(s, message.conversationId, (e) => ({
@@ -432,12 +351,8 @@ export const useChatStore = create((set, get) => ({
       })),
     ),
 
-  // Step 2a: the server saved it. The saved copy (same clientId, now with an
-  // id and no status) replaces the pending bubble.
   confirmMessage: (message) =>
     set((s) => {
-      // The pending bubble showed the chosen file from a temporary blob: URL.
-      // The saved copy points at the server, so free that memory.
       const pending = s.messagesByConversation[message.conversationId]?.messages.find(
         (m) => m.clientId === message.clientId && !m.id,
       )
@@ -450,9 +365,6 @@ export const useChatStore = create((set, get) => ({
       }
     }),
 
-  // Changes a message that is still on its way: its status ('uploading',
-  // 'sending', 'failed'), upload progress, or the attachmentId once the file
-  // has been uploaded.
   updatePendingMessage: (conversationId, clientId, changes) =>
     set((s) =>
       patchConversation(s, conversationId, (e) => ({
@@ -460,21 +372,17 @@ export const useChatStore = create((set, get) => ({
       })),
     ),
 
-  // Step 2b: it failed or timed out. The bubble stays, with a Retry button.
   setMessageStatus: (conversationId, clientId, status) =>
     get().updatePendingMessage(conversationId, clientId, { status }),
 
-  // A message:new event - from the friend, or from one of MY other tabs.
   receiveMessage: (message, myId) =>
     set((s) => {
       const entry = s.messagesByConversation[message.conversationId]
-      if (entry?.messages.some((m) => m.id === message.id)) return {} // duplicate
+      if (entry?.messages.some((m) => m.id === message.id)) return {}
 
       const fromThem = message.senderId !== myId
       const isOpen = message.conversationId === s.activeConversationId
       return {
-        // Only add it to a conversation we have loaded. One never opened
-        // loads its full latest page (including this message) when opened.
         ...(entry?.status === 'ready' &&
           patchConversation(s, message.conversationId, (e) => ({
             messages: mergeMessages(e.messages, [message]),
@@ -490,10 +398,7 @@ export const useChatStore = create((set, get) => ({
       }
     }),
 
-  // A message:deleted event (or its own ack, on the tab that asked - see
-  // ChatWindow). "me" removes it outright (hidden on my devices only); the
-  // conversation timeline must not shift for "everyone", so that one is
-  // marked in place instead, the same shape messageView() sends for it.
+  // "everyone" is marked in place, so the timeline doesn't shift
   applyMessageDeleted: (conversationId, messageId, mode) =>
     set((s) =>
       patchConversation(s, conversationId, (e) => ({
@@ -506,10 +411,6 @@ export const useChatStore = create((set, get) => ({
       })),
     ),
 
-  // "Clear chat" (from this tab, or the conversation:cleared event from my
-  // other tabs): the server has hidden every message from me, so empty the
-  // loaded history and the preview. Anything that arrives later shows as
-  // normal - it isn't cleared.
   clearConversation: (conversationId) =>
     set((s) => ({
       ...patchConversation(s, conversationId, () => ({ messages: [], hasMore: false })),
@@ -517,16 +418,11 @@ export const useChatStore = create((set, get) => ({
       unreadCounts: { ...s.unreadCounts, [conversationId]: 0 },
     })),
 
-  // A muted chat still gets messages and unread badges - just no
-  // notification pop-ups (see useSocketEvents).
   setMuted: (conversationId, muted) =>
     set((s) => ({
       friends: s.friends.map((f) => (f.conversationId === conversationId ? { ...f, muted } : f)),
     })),
 
-  // Overwrites a friend's sidebar preview with a value the SERVER has
-  // already decided (recomputed after a "delete for everyone"), so - unlike
-  // withLastMessage - there is no "only if newer" guard here.
   setLastMessage: (conversationId, lastMessage) =>
     set((s) => ({
       friends: sortFriends(
@@ -534,21 +430,15 @@ export const useChatStore = create((set, get) => ({
       ),
     })),
 
-  // ----- The "PingMe" updates channel ------------------------------------
-
-  // For the pinned row: the latest post and my unread count. A failure is
-  // quiet - the row just shows its default text until the next try.
   fetchUpdatesSummary: async () => {
     try {
       const { latest, unreadCount } = await getUpdatesSummary()
       set((s) => ({ updates: { ...s.updates, latest, unreadCount } }))
     } catch {
-      // Nothing to do - see above.
+      // quiet: the row keeps its default text until the next try
     }
   },
 
-  // The latest page, when the channel is opened (and again after a
-  // reconnect) - merged into what is already loaded, like chat history.
   fetchUpdates: async () => {
     set((s) => (s.updates.status === 'ready' ? {} : { updates: { ...s.updates, status: 'loading' } }))
     try {
@@ -570,8 +460,6 @@ export const useChatStore = create((set, get) => ({
     }
   },
 
-  // The page before the oldest post shown. Resolves to true if posts were
-  // added, so the channel knows to keep the scroll position steady.
   fetchOlderUpdates: async () => {
     const { items, hasMore } = get().updates
     if (!hasMore || items.length === 0) return false
@@ -587,8 +475,6 @@ export const useChatStore = create((set, get) => ({
     }
   },
 
-  // An update:new event. Counted as unread here; the channel itself marks
-  // it read at once if it is open and actually on screen.
   receiveUpdate: (update) =>
     set((s) => {
       const known = s.updates.latest?.id === update.id || s.updates.items.some((u) => u.id === update.id)
@@ -604,29 +490,19 @@ export const useChatStore = create((set, get) => ({
       }
     }),
 
-  // An update:deleted event. Which post is now the latest, and how many are
-  // still unread, is the server's to say - so ask it again.
   removeUpdate: (id) => {
     set((s) => ({ updates: { ...s.updates, items: s.updates.items.filter((u) => u.id !== id) } }))
     get().fetchUpdatesSummary()
   },
 
-  // I have just read the channel up to its latest post (this tab).
   clearUpdatesUnread: () => set((s) => ({ updates: { ...s.updates, unreadCount: 0 } })),
 
-  // An updates:read event from my OTHER tab. If it read up to the latest
-  // post I know of, nothing is unread; otherwise let the server count.
   applyUpdatesRead: (upToId) => {
     const { latest } = get().updates
     if (latest && upToId >= latest.id) get().clearUpdatesUnread()
     else get().fetchUpdatesSummary()
   },
 
-  // ----- PingMe AI ----------------------------------------------------------
-
-  // Whether PingMe AI is on, my daily limit, and the latest message for the
-  // pinned row. A failure is quiet: the row just stays hidden until the
-  // next try (on reconnect).
   fetchAiSummary: async () => {
     try {
       const { available, imageGeneration, dailyLimit, usedToday, latest } = await getAiSummary()
@@ -641,11 +517,10 @@ export const useChatStore = create((set, get) => ({
         },
       }))
     } catch {
-      // Nothing to do - see above.
+      // quiet: the row stays hidden until the next try
     }
   },
 
-  // The latest page, when the chat is opened (and again after a reconnect).
   fetchAiMessages: async () => {
     set((s) => (s.ai.status === 'ready' ? {} : { ai: { ...s.ai, status: 'loading' } }))
     try {
@@ -668,7 +543,6 @@ export const useChatStore = create((set, get) => ({
     }
   },
 
-  // Resolves to true if older messages were added (to keep the scroll steady).
   fetchOlderAiMessages: async () => {
     const { items, hasMore } = get().ai
     const oldest = items.find((m) => m.id)
@@ -683,7 +557,6 @@ export const useChatStore = create((set, get) => ({
     }
   },
 
-  // Saved messages from anywhere: the HTTP response, ai:new, ai:done.
   addAiMessages: (messages) =>
     set((s) => ({
       ai: {
@@ -693,15 +566,12 @@ export const useChatStore = create((set, get) => ({
       },
     })),
 
-  // ai:delta - the WHOLE answer so far (not just the new piece), so it
-  // simply replaces the text. Ignored once the answer has finished.
   applyAiDelta: ({ id, text, reasoning }) =>
     set((s) => {
       const patch = (m) => (m.id === id && m.status === 'streaming' ? { ...m, text, reasoning } : m)
       return { ai: { ...s.ai, items: s.ai.items.map(patch), latest: s.ai.latest && patch(s.ai.latest) } }
     }),
 
-  // A question still on its way (it has no id yet) - see AiChat.
   addPendingAiMessage: (message) =>
     set((s) => ({ ai: { ...s.ai, items: mergeAiMessages(s.ai.items, [message]) } })),
   updatePendingAiMessage: (clientId, changes) =>
@@ -714,9 +584,7 @@ export const useChatStore = create((set, get) => ({
   removePendingAiMessage: (clientId) =>
     set((s) => ({ ai: { ...s.ai, items: s.ai.items.filter((m) => m.id || m.clientId !== clientId) } })),
 
-  // One more answer used up today (a failed one does not count).
   countAiAnswer: () => set((s) => ({ ai: { ...s.ai, usedToday: s.ai.usedToday + 1 } })),
 
-  // "Clear chat", from this tab or another (ai:cleared).
   clearAiChat: () => set((s) => ({ ai: { ...s.ai, items: [], hasMore: false, latest: null } })),
 }))

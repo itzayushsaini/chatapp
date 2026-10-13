@@ -1,7 +1,4 @@
-// Starts the REAL production server (API + sockets + built client) against a
-// throw-away in-memory MongoDB. Used by Playwright (see playwright.config.js)
-// so the end-to-end tests need no database installed and never touch real
-// data. Run `npm run build` first so client/dist exists.
+// The real production server on a throw-away in-memory MongoDB, for Playwright (run `npm run build` first).
 import { MongoMemoryServer } from 'mongodb-memory-server'
 
 const mongod = await MongoMemoryServer.create()
@@ -9,49 +6,29 @@ const mongod = await MongoMemoryServer.create()
 process.env.NODE_ENV = 'production'
 process.env.MONGO_URI = mongod.getUri()
 process.env.PORT ??= '5100'
-// A fixed secret is fine here: this server only ever holds test data.
 process.env.JWT_SECRET ??= 'e2e-only-secret-that-is-at-least-32-characters'
-// Every spec file's register/login calls share this one process and one IP,
-// so together they would trip the per-IP rate limit meant for a single
-// abusive caller. See middleware/rateLimits.js - never set in real deploys.
+// every spec shares one IP, so the per-IP limits would trip; never set in real deploys
 process.env.E2E_DISABLE_RATE_LIMITS = 'true'
-// e2e must behave the same regardless of whatever happens to be in the
-// developer's own server/.env - a real GOOGLE_CLIENT_ID there (once Google
-// sign-in is configured for local development) would otherwise leak in here
-// via dotenv (which only fills variables not already set) and silently turn
-// on the Google button, breaking specs that assume it is off.
+// set (even blank) so dotenv can't pull real keys in from server/.env
 process.env.GOOGLE_CLIENT_ID = ''
 process.env.GOOGLE_CLIENT_SECRET = ''
-// PingMe AI talks to a FAKE Gemini here (see fakeGemini.js) - and this
-// placeholder key also means a real GEMINI_API_KEY in server/.env can never
-// be picked up by the tests.
 process.env.GEMINI_API_KEY = 'e2e-fake-key'
 const { installFakeGemini } = await import('./fakeGemini.js')
 installFakeGemini()
-// Web Push stays OFF here, whatever server/.env says: with real keys, a test
-// could make the server post to Google's or Mozilla's push service. The
-// sending side is covered by server/tests/push.test.js (with a fake
-// sender); pwa.spec.js hands a push to the service worker directly.
+// push stays off, so a test can never post to a real push service
 process.env.VAPID_PUBLIC_KEY = ''
 process.env.VAPID_PRIVATE_KEY = ''
 
-// Imported only now, because config/env.js validates process.env on load.
+// imported only now, because config/env.js validates process.env on load
 await import('../server/src/server.js')
 
-// Admin-only screens need a REAL admin, and the browser has no way to make
-// one (that is `npm run make-admin`, on purpose). So, in THIS test server
-// only, any account whose username starts with "admin_e2e" is promoted
-// shortly after it registers. Production code has nothing like this.
+// test server only: "admin_e2e..." accounts become admins and "legacy_e2e..." ones pre-photo-rule accounts
 const { User } = await import('../server/src/models/User.js')
 setInterval(() => {
   User.updateMany({ username: /^admin_e2e/, isAdmin: false }, { isAdmin: true }).catch(() => {})
-  // Likewise, an account named "legacy_e2e..." is turned into one from BEFORE
-  // profile photos were required (photoRequired false), so the reminder
-  // popup for older accounts can be tested. Test server only.
   User.updateMany({ username: /^legacy_e2e/, photoRequired: true }, { photoRequired: false }).catch(() => {})
 }, 200)
 
-// server.js exits on SIGINT/SIGTERM; stop MongoDB along with it.
 process.on('exit', () => {
   mongod.stop().catch(() => {})
 })

@@ -5,8 +5,6 @@ const SIZES = {
   lg: 'h-16 w-16',
 }
 
-// The picture for PingMe's own account (the updates channel): the app logo
-// on the brand colour, the same size as a user's Avatar.
 export default function PingMeAvatar({ size = 'md' }) {
   return (
     <span

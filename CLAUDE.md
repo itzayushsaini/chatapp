@@ -8,7 +8,7 @@ The key feature: **nobody can message you without your consent.** A user finds a
 
 Two things matter as much as working code:
 
-1. **The team must be able to explain every file in a viva.** Prefer simple, readable code over clever code. Add short comments that explain *why* wherever it isn't obvious. Avoid unnecessary abstractions and extra libraries.
+1. **The team must be able to explain every file in a viva.** Prefer simple, readable code over clever code. Keep comments few and short: one line explaining *why*, only where a reader would otherwise misunderstand the code (security reasons, races, browser quirks). No file-header essays, no comments that repeat the code, no history or phase notes - longer explanations belong in `docs/EXPLAINED.md`. Avoid unnecessary abstractions and extra libraries.
 2. **It must be real-world ready**: secure, tested and deployable.
 
 Do not add features that are not listed here. If something seems missing, or a rule seems wrong, ask before changing it.

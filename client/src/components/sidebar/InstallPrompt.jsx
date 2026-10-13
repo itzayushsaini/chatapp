@@ -5,10 +5,6 @@ import { dismissInstallOffer, installOfferDismissed } from '../../utils/install.
 import { SmartphoneIcon } from '../common/Icons.jsx'
 import InstallAppDialog from '../common/InstallAppDialog.jsx'
 
-// A one-line offer to install PingMe as an app - the same idea as the
-// notifications offer just above it. Shown only when installing is possible
-// right now (the browser offered it, or this is an iPhone/iPad) and until it
-// is installed or dismissed. Settings → App always has it too.
 export default function InstallPrompt() {
   const { state, install } = useInstallApp()
   const [dismissed, setDismissed] = useState(installOfferDismissed)

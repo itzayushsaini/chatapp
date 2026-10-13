@@ -15,8 +15,7 @@ const registerSchema = z.object({
     .regex(USERNAME_REGEX, 'must be 3-20 characters: letters, numbers, _ or .'),
   displayName: z.string().trim().min(1, 'is required').max(40, 'must be at most 40 characters'),
   email: z.string().trim().toLowerCase().email('must be a valid email address'),
-  // bcrypt only uses the first 72 bytes, so a longer password would silently
-  // be cut short. Rejecting it is more honest.
+  // bcrypt only uses the first 72 bytes, so reject longer passwords
   password: z
     .string()
     .min(8, 'must be at least 8 characters')
@@ -29,7 +28,6 @@ const loginSchema = z.object({
   rememberMe: z.boolean().default(false),
 })
 
-// bcrypt only uses the first 72 bytes - shared with registerSchema's rule.
 const newPasswordField = z
   .string()
   .min(8, 'must be at least 8 characters')
@@ -41,7 +39,7 @@ const forgotPasswordSchema = z.object({
 
 const resetPasswordSchema = z.object({
   email: z.string().trim().toLowerCase().email('must be a valid email address'),
-  // 32 random bytes, hex-encoded - see authService.requestPasswordReset.
+  // 32 random bytes, hex-encoded
   token: z.string().regex(/^[a-f0-9]{64}$/, 'Invalid or malformed token'),
   password: newPasswordField,
 })
@@ -63,8 +61,6 @@ router.post('/login', authLimiter, validate({ body: loginSchema }), auth.login)
 router.post('/logout', auth.logout)
 router.get('/me', requireAuth, auth.me)
 
-// "Continue with Google" - see services/googleAuthService.js. Same per-IP
-// limit as login: both are ways an anonymous visitor gets into an account.
 router.get('/google', authLimiter, auth.googleStart)
 router.get(
   '/google/callback',
@@ -79,8 +75,6 @@ router.get(
   auth.googleCallback,
 )
 
-// Same limiter as register/login: all three are the ways an anonymous
-// visitor can act on an account, so all three share one abuse budget.
 router.post(
   '/forgot-password',
   authLimiter,
@@ -93,8 +87,7 @@ router.post(
   validate({ body: resetPasswordSchema }),
   auth.resetPassword,
 )
-// Per-user (not per-IP): this is an authenticated action, so IP-based
-// limiting would unfairly cap several logged-in users on one network.
+// Per user, not per IP, so users sharing a network don't share a limit
 router.patch(
   '/password',
   requireAuth,

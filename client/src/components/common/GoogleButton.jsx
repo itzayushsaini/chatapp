@@ -2,14 +2,7 @@ import { useEffect, useState } from 'react'
 
 import { getPublicSettings } from '../../api/settings.js'
 
-// "Continue with Google", on both the login and the register page - with
-// Google there is no difference: a new person gets an account, a returning
-// one is logged in.
-//
-// It is a plain link, not a fetch: signing in with Google means leaving
-// PingMe for Google's own page, and the server's /api/auth/google starts
-// that redirect (see googleAuthService.js). Only shown when the server says
-// Google sign-in is set up.
+// A plain link, not a fetch: the browser must leave for Google's own page.
 export default function GoogleButton() {
   const [enabled, setEnabled] = useState(false)
 
@@ -39,7 +32,7 @@ export default function GoogleButton() {
   )
 }
 
-// Google's "G" in its four brand colours, as their sign-in guidelines ask.
+// Fixed brand colours, as Google's sign-in guidelines require.
 function GoogleLogo() {
   return (
     <svg viewBox="0 0 48 48" className="h-5 w-5" aria-hidden="true">

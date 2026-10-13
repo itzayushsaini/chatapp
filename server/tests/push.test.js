@@ -14,9 +14,7 @@ import { notifyAiAnswer } from '../src/services/pushService.js'
 import { initSocket } from '../src/socket/index.js'
 import { PNG, makeAdmin, makeFriends, registerUser, upload } from './helpers.js'
 
-// Web Push, with web-push's real encryption and key code but a FAKE
-// sendNotification - so nothing is ever posted to a real push service, and
-// the tests can see exactly what would have been sent, and to whom.
+// real web-push keys and encryption, but a fake sendNotification so nothing reaches a real push service
 vi.mock('web-push', async (importOriginal) => {
   const real = await importOriginal()
   const lib = real.default ?? real
@@ -26,8 +24,6 @@ vi.mock('web-push', async (importOriginal) => {
 const send = vi.mocked(webpush.sendNotification)
 const keys = webpush.generateVAPIDKeys()
 
-// A subscription as a browser would make it: an FCM address and the
-// device's (base64url) keys.
 const subscription = (n = 1) => ({
   endpoint: `https://fcm.googleapis.com/fcm/send/device-${n}`,
   keys: {
@@ -38,10 +34,9 @@ const subscription = (n = 1) => ({
 
 const subscribe = (agent, n = 1) => agent.post('/api/push/subscriptions').send(subscription(n))
 
-// What was pushed: [{ endpoint, payload }] in order.
 const pushed = () => send.mock.calls.map(([sub, body]) => ({ endpoint: sub.endpoint, payload: JSON.parse(body) }))
 
-// Pushes are sent in the background, after the response.
+// pushes go out in the background, after the response
 const settle = () => new Promise((resolve) => setTimeout(resolve, 150))
 
 beforeEach(() => {
@@ -104,7 +99,7 @@ describe('push: the key and subscriptions', () => {
     const riya = await registerUser('riya')
     const aman = await registerUser('aman')
     await subscribe(riya.agent)
-    await subscribe(aman.agent) // the same browser, now logged in as Aman
+    await subscribe(aman.agent)
     expect((await PushSubscription.findOne()).user.toString()).toBe(aman.user.id)
 
     await riya.agent.delete('/api/push/subscriptions').send({ endpoint: subscription().endpoint })
@@ -156,7 +151,7 @@ describe('push: friend requests', () => {
     const aman = await registerUser('aman')
     await subscribe(aman.agent)
 
-    addConnection(aman.user.id) // Aman has PingMe open - the app shows its own notification
+    addConnection(aman.user.id)
     await riya.agent.post('/api/friends/requests').send({ username: 'aman' })
     await settle()
     removeConnection(aman.user.id)
@@ -235,10 +230,10 @@ describe('push: messages', () => {
 
     await Conversation.updateOne({ _id: conversationId }, { $addToSet: { mutedBy: b.user.id } })
     await sendMessage(socket, conversationId, { text: 'muted' })
-    await settle() // let the background push check finish while it is still muted
+    await settle() // let the background check finish while still muted
     await Conversation.updateOne({ _id: conversationId }, { $pull: { mutedBy: b.user.id } })
 
-    const bSocket = await connect(b.cookie) // Aman opens PingMe
+    const bSocket = await connect(b.cookie)
     await sendMessage(socket, conversationId, { text: 'online' })
     await settle()
     expect(send).not.toHaveBeenCalled()
@@ -278,9 +273,9 @@ describe('push: updates channel and PingMe AI', () => {
     await subscribe(riya.agent, 1)
     await subscribe(aman.agent, 2)
 
-    addConnection(aman.user.id) // Aman is using PingMe right now
+    addConnection(aman.user.id)
     await admin.agent.post('/api/admin/updates').send({ text: 'New: PingMe is now an app 📱' })
-    // Riya's push going out means the online check for both has been made.
+    // once Riya's push is out, both online checks are done
     await vi.waitFor(() => expect(send).toHaveBeenCalled())
     removeConnection(aman.user.id)
     await settle()

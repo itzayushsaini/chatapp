@@ -15,10 +15,6 @@ const ACK_TIMEOUT_MS = 10_000
 const CHECKBOX =
   'h-4 w-4 rounded border-slate-300 text-brand-600 focus-visible:ring-2 focus-visible:ring-brand-500'
 
-// Lets the user pick any number of friends to copy `message` into, in one
-// go - the same multi-select WhatsApp offers when forwarding. PingMe AI is
-// offered first (while it is available): forwarding a message there asks
-// PingMe AI about it.
 export default function ForwardDialog({ message, onClose }) {
   const socket = useSocket()
   const { user } = useAuth()
@@ -39,8 +35,6 @@ export default function ForwardDialog({ message, onClose }) {
     })
   }
 
-  // To friends: one socket event for all of them. Resolves to one result per
-  // chat ({ ok, error? }) - never rejects.
   function forwardToFriends() {
     if (selected.size === 0) return Promise.resolve([])
     return new Promise((resolve) => {
@@ -56,8 +50,6 @@ export default function ForwardDialog({ message, onClose }) {
     })
   }
 
-  // To PingMe AI: a REST call, like asking it a question. The answer then
-  // streams into the PingMe AI chat over the socket.
   function forwardToPingMeAi() {
     if (!toAi) return Promise.resolve([])
     return forwardToAi(message.id, crypto.randomUUID())

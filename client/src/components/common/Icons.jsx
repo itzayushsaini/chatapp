@@ -1,6 +1,4 @@
-// A handful of inline SVG icons, so we do not need an icon library.
-// They are decorative (aria-hidden): every button that uses one also has a
-// text label or an aria-label for screen readers.
+// Decorative (aria-hidden): every button using one has its own text or aria-label.
 function Icon({ children, className = 'h-5 w-5' }) {
   return (
     <svg
@@ -250,15 +248,12 @@ export const ShieldIcon = (p) => (
     <path d="m9 12 2 2 4-4" />
   </Icon>
 )
-// The "verified" tick next to PingMe's own name in the updates channel - a
-// filled circle, so it is drawn directly rather than with <Icon>'s strokes.
 export const VerifiedIcon = ({ className = 'h-4 w-4' }) => (
   <svg viewBox="0 0 24 24" className={className} aria-hidden="true">
     <circle cx="12" cy="12" r="10" fill="currentColor" />
     <path d="m7.5 12.2 3 3 6-6.4" fill="none" stroke="white" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" />
   </svg>
 )
-// The icons below are used by the public home page (LandingPage).
 export const ZapIcon = (p) => (
   <Icon {...p}>
     <path d="M13 2 4 14h7l-1 8 9-12h-7Z" />
@@ -302,8 +297,6 @@ export const RefreshIcon = (p) => (
     <path d="M21 3v5h-5" />
   </Icon>
 )
-// Safari's Share button (a box with an arrow out of it) - drawn in the iPhone
-// install steps so people recognise it.
 export const ShareIcon = (p) => (
   <Icon {...p}>
     <path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8" />

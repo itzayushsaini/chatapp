@@ -12,9 +12,6 @@ import TypingDots from '../common/TypingDots.jsx'
 import AiRow from '../ai/AiRow.jsx'
 import UpdatesRow from '../updates/UpdatesRow.jsx'
 
-// The two pinned rows always come first - PingMe AI (while it is available)
-// and the "PingMe" updates channel - even while friends are loading, and
-// even when you have none yet.
 export default function ChatsTab() {
   const aiAvailable = useChatStore((s) => s.ai.available)
   return (
@@ -103,8 +100,6 @@ function FriendRow({ item }) {
         isActive ? 'bg-slate-100' : 'hover:bg-slate-50'
       }`}
     >
-      {/* The selected row's own left edge, so which chat is open is
-          obvious at a glance - not just a faint background tint. */}
       {isActive && (
         <span className="absolute inset-y-1 left-0 w-1 rounded-r-full bg-brand-600" aria-hidden="true" />
       )}
@@ -132,8 +127,6 @@ function FriendRow({ item }) {
                 <span className="sr-only">Muted</span>
               </span>
             )}
-            {/* A muted chat still counts unread messages, in grey - like
-                WhatsApp - so it is visible without demanding attention. */}
             {unread > 0 && (
               <span
                 className={`animate-pop min-w-5 rounded-full px-1.5 text-center text-xs leading-5 font-semibold text-white ${
@@ -152,8 +145,6 @@ function FriendRow({ item }) {
   )
 }
 
-// The empty state: nobody can find you unless you share your username, so
-// show it with a copy button.
 function NoFriends() {
   const { user } = useAuth()
   const setTab = useChatStore((s) => s.setSidebarTab)
@@ -165,7 +156,7 @@ function NoFriends() {
       setCopied(true)
       setTimeout(() => setCopied(false), 2000)
     } catch {
-      // Clipboard can be blocked by the browser; the username is on screen anyway.
+      // The clipboard can be blocked; the username is on screen anyway.
     }
   }
 

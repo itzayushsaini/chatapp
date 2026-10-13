@@ -8,8 +8,6 @@ test('editing my profile: photo, display name, bio and username', async ({ page 
   await page.getByRole('button', { name: 'Edit your profile' }).click()
   const dialog = page.getByRole('dialog', { name: 'Your profile' })
 
-  // Signing up already added a photo. A new one is cropped in the browser
-  // and saved as soon as it is chosen; it can be changed, never removed.
   const footerPhoto = page.getByRole('button', { name: 'Edit your profile' }).locator('img')
   const before = await footerPhoto.getAttribute('src')
   await dialog
@@ -23,7 +21,7 @@ test('editing my profile: photo, display name, bio and username', async ({ page 
   await dialog.getByLabel('Display name').fill('Neha Kapoor')
   await dialog.getByLabel('Bio').fill('Loves clean UI')
   await dialog.getByLabel('Username').fill('neha_new')
-  page.once('dialog', (confirm) => confirm.accept()) // "Change your username to...?"
+  page.once('dialog', (confirm) => confirm.accept())
   await dialog.getByRole('button', { name: 'Save' }).click()
 
   await expect(page.getByText('Profile saved')).toBeVisible()
@@ -31,12 +29,10 @@ test('editing my profile: photo, display name, bio and username', async ({ page 
   await expect(me).toContainText('@neha_new')
   await expect(me).toContainText('Neha Kapoor')
 
-  // Saved on the server, not just on screen.
   await page.reload()
   await expect(me).toContainText('@neha_new')
   await expect.poll(() => imageLoaded(footerPhoto)).toBe(true)
 
-  // The 30-day rule: the username field is now locked, and says until when.
   await page.getByRole('button', { name: 'Edit your profile' }).click()
   await expect(dialog.getByLabel('Username')).toBeDisabled()
   await expect(dialog.getByText(/You can change your username again on/)).toBeVisible()
@@ -56,13 +52,11 @@ test('photos and documents are delivered, and profile changes appear live', asyn
   await aman.getByRole('button', { name: /Priya Sharma/ }).click()
   const amanLog = aman.getByRole('log', { name: 'Messages' })
 
-  // --- A photo with a caption ---------------------------------------------
   await aman
     .getByTestId('attach-input')
     .setInputFiles({ name: 'poster.png', mimeType: 'image/png', buffer: PNG })
 
-  // The preview comes from a blob: URL - this also proves the production
-  // Content-Security-Policy allows it.
+  // the preview is a blob: URL, so this also checks the CSP allows it
   const preview = aman.getByRole('button', { name: 'Remove poster.png' }).locator('..').locator('img')
   await expect.poll(() => imageLoaded(preview)).toBe(true)
 
@@ -72,10 +66,8 @@ test('photos and documents are delivered, and profile changes appear live', asyn
   const sentPhoto = amanLog.getByRole('img', { name: 'poster.png' })
   await expect(sentPhoto).toHaveAttribute('src', /^\/api\/attachments\/[a-f0-9]{24}$/)
   await expect.poll(() => imageLoaded(sentPhoto)).toBe(true)
-  // Priya is online, so it is delivered straight away.
   await expect(amanLog.getByText('Delivered', { exact: true })).toBeVisible()
 
-  // Priya sees the preview in her sidebar, then the photo itself.
   await expect(priya.getByText('📷 Our poster')).toBeVisible()
   await priya.getByRole('button', { name: /Aman Kumar/ }).click()
   const priyaLog = priya.getByRole('log', { name: 'Messages' })
@@ -83,13 +75,11 @@ test('photos and documents are delivered, and profile changes appear live', asyn
   await expect.poll(() => imageLoaded(receivedPhoto)).toBe(true)
   await expect(priyaLog.getByText('Our poster')).toBeVisible()
 
-  // Clicking it opens it full size.
   await priyaLog.getByRole('button', { name: 'Open photo poster.png' }).click()
   await expect(priya.getByRole('dialog', { name: 'poster.png' })).toBeVisible()
   await priya.keyboard.press('Escape')
   await expect(priya.getByRole('dialog', { name: 'poster.png' })).toBeHidden()
 
-  // --- A document with no caption -----------------------------------------
   await aman
     .getByTestId('attach-input')
     .setInputFiles({ name: 'notes.pdf', mimeType: 'application/pdf', buffer: PDF })
@@ -102,7 +92,6 @@ test('photos and documents are delivered, and profile changes appear live', asyn
   expect(response.headers()['content-type']).toBe('application/pdf')
   expect(response.headers()['content-disposition']).toMatch(/^attachment/)
 
-  // --- Aman edits his bio: Priya sees it without reloading -----------------
   await aman.getByRole('button', { name: 'Edit your profile' }).click()
   await aman.getByRole('dialog', { name: 'Your profile' }).getByLabel('Bio').fill('Team lead')
   await aman.getByRole('button', { name: 'Save' }).click()
@@ -111,7 +100,6 @@ test('photos and documents are delivered, and profile changes appear live', asyn
   await priya.getByRole('heading', { name: 'Aman Kumar' }).getByRole('button').click()
   const info = priya.getByRole('complementary', { name: 'Contact info' })
   await expect(info.getByText('Team lead')).toBeVisible()
-  // The chat's shared photo and document are listed there too.
   await expect(info.getByRole('button', { name: 'Open photo poster.png' })).toBeVisible()
   await expect(info.getByRole('link', { name: /notes\.pdf/ })).toBeVisible()
 

@@ -1,58 +1,29 @@
-/* Tailwind v4 needs exactly this one line - no tailwind.config.js and no
-   PostCSS file. The @tailwindcss/vite plugin in vite.config.js scans the
-   source for class names and generates only the CSS actually used. */
 @import 'tailwindcss';
 
-/* v4 customises the theme in CSS. Inter is loaded in index.html; the rest
-   of the stack is the fallback while it loads or if it is blocked. */
 @theme {
   --font-sans: 'Inter', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif;
 
-  /* The WhatsApp-style accent colour. Any Tailwind utility that works for
-     "blue" (bg-brand-600, ring-brand-500, hover:bg-brand-700, ...) works the
-     same way here - Tailwind v4 generates utilities from these variables
-     automatically. Everywhere the app used to use "blue-*" now uses "brand-*"
-     at the identical shade number, so buttons, focus rings, links and the
-     outgoing message bubble all move together if this scale ever changes. */
   --color-brand-50: #e7f5ef;
-  --color-brand-100: #d9fdd3; /* outgoing message bubble */
+  --color-brand-100: #d9fdd3;
   --color-brand-300: #7bcfb0;
   --color-brand-400: #34b7a0;
-  --color-brand-500: #06cf9c; /* focus rings */
-  --color-brand-600: #00a884; /* primary buttons, links, active states */
-  --color-brand-700: #017561; /* hover on primary buttons */
+  --color-brand-500: #06cf9c;
+  --color-brand-600: #00a884;
+  --color-brand-700: #017561;
 
-  /* WhatsApp's own tick colours - separate from the brand scale because
-     they are never used as a background or a button colour, only for the
-     small sent/delivered/read icons on a message. */
-  --color-tick-sent: #8696a0; /* one grey tick: saved on the server */
-  --color-tick-read: #53bdeb; /* two blue ticks: they opened the chat */
+  --color-tick-sent: #8696a0;
+  --color-tick-read: #53bdeb;
 
-  /* Three colours that are NOT simply "a shade of grey", so dark mode can't
-     get them by flipping the slate scale below:
-     - surface: cards, panels, dialogs (bg-surface - was bg-white)
-     - overlay: faint hover/pressed tints (bg-overlay/5 - was bg-black/5)
-     - meta: the time inside a message bubble (text-meta) */
+  /* use these instead of white/black, so dark mode can swap them */
   --color-surface: #ffffff;
   --color-overlay: #000000;
   --color-meta: rgb(0 0 0 / 0.45);
 }
 
-/* ---------------------------------------------------------------------------
-   Dark mode. Every component is written once, with light-mode class names
-   (bg-slate-100, text-slate-900, ...). Tailwind turns each of those into a
-   CSS variable (var(--color-slate-100)), so redefining the variables here
-   re-colours the whole app at once - no "dark:" variant on every element.
-
-   The grey scale is flipped (50 is now the darkest background, 900 the
-   brightest text); the status colours get dark backgrounds with light text.
-   Colours are WhatsApp's own dark theme where it has one.
-
-   data-theme is set on <html> by utils/theme.js (and, before React loads,
-   by public/theme-init.js, so a dark-mode user never sees a white flash).
-   --------------------------------------------------------------------------- */
+/* Dark mode redefines Tailwind's colour variables (the slate scale is flipped),
+   so no element needs a dark: class. */
 :root[data-theme='dark'] {
-  color-scheme: dark; /* native scrollbars, checkboxes and date pickers too */
+  color-scheme: dark;
 
   --color-surface: #111b21;
   --color-overlay: #ffffff;
@@ -70,9 +41,9 @@
   --color-slate-900: #e9edef;
 
   --color-brand-50: #0f2e27;
-  --color-brand-100: #005c4b; /* outgoing message bubble */
-  --color-brand-300: #1d6b5a; /* disabled send button */
-  --color-brand-700: #21c9a0; /* links/labels - must stay readable on dark */
+  --color-brand-100: #005c4b;
+  --color-brand-300: #1d6b5a;
+  --color-brand-700: #21c9a0; /* light on purpose: used for text */
 
   --color-red-50: #3a1d20;
   --color-red-100: #4a2226;
@@ -86,40 +57,19 @@
   --color-amber-900: #fde68a;
 }
 
-/* The logged-in CHAT SHELL (`/` and `/settings`) is a fixed-viewport SPA
-   (WhatsApp-Web style): every panel inside it that needs to scroll (the
-   message list, the sidebar's chat list, contact info) does so INSIDE
-   itself, and the shell itself must never scroll - see the `overflow-hidden
-   overscroll-none` on LoggedInLayout.jsx's own root div, which is where
-   that is actually applied.
-   This is deliberately NOT set here on html/body: those elements are
-   shared by every OTHER page too (the admin panel, login/register), which
-   are ordinary pages that DO need the page itself to scroll when their
-   content is taller than the viewport - min-h-dvh, not h-dvh, is exactly
-   that signal. Applying this globally once broke scrolling on all of them
-   at once. */
-
+/* Not overflow-hidden here: other pages must scroll; the chat shell sets it on its own root. */
 body {
   @apply bg-slate-50 font-sans text-slate-900 antialiased;
 }
 
-/* Bigger on phones (below 768px, Tailwind's md), so PingMe feels like an
-   app there rather than a shrunken website - the team's request. Every
-   Tailwind size (text, spacing, avatars, icons, buttons) is in rem, i.e. a
-   multiple of this one root size, so this single line scales the whole
-   layout evenly: 112.5% = 18px instead of the browser's 16px (about 113%).
-   A percentage, not 18px, so someone who set a larger text size in their
-   browser still gets their own size on top. Media queries are measured in
-   the browser's default size, never this one, so breakpoints don't move. */
+/* Everything is in rem, so this makes the whole layout bigger on phones (18px).
+   A percentage, so a user's own larger browser text size still applies. */
 @media (max-width: 47.99rem) {
   html {
     font-size: 112.5%;
   }
 }
 
-/* The chat panel's background, behind the message bubbles - WhatsApp's own
-   flat warm-white tone plus a very faint repeating doodle pattern, so the
-   panel is never a flat, empty colour the way the rest of the app is. */
 .chat-background {
   background-color: #efeae2;
   background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='100' height='100' viewBox='0 0 100 100'%3E%3Cg fill='none' stroke='%23d8d0c3' stroke-width='1.2'%3E%3Ccircle cx='20' cy='20' r='6'/%3E%3Cpath d='M45 15h20M45 25h14'/%3E%3Cpath d='M10 55c6-6 14-6 20 0s14 6 20 0'/%3E%3Ccircle cx='75' cy='60' r='5'/%3E%3Cpath d='M15 85h18M15 92h10'/%3E%3Cpath d='M60 80c5-5 12-5 17 0'/%3E%3Ccircle cx='88' cy='30' r='4'/%3E%3C/g%3E%3C/svg%3E");
@@ -131,21 +81,7 @@ body {
   background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='100' height='100' viewBox='0 0 100 100'%3E%3Cg fill='none' stroke='%23182229' stroke-width='1.2'%3E%3Ccircle cx='20' cy='20' r='6'/%3E%3Cpath d='M45 15h20M45 25h14'/%3E%3Cpath d='M10 55c6-6 14-6 20 0s14 6 20 0'/%3E%3Ccircle cx='75' cy='60' r='5'/%3E%3Cpath d='M15 85h18M15 92h10'/%3E%3Cpath d='M60 80c5-5 12-5 17 0'/%3E%3Ccircle cx='88' cy='30' r='4'/%3E%3C/g%3E%3C/svg%3E");
 }
 
-/* ---------------------------------------------------------------------------
-   Animations (Phase 17 - visual polish). Every effect below is a plain CSS
-   @keyframes plus a small utility class - no animation library, so each one
-   is a few lines the team can point to and explain in the viva.
-
-   Toggling light/dark itself gets a quick colour fade rather than an
-   instant snap, since flipping so many CSS variables at once would
-   otherwise look like a flash.
-
-   Everything in the reduced-motion block below is skipped entirely for
-   anyone whose OS has "reduce motion" turned on - they get the same UI,
-   just appearing instantly instead of animating in. This is the ONE place
-   that decision is made, rather than sprinkling media queries everywhere
-   each animation is used.
-   --------------------------------------------------------------------------- */
+/* All animation is inside prefers-reduced-motion: no-preference blocks. */
 body,
 .chat-background {
   transition: background-color 0.25s ease, color 0.25s ease;
@@ -171,11 +107,7 @@ body,
     animation: bounce-dot 1.1s ease-in-out infinite both;
   }
 
-  /* Native <dialog> elements animate open for free: the browser treats
-     showModal() as inserting the element, so this keyframe plays every
-     time. There is deliberately no matching close animation - dialog.close()
-     removes it from the DOM immediately, and delaying that would need extra
-     JS just to time the exit, which is not worth it for a fade this quick. */
+  /* no close animation: dialog.close() hides it at once */
   dialog[open] {
     animation: dialog-in 0.16s ease-out both;
   }
@@ -235,11 +167,7 @@ body,
   }
 }
 
-/* A slow, gentle pulse ring around an online friend's avatar dot - makes
-   "online" read as a live signal rather than a static coloured circle.
-   Kept separate from Tailwind's own animate-ping (which ignores reduced
-   motion) so it lives inside the same reduced-motion block as everything
-   else here. */
+/* our own, because Tailwind's animate-ping ignores reduced motion */
 @media (prefers-reduced-motion: no-preference) {
   .animate-online-pulse {
     animation: online-pulse 1.8s cubic-bezier(0, 0, 0.2, 1) infinite;
@@ -257,15 +185,6 @@ body,
   }
 }
 
-/* ---------------------------------------------------------------------------
-   Visual polish, round two: thinner scrollbars, a chat-bubble tail, loading
-   skeletons, and a soft auth-page background. Still plain CSS, still no
-   library, still themed entirely through the existing colour variables so
-   dark mode needs no separate rules for any of it.
-   --------------------------------------------------------------------------- */
-
-/* Thin, brand-toned scrollbars everywhere, instead of the browser's bulky
-   default - only elements that actually overflow ever show one. */
 * {
   scrollbar-width: thin;
   scrollbar-color: var(--color-slate-300) transparent;
@@ -285,12 +204,7 @@ body,
   background-color: var(--color-slate-400);
 }
 
-/* A small triangular "tail" on text-only message bubbles - the classic
-   speech-bubble shape, using the same squared corner the bubble already has
-   (rounded-tr-none / rounded-tl-none). Only added when there is no
-   attachment: an attachment bubble needs `overflow-hidden` to clip the
-   image/video to its rounded corners, which would cut the tail off, so it
-   is left plain there rather than showing a clipped sliver of one. */
+/* Text-only bubbles: an attachment bubble's overflow-hidden would cut the tail off. */
 .bubble-tail-mine,
 .bubble-tail-theirs {
   position: relative;
@@ -315,8 +229,6 @@ body,
   border-color: transparent var(--color-surface) transparent transparent;
 }
 
-/* Shimmering grey placeholders, shown in place of a bare spinner while the
-   Chats list or a chat's history is still loading. */
 .skeleton {
   background-color: var(--color-slate-100);
   background-image: linear-gradient(
@@ -341,36 +253,22 @@ body,
   }
 }
 
-/* A very soft, brand-tinted glow in two corners behind the login/register
-   card, instead of a flat grey page - color-mix() keeps this working
-   automatically in dark mode too, since --color-brand-* already has its own
-   dark-mode values with no extra rule needed here. */
 .auth-background {
   background-image:
     radial-gradient(circle at 15% 20%, color-mix(in srgb, var(--color-brand-100) 55%, transparent) 0%, transparent 45%),
     radial-gradient(circle at 85% 80%, color-mix(in srgb, var(--color-brand-50) 65%, transparent) 0%, transparent 50%);
 }
 
-/* ---------------------------------------------------------------------------
-   The public home page (Phase 19, pages/LandingPage.jsx). Same rule as
-   above: plain CSS, and every bit of motion lives inside the reduced-motion
-   block - without it the page looks exactly the same, just still.
-   --------------------------------------------------------------------------- */
 @media (prefers-reduced-motion: no-preference) {
-  /* Clicking "Features" etc. in the header glides down to that section.
-     Only on the home page (:has), so nothing else in the app changes. */
   html:has(.landing-page) {
     scroll-behavior: smooth;
   }
 
-  /* The preview's chat bubbles appear one after another: each bubble sets
-     its own --delay in the style attribute. */
+  /* each bubble sets its own --delay in its style attribute */
   .landing-pop {
     animation: message-in 0.4s ease-out both;
     animation-delay: var(--delay, 0s);
   }
-  /* ...and the ticks on "my" bubbles start grey, then turn blue shortly
-     after - "read". Without animation they are simply blue. */
   .landing-tick {
     animation: tick-read 0.3s ease-out both;
     animation-delay: calc(var(--delay, 0s) + 1.4s);
@@ -379,11 +277,7 @@ body,
     animation: float 6s ease-in-out infinite;
   }
 
-  /* Cards fade and rise in as they scroll into view. animation-timeline:
-     view() ties the animation to the element's own position on screen
-     instead of to time - no JavaScript, no IntersectionObserver. Browsers
-     that do not support it skip this block (@supports), and the cards are
-     simply there. */
+  /* fades cards in on scroll; browsers without view() just show them */
   @supports (animation-timeline: view()) {
     .reveal {
       animation: reveal linear both;

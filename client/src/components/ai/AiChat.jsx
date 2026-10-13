@@ -21,7 +21,6 @@ import AiComposer from './AiComposer.jsx'
 
 const NEAR_BOTTOM_PX = 120
 const LOAD_OLDER_PX = 80
-// Show "N messages left today" once someone gets this close to the limit.
 const SHOW_LEFT_FROM = 5
 
 const SUGGESTIONS = [
@@ -31,29 +30,21 @@ const SUGGESTIONS = [
   'Translate "How are you?" into Hindi',
 ]
 
-// The PingMe AI chat. Questions go to the server over REST (they may carry a
-// file); the answer streams back over the socket - see useSocketEvents and
-// server/src/services/aiService.js.
 export default function AiChat() {
   const ai = useChatStore((s) => s.ai)
   const store = useChatStore.getState
-  // Escape closes PingMe AI (unless a dialog or a recording is using it).
   useEscapeKey(() => store().setActiveConversation(null))
-  const [viewing, setViewing] = useState(null) // a photo open full size
+  const [viewing, setViewing] = useState(null)
   const [confirmClear, setConfirmClear] = useState(false)
   const { items, status, latest, available, imageGeneration, dailyLimit, usedToday, hasMore } = ai
   const answering = latest?.role === 'model' && latest.status === 'streaming'
   const latestAnswerId = [...items].reverse().find((m) => m.role === 'model' && m.id)?.id
 
-  // Load (or refresh) the latest page every time the chat is opened, and
-  // the summary too, for an up-to-date "messages left today".
   useEffect(() => {
     store().fetchAiMessages()
     store().fetchAiSummary()
   }, [store])
 
-  // Sends a question that is shown on screen already (`pending`, which has
-  // no id yet). Used for the first try and for Retry.
   async function deliver(pending) {
     const { clientId } = pending
     store().updatePendingAiMessage(clientId, { status: pending.file ? 'uploading' : 'sending', progress: 0 })
@@ -63,8 +54,7 @@ export default function AiChat() {
         (progress) => store().updatePendingAiMessage(clientId, { progress }),
       )
       store().addAiMessages([question, answer].filter(Boolean))
-      // The saved copy now shows the file from the server - release the
-      // temporary blob: URL that previewed it.
+      // The saved copy uses the server's file, so free the preview blob URL
       if (pending.attachment) URL.revokeObjectURL(pending.attachment.url)
     } catch (err) {
       store().updatePendingAiMessage(clientId, { status: 'failed' })
@@ -72,9 +62,7 @@ export default function AiChat() {
     }
   }
 
-  // Optimistic, like a chat message: the question appears at once (a file
-  // previewed from a blob: URL), with a clientId made here so a Retry is
-  // recognised by the server instead of being saved twice.
+  // The clientId is made here so the server recognises a Retry instead of saving it twice
   function send({ text, file, voice, mode }) {
     const pending = {
       id: null,
@@ -232,8 +220,6 @@ export default function AiChat() {
   )
 }
 
-// What PingMe AI does with what you send - shown before the first message
-// and at the start of the history.
 function Disclosure() {
   return (
     <p className="mx-auto max-w-md rounded-lg bg-surface/80 px-3 py-2 text-center text-xs leading-relaxed text-slate-500 shadow-sm">
@@ -274,14 +260,9 @@ function Welcome({ onPick }) {
   )
 }
 
-// A question keeps its clientId from the moment it is typed, so its bubble
-// is not replaced when the saved copy arrives. Answers have no clientId.
+// Questions are keyed by clientId so the bubble isn't remounted when the saved copy arrives
 const keyOf = (message) => message?.clientId ?? message?.id ?? null
 
-// The same scrolling rules as a chat: open at the bottom, keep the place
-// when older messages load above, and follow new text down only if the
-// reader is already near the bottom - except a question I just asked,
-// which always scrolls into view.
 function AiMessageList({ items, hasMore, latestAnswerId, onOpenImage, ...actions }) {
   const fetchOlder = useChatStore((s) => s.fetchOlderAiMessages)
   const listRef = useRef(null)
@@ -289,13 +270,10 @@ function AiMessageList({ items, hasMore, latestAnswerId, onOpenImage, ...actions
   const lastKey = useRef(null)
   const restoreFrom = useRef(null)
   const [loadingOlder, setLoadingOlder] = useState(false)
-  // Messages already there when the chat opened don't slide in - only new ones.
   const [shownAtOpen] = useState(() => new Set(items.map(keyOf)))
 
-  // The keyboard opening makes the list shorter - keep the newest in view.
   useKeepBottomOnResize(listRef, nearBottom)
 
-  // Runs on every change, including each streamed piece of an answer.
   useLayoutEffect(() => {
     const el = listRef.current
     if (!el) return
@@ -324,7 +302,7 @@ function AiMessageList({ items, hasMore, latestAnswerId, onOpenImage, ...actions
     }
   }
 
-  // A photo only gets its real height once it loads - stay at the bottom.
+  // A photo only gets its real height once it loads, so stay at the bottom
   function handleMediaLoad() {
     const el = listRef.current
     if (el && nearBottom.current) el.scrollTop = el.scrollHeight

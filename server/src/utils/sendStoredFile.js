@@ -1,8 +1,6 @@
 import { openFile } from '../services/storageService.js'
 
-// Parses a "Range: bytes=..." header for a file of `size` bytes.
-// Returns { start, end } (inclusive), null for "no range, send it all", or
-// 'invalid' for a range that cannot be satisfied.
+// Returns { start, end } (inclusive), null for no range, or 'invalid'
 export function parseRange(header, size) {
   if (!header) return null
   const match = /^bytes=(\d*)-(\d*)$/.exec(header.trim())
@@ -22,14 +20,7 @@ export function parseRange(header, size) {
   return { start, end }
 }
 
-// Streams a stored file into the HTTP response.
-//
-// Range support is what lets a <video> seek: the browser asks for just the
-// part it needs ("bytes=1000000-") and we answer 206 Partial Content.
-//
-// `inline: false` sends Content-Disposition: attachment, which makes the
-// browser download the file instead of opening it - always used for
-// documents, so a file can never be rendered as a page on our domain.
+// Range support is what lets a <video> seek (206 Partial Content)
 export function sendStoredFile(req, res, next, file) {
   const { fileId, size, mimeType, name, inline, cache } = file
   const range = parseRange(req.headers.range, size)
@@ -40,11 +31,9 @@ export function sendStoredFile(req, res, next, file) {
   }
 
   if (inline) res.set('Content-Disposition', 'inline')
-  else res.attachment(name) // sets Content-Disposition: attachment; filename="..."
+  else res.attachment(name)
 
-  // Set AFTER res.attachment(), which would otherwise pick a Content-Type
-  // from the file's extension. We only trust the type detected from the
-  // file's own bytes when it was uploaded.
+  // After res.attachment(), which would guess a type from the extension; only the detected type is trusted
   res.set({
     'Content-Type': mimeType,
     'Accept-Ranges': 'bytes',
@@ -61,8 +50,7 @@ export function sendStoredFile(req, res, next, file) {
 
   const stream = openFile(fileId, range)
   stream.on('error', (err) => {
-    // Before any bytes are sent we can still answer with a proper error;
-    // after that the only honest option is to cut the connection.
+    // Once bytes are sent, the only option left is to cut the connection
     if (!res.headersSent) next(err)
     else res.destroy(err)
   })

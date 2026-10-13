@@ -9,13 +9,9 @@ const SIZES = {
   xl: 'h-24 w-24 text-3xl',
 }
 
-// The profile picture if there is one, otherwise initials on a coloured
-// circle. `online` adds the green dot; leave it undefined for users whose
-// presence we are not allowed to know.
+// Leave `online` undefined for users whose presence we are not allowed to know.
 export default function Avatar({ user, size = 'md', online }) {
-  // If the picture fails to load (deleted a moment ago, network error), fall
-  // back to initials. Remembering WHICH url failed means a new picture is
-  // tried again automatically.
+  // Remember WHICH url failed, so a new picture is tried again automatically.
   const [failedUrl, setFailedUrl] = useState(null)
   const showPhoto = user.avatarUrl && user.avatarUrl !== failedUrl
 
@@ -39,8 +35,6 @@ export default function Avatar({ user, size = 'md', online }) {
       )}
       {online !== undefined && (
         <span className="absolute right-0 bottom-0 h-3 w-3" aria-hidden="true">
-          {/* A soft pulse behind the dot, only while actually online - makes
-              "online" read as a live signal rather than a static colour. */}
           {online && (
             <span className="animate-online-pulse absolute inset-0 rounded-full bg-emerald-400" />
           )}

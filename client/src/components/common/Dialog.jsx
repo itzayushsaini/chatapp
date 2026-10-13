@@ -1,11 +1,6 @@
 import { useEffect, useId, useRef } from 'react'
 
-// A modal built on the browser's own <dialog> element. showModal() gives us,
-// for free: focus moves into the dialog and stays there, Escape closes it,
-// the page behind cannot be clicked, and screen readers announce it.
-//
-// The content is only rendered while open, so a form inside starts fresh
-// every time the dialog opens.
+// Content is only rendered while open, so a form inside starts fresh each time.
 export default function Dialog({ open, onClose, title, children, wide = false }) {
   const ref = useRef(null)
   const titleId = useId()
@@ -20,13 +15,10 @@ export default function Dialog({ open, onClose, title, children, wide = false })
     <dialog
       ref={ref}
       aria-labelledby={titleId}
-      // Fired by Escape and by dialog.close() - keep React's state in step.
       onClose={onClose}
-      // A click on the dialog element itself (not its content) is a click on
-      // the dark backdrop around it.
+      // A click on the <dialog> itself (not its content) is a click on the backdrop.
       onClick={(e) => e.target === ref.current && onClose()}
-      // text-left: a dialog opened from a centred section (the home page's
-      // hero) would otherwise inherit text-align: center.
+      // text-left: otherwise it inherits text-align: center from a centred section.
       className={`m-auto w-[calc(100%-2rem)] rounded-2xl bg-surface p-0 text-left shadow-xl backdrop:bg-black/50 ${
         wide ? 'max-w-3xl' : 'max-w-md'
       }`}

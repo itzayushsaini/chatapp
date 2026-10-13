@@ -5,8 +5,6 @@ import * as updates from '../controllers/updates.controller.js'
 import { requireAuth } from '../middleware/requireAuth.js'
 import { objectId, validate } from '../middleware/validate.js'
 
-// Reading the "PingMe" updates channel - any logged-in user. Posting and
-// deleting are admin routes (see admin.routes.js).
 const router = Router()
 
 router.use(requireAuth)

@@ -4,13 +4,6 @@ import Button from './Button.jsx'
 import Dialog from './Dialog.jsx'
 import Spinner from './Spinner.jsx'
 
-// "Are you sure?" - used for everything that is hard to undo: log out,
-// clear chat, block, remove friend. Our own dialog rather than
-// window.confirm(), so it looks like the rest of the app, works in dark
-// mode, and can show a spinner while the action runs.
-//
-// `onConfirm` may be async: the buttons are disabled until it finishes, and
-// the dialog closes itself afterwards.
 export default function ConfirmDialog({
   open,
   onClose,

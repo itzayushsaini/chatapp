@@ -1,23 +1,8 @@
-// A stand-in for Google's Gemini API, for the end-to-end tests ONLY - it is
-// never part of the app itself. The browser tests must never send anything
-// to Google: no real key, no cost, and the same answer every run.
-//
-// The @google/genai SDK makes every request with the global fetch(), so this
-// wraps fetch: requests to Google's API get a made-up answer in Google's own
-// format (a "data: {...}" line per streamed piece); everything else goes to
-// the real fetch untouched.
-//
-// What it answers depends on the question:
-//   contains "slow" - a long story, one piece every 400 ms (to press Stop)
-//   contains "fail" - Google's "model overloaded" error (503); with
-//                     "fail once", only the first attempt fails (all three
-//                     requests of it), so "Try again" then works
-//   anything else   - reasoning, then a short Markdown answer that repeats
-//                     the question and says which files it was sent
+// Fake Gemini for the e2e server: the SDK uses global fetch, so wrapping fetch keeps every request away from Google.
+// "slow" streams slowly (to press Stop), "fail" gives a 503, "fail once" fails only the first attempt.
 
 const GOOGLE_API = 'generativelanguage.googleapis.com'
 
-// A small green square, as the "created" picture.
 const PICTURE =
   'iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAIAAACQkWg2AAAAFUlEQVR4nGNgWNFCGhrVMKph+GoAAPnmLBDphfWcAAAAAElFTkSuQmCC'
 
@@ -58,8 +43,6 @@ function streamResponse({ delay, pieces }, signal) {
   const encoder = new TextEncoder()
   const body = new ReadableStream({
     async start(controller) {
-      // The Stop button aborts the request - end the stream the way a real
-      // aborted fetch does.
       signal?.addEventListener('abort', () => {
         try {
           controller.error(new DOMException('This operation was aborted', 'AbortError'))
@@ -83,7 +66,7 @@ const json = (status, data) =>
 
 export function installFakeGemini() {
   const realFetch = globalThis.fetch
-  const failuresSoFar = new Map() // question -> requests failed (for "fail once")
+  const failuresSoFar = new Map()
 
   globalThis.fetch = async (input, init = {}) => {
     const url = typeof input === 'string' ? input : input.url ?? String(input)
@@ -95,7 +78,6 @@ export function installFakeGemini() {
     const question = last.filter((p) => p.text && !p.text.startsWith('(The user forwarded')).map((p) => p.text).join(' ')
     const files = last.filter((p) => p.inlineData).map((p) => p.inlineData.mimeType)
 
-    // "Imagine" - the only request that is not streamed.
     if (url.includes(':generateContent')) {
       return json(200, {
         candidates: [
@@ -109,8 +91,7 @@ export function installFakeGemini() {
     }
 
     const failed = failuresSoFar.get(question) ?? 0
-    // Three requests per attempt: the main model, the fallback model, then
-    // the main model again (see geminiClient.js).
+    // one attempt is 3 requests: main model, fallback model, main model again
     if (/\bfail\b/i.test(question) && (!/fail once/i.test(question) || failed < 3)) {
       failuresSoFar.set(question, failed + 1)
       return json(503, { error: { code: 503, message: 'The model is overloaded.', status: 'UNAVAILABLE' } })

@@ -1,7 +1,5 @@
 import { useChatStore } from '../../store/useChatStore.js'
 
-// Small pop-up notices: a new friend request, a request accepted, errors.
-// aria-live makes screen readers announce each new toast.
 export default function Toasts() {
   const toasts = useChatStore((s) => s.toasts)
   const dismiss = useChatStore((s) => s.dismissToast)

@@ -2,16 +2,11 @@ import { expect, test } from '@playwright/test'
 
 import { PASSWORD, register, searchFor } from './helpers.js'
 
-// Each browser "context" is a separate, isolated browser profile with its own
-// cookies - so two contexts are two different people on two computers.
-
 test('a logged-out visitor gets the home page at "/", and unknown routes get a 404 page', async ({ page }) => {
-  // Since Phase 19, "/" is the public home page for anyone not logged in.
   await page.goto('/')
   await expect(page).toHaveURL(/\/$/)
   await expect(page.getByRole('heading', { level: 1 })).toContainText('Real conversations')
 
-  // An address PingMe does not have shows a friendly 404, with a way home.
   await page.goto('/some/unknown/page')
   await expect(page).toHaveURL(/\/some\/unknown\/page$/)
   await expect(page.getByRole('heading', { level: 1 })).toHaveText('This page doesn’t exist')
@@ -19,7 +14,6 @@ test('a logged-out visitor gets the home page at "/", and unknown routes get a 4
   await expect(page).toHaveURL(/\/$/)
   await expect(page.getByRole('heading', { level: 1 })).toContainText('Real conversations')
 
-  // Pages that need an account still send you to log in.
   await page.goto('/settings')
   await expect(page).toHaveURL(/\/login$/)
   await expect(page.getByRole('heading', { name: 'Welcome back' })).toBeVisible()
@@ -36,14 +30,11 @@ test('two people find each other, become friends and chat in real time', async (
   await register(aman, 'aman_e2e', 'Aman Kumar')
   await register(priya, 'priya_e2e', 'Priya Sharma')
 
-  // Empty state shows my own username to share.
   await expect(aman.getByText('No friends yet')).toBeVisible()
 
-  // --- Search by name or username --------------------------------------
   await aman.getByRole('tab', { name: 'Add Friend' }).click()
   const search = aman.getByLabel('Search by name or username')
 
-  // Fewer than 3 letters can't be searched.
   await search.fill('pr')
   await expect(aman.getByRole('button', { name: 'Search' })).toBeDisabled()
 
@@ -51,11 +42,9 @@ test('two people find each other, become friends and chat in real time', async (
   await aman.getByRole('button', { name: 'Search' }).click()
   await expect(aman.getByText('No user found')).toBeVisible()
 
-  // Any part of the username, in any case.
   const priyaRow = await searchFor(aman, 'IYA_E2', 'priya_e2e')
   await expect(priyaRow).toContainText('Priya Sharma')
 
-  // --- Friend request, delivered live -----------------------------------
   await priyaRow.getByRole('button', { name: 'Add friend' }).click()
   await expect(priyaRow.getByText('Requested ·')).toBeVisible()
 
@@ -68,7 +57,6 @@ test('two people find each other, become friends and chat in real time', async (
   await expect(aman.getByText('Priya Sharma accepted your friend request')).toBeVisible()
   await expect(aman.getByRole('button', { name: 'Message' })).toBeVisible()
 
-  // --- Chat --------------------------------------------------------------
   await aman.getByRole('button', { name: 'Message' }).click()
   await expect(aman.getByRole('heading', { name: 'Priya Sharma' })).toBeVisible()
   const amanChat = aman.getByRole('region', { name: 'Chat with Priya Sharma' })
@@ -78,13 +66,10 @@ test('two people find each other, become friends and chat in real time', async (
   await amanInput.fill('Hello <b>Priya</b>')
   await amanInput.press('Enter')
 
-  // Rendered as text, never as HTML.
   const amanLog = aman.getByRole('log', { name: 'Messages' })
   await expect(amanLog.getByText('Hello <b>Priya</b>')).toBeVisible()
-  // Priya is online, so it reaches her app at once: grey double tick.
   await expect(amanLog.getByText('Delivered', { exact: true })).toBeVisible()
 
-  // Priya sees an unread badge and the preview, then opens the chat.
   await priya.getByRole('tab', { name: 'Chats' }).click()
   await expect(priya.getByLabel('1 unread')).toBeVisible()
   await priya.getByRole('button', { name: /Aman Kumar/ }).click()
@@ -96,14 +81,12 @@ test('two people find each other, become friends and chat in real time', async (
   await priyaInput.press('Enter')
   await expect(amanLog.getByText('Hi Aman!')).toBeVisible()
 
-  // --- The session and history survive a refresh ------------------------
   await aman.reload()
   await expect(aman.getByRole('heading', { name: 'Welcome back' })).toHaveCount(0)
   await aman.getByRole('button', { name: /Priya Sharma/ }).click()
   await expect(amanLog.getByText('Hi Aman!')).toBeVisible()
   await expect(amanLog.getByText('Hello <b>Priya</b>')).toBeVisible()
 
-  // --- Presence: Priya leaves --------------------------------------------
   await priyaContext.close()
   await expect(amanChat.getByText(/Last seen today/)).toBeVisible()
 
@@ -125,9 +108,7 @@ test('switching between two chats never shows the other chat\'s messages, and on
     await aman.getByRole('tab', { name: 'Chats' }).click()
   }
 
-  // Chat A has enough messages to be taller than the viewport. The composer
-  // is disabled until history has loaded, so wait for it to be usable first -
-  // typing into it earlier would silently do nothing.
+  // the composer is disabled until history loads, so wait before typing
   await aman.getByRole('button', { name: /Rahul Singh/ }).click()
   const amanLog = aman.getByRole('log', { name: 'Messages' })
   const amanInput2 = aman.getByLabel('Type a message')
@@ -138,16 +119,12 @@ test('switching between two chats never shows the other chat\'s messages, and on
     await amanLog.getByText(`Rahul message ${i}`, { exact: true }).waitFor()
   }
 
-  // Chat B - open it and send its own, distinct message.
   await aman.getByRole('button', { name: /Priya Sharma/ }).click()
   await expect(amanInput2).toBeEnabled()
   await amanInput2.fill('Priya message')
   await amanInput2.press('Enter')
   await amanLog.getByText('Priya message').waitFor()
 
-  // Switching back and forth must always show the RIGHT chat's content -
-  // never the previous one's - and the page itself must never scroll (only
-  // the message list, inside its own fixed-height panel, does).
   await aman.getByRole('button', { name: /Rahul Singh/ }).click()
   await expect(amanLog.getByText('Rahul message 1')).toBeVisible()
   await expect(amanLog.getByText('Priya message')).toHaveCount(0)
@@ -186,19 +163,13 @@ test('scrolling the message list never scrolls the page itself (no scroll chaini
   const box = await log.boundingBox()
   await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2)
 
-  // Without "the outer page must never scroll" (overflow: hidden on
-  // html/body, and overscroll-behavior on the panel itself), once the
-  // message list is scrolled to its own end, the browser's default "scroll
-  // chaining" hands any further wheel input to the page - which then
-  // scrolls the fixed-height layout out of view, revealing blank space.
-  for (let i = 0; i < 20; i++) await page.mouse.wheel(0, 400) // hard past the bottom
+  // wheel far past both ends: scroll chaining must not hand the rest to the page
+  for (let i = 0; i < 20; i++) await page.mouse.wheel(0, 400)
   await expect.poll(() => page.evaluate(() => window.scrollY)).toBe(0)
 
-  for (let i = 0; i < 20; i++) await page.mouse.wheel(0, -400) // hard past the top
+  for (let i = 0; i < 20; i++) await page.mouse.wheel(0, -400)
   await expect.poll(() => page.evaluate(() => window.scrollY)).toBe(0)
 
-  // The chat header stayed on screen throughout - proof the page itself
-  // never moved, not just that it settled back to 0 afterwards.
   await expect(page.getByRole('heading', { name: 'Rahul Singh' })).toBeVisible()
 })
 
@@ -206,7 +177,6 @@ test('logging out ends the session', async ({ page }) => {
   await register(page, 'rahul_e2e', 'Rahul')
 
   await page.getByRole('button', { name: 'Log out' }).click()
-  // It asks first - cancelling keeps you logged in.
   const confirm = page.getByRole('dialog', { name: 'Log out?' })
   await confirm.getByRole('button', { name: 'Cancel' }).click()
   await expect(page.getByText('@rahul_e2e').first()).toBeVisible()
@@ -215,13 +185,10 @@ test('logging out ends the session', async ({ page }) => {
   await confirm.getByRole('button', { name: 'Log out' }).click()
   await expect(page).toHaveURL(/\/login$/)
 
-  // The cookie is gone: going back to "/" shows the public home page, not
-  // the chat.
   await page.goto('/')
   await expect(page.getByRole('heading', { level: 1 })).toContainText('Real conversations')
   await expect(page.getByText('@rahul_e2e')).toHaveCount(0)
 
-  // And logging back in works (from the home page's "Log in").
   await page.getByRole('link', { name: 'Log in' }).first().click()
   await expect(page).toHaveURL(/\/login$/)
   await page.getByLabel('Username or email').fill('rahul_e2e')

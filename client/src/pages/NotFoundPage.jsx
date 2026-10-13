@@ -3,9 +3,6 @@ import { Link } from 'react-router'
 import { buttonClass } from '../components/common/buttonClass.js'
 import Logo from '../components/common/Logo.jsx'
 
-// Shown for any address PingMe does not have (App.jsx's catch-all route).
-// Works the same logged in or out: "Go to PingMe" lands on the chat or on
-// the home page, whichever applies.
 export default function NotFoundPage() {
   return (
     <main className="auth-background flex min-h-dvh flex-col items-center justify-center gap-6 bg-slate-50 px-6 text-center">

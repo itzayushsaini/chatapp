@@ -15,18 +15,11 @@ const TABS = [
   { id: 'settings', label: 'Settings', icon: SettingsIcon },
 ]
 
-// A standalone page, not part of the chat layout - reachable only via the
-// "Admin" link in the sidebar, itself only shown when user.isAdmin. The
-// route in App.jsx redirects anyone else straight back to "/".
 export default function AdminPage() {
   const { user } = useAuth()
   const [tab, setTab] = useState('overview')
 
   return (
-    // h-dvh + flex-col, with the scrolling confined to <main> below (same
-    // pattern SettingsPage.jsx uses) - so the header and tabs stay in view
-    // while the (potentially long) settings content scrolls underneath
-    // them, instead of scrolling away with everything else.
     <div className="flex h-dvh flex-col bg-slate-50">
       <header className="flex shrink-0 items-center gap-3 border-b border-slate-200 bg-surface px-4 py-3 sm:px-6">
         <Link

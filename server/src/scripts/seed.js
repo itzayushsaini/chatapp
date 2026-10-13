@@ -1,9 +1,4 @@
-// npm run seed - creates demo users, friendships and messages for trying the
-// app locally or for a demo in the viva.
-//
-// Safety:
-//  - refuses to run when NODE_ENV=production
-//  - never deletes anything: if the demo users already exist it stops
+// npm run seed: demo data. Refuses to run in production and never deletes anything.
 import bcrypt from 'bcryptjs'
 import mongoose from 'mongoose'
 
@@ -38,16 +33,13 @@ async function befriend(a, b) {
 }
 
 async function addMessages(conversation, lines) {
-  // Spread the messages out over the last two days so the date separators
-  // ("Yesterday", "Today") show up.
   const start = Date.now() - 2 * 24 * 60 * 60 * 1000
   const step = (2 * 24 * 60 * 60 * 1000) / (lines.length + 1)
   let last
   for (const [i, [sender, text]] of lines.entries()) {
     const createdAt = new Date(start + step * (i + 1))
     last = await Message.create({
-      // An explicit _id from the timestamp keeps _id order = time order,
-      // which is what history pagination relies on.
+      // _id from the timestamp keeps _id order = time order, which history paging relies on
       _id: mongoose.Types.ObjectId.createFromTime(createdAt.getTime() / 1000),
       conversation: conversation._id,
       sender: sender._id,
@@ -92,7 +84,6 @@ async function seed() {
   ])
   await befriend(aman, rahul)
 
-  // A pending request, so the Requests tab has something in it.
   await Friendship.create({
     pairKey: pairKey(sneha._id, aman._id),
     requester: sneha._id,

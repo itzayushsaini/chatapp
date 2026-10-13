@@ -14,24 +14,13 @@ import RegisterPage from './pages/RegisterPage.jsx'
 import ResetPasswordPage from './pages/ResetPasswordPage.jsx'
 import SettingsPage from './pages/SettingsPage.jsx'
 
-// Seven routes. Which ones you may see depends only on whether you are
-// logged in (and, for /admin, whether you are an admin), so the redirects
-// all live here in one place:
-//   "/"        -> the chat when logged in, the public home page when not
-//   logged out -> "/settings" and "/admin" send you to /login
-//   logged in  -> /login, /register, /forgot-password and /reset-password
-//                 all send you to "/"
-//   logged in but not an admin -> /admin sends you to "/"
-//   anything else -> a 404 page (with a button back to "/")
 export default function App() {
   const { user, loading, bootError, retrySession } = useAuth()
 
-  // Until /auth/me answers we do not know which page to show, so show
-  // neither - this is what prevents the login page flashing on refresh.
+  // wait for /auth/me so the login page doesn't flash on refresh
   if (loading) return <FullScreenLoader />
 
-  // The server could not be reached at all. Showing the login page here
-  // would be wrong - they may well be logged in already.
+  // server unreachable: not the login page, they may already be logged in
   if (bootError) {
     return (
       <ErrorScreen
@@ -54,8 +43,6 @@ export default function App() {
         element={user ? <Navigate to="/" replace /> : <ResetPasswordPage />}
       />
       {user ? (
-        // The socket only exists inside the logged-in part of the app, and
-        // both of these pages share it (see LoggedInLayout).
         <Route element={<LoggedInLayout />}>
           <Route path="/" element={<ChatPage />} />
           <Route path="/settings" element={<SettingsPage />} />

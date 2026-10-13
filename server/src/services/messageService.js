@@ -10,8 +10,6 @@ import { attachmentView } from './attachmentService.js'
 import { assertFriends, assertParticipant } from './friendService.js'
 import { getSettings } from './settingsService.js'
 
-// A quoted reply is shown as its snapshot from send time (see the model
-// comment) - the id lets the client jump to the original if it's still here.
 function replyToView(replyTo) {
   if (!replyTo) return null
   return {
@@ -22,12 +20,7 @@ function replyToView(replyTo) {
   }
 }
 
-// The one shape a message has when it leaves the server (REST and sockets).
-// `message.attachment` must be populated (the Attachment document) or null.
-//
-// A message deleted "for everyone" is a soft delete: the row still exists,
-// but every reader is shown the same empty placeholder rather than the
-// original text or attachment.
+// A soft-deleted message is never sent with its real text or file
 export function messageView(message) {
   if (message.deletedForEveryone) {
     return {
@@ -58,31 +51,20 @@ export function messageView(message) {
   }
 }
 
-// Keyset ("cursor") pagination: "give me `limit` messages older than
-// message X". MongoDB ids grow over time, so `_id < before` means "older".
-//
-// We never use skip/offset. With skip, a message arriving while you scroll
-// shifts every page by one, so you see a message twice or miss one; skip also
-// gets slower the further back you go. A cursor has neither problem.
+// Cursor paging, not skip: new messages arriving would shift skip-based pages
 export async function getHistory(meId, conversationId, { before, limit }) {
   const conversation = await assertParticipant(conversationId, meId)
 
-  // A message I deleted "for me" is excluded entirely, not just flagged, so
-  // it never renders on my screen again. This can make a page come back with
-  // fewer than `limit` visible rows even though older history remains -
-  // acceptable for a chat this size, and simpler than shifting the cursor to
-  // compensate.
   const filter = { conversation: conversationId, deletedFor: { $ne: meId } }
   if (before) filter._id = { $lt: before }
 
-  // Fetch one extra row: if it exists, there are older messages to load.
   const rows = await Message.find(filter)
     .sort({ _id: -1 })
     .limit(limit + 1)
     .populate('attachment')
 
   const hasMore = rows.length > limit
-  const page = rows.slice(0, limit).reverse() // oldest -> newest for display
+  const page = rows.slice(0, limit).reverse()
 
   const otherId = conversation.participants.find((p) => String(p) !== String(meId))
   const theirRead = conversation.lastRead?.get(String(otherId))
@@ -91,21 +73,15 @@ export async function getHistory(meId, conversationId, { before, limit }) {
   return {
     messages: page.map(messageView),
     hasMore,
-    // How far the OTHER person has read, and how far their app has received,
-    // so the client can show the right ticks on my own messages without
-    // waiting for a live event.
     theirReadUpTo: theirRead?.upTo ? String(theirRead.upTo) : null,
     theirDeliveredUpTo: theirDelivered?.upTo ? String(theirDelivered.upTo) : null,
   }
 }
 
-// Records that `recipientId`'s app has received everything up to
-// `upToMessageId` in this conversation. ONE atomic update whose filter is the
-// "only moves forward" rule, so two tabs (or a live send racing a reconnect
-// catch-up) can never move the pointer backwards. Returns true if it moved.
+// One atomic update whose filter only lets the pointer move forward, so racing tabs can't move it back
 export async function markDelivered(recipientId, conversationId, upToMessageId) {
   const path = `lastDelivered.${recipientId}`
-  // Cast explicitly: a path inside a Map is not always cast automatically.
+  // Mongoose doesn't always cast a path inside a Map, so cast it ourselves
   const upTo = new mongoose.Types.ObjectId(String(upToMessageId))
   const result = await Conversation.updateOne(
     {
@@ -118,10 +94,6 @@ export async function markDelivered(recipientId, conversationId, upToMessageId) 
   return result.modifiedCount > 0
 }
 
-// Called when a user comes online: everything already waiting for them in
-// every conversation now counts as delivered. Returns who needs telling -
-// [{ senderId, conversationId, upToMessageId }] - for only the pointers that
-// actually moved, so reconnecting repeatedly announces nothing new.
 export async function catchUpDelivered(userId) {
   const conversations = await Conversation.find({ participants: userId }, { participants: 1 })
   const moved = []
@@ -144,9 +116,6 @@ export async function catchUpDelivered(userId) {
   return moved
 }
 
-// Records that I have read up to `upToMessageId` in this conversation.
-// Returns the other participant's id, so the caller can tell them, or null
-// if this was not actually a step forward (nothing to announce).
 export async function markRead(meId, conversationId, upToMessageId) {
   const conversation = await assertParticipant(conversationId, meId)
   const otherId = conversation.participants.find((p) => String(p) !== String(meId))
@@ -154,8 +123,7 @@ export async function markRead(meId, conversationId, upToMessageId) {
   const key = `lastRead.${meId}`
   const current = conversation.lastRead?.get(String(meId))
 
-  // A read pointer only ever moves forward. Comparing by string works
-  // because same-length hex ObjectIds sort the same as their timestamps.
+  // only moves forward; same-length hex ids compare correctly as strings
   if (current?.upTo && String(current.upTo) >= String(upToMessageId)) return null
 
   await Conversation.updateOne(
@@ -169,11 +137,6 @@ async function findExisting(meId, clientId) {
   return Message.findOne({ sender: meId, clientId }).populate('attachment')
 }
 
-// Builds the `replyTo` snapshot stored on the new message, or null. Looked up
-// scoped to the SAME conversation, so a stray or cross-conversation id is
-// simply treated as "no reply" rather than failing the whole send - the
-// original may also have been deleted between the user tapping Reply and the
-// message actually going out.
 async function buildReplySnapshot(conversationId, replyToId) {
   if (!replyToId) return null
   const original = await Message.findOne({ _id: replyToId, conversation: conversationId }).populate(
@@ -198,38 +161,26 @@ function lastMessageSnapshot(message, attachment) {
   }
 }
 
-// Saves a message. The ORDER of the checks is the point: nothing is saved
-// unless I am in the conversation AND we are still friends. The caller
-// (the socket handler) emits and acknowledges only after this returns.
-//
-// Returns { message, otherId, created }. created is false when this was a
-// retry of a message we already have.
 export async function sendMessage(meId, { conversationId, text, clientId, attachmentId, replyToId }) {
   const conversation = await assertParticipant(conversationId, meId)
   const otherId = String(conversation.participants.find((p) => String(p) !== String(meId)))
   await assertFriends(meId, otherId)
 
-  // Idempotency: the browser retries with the SAME clientId after a timeout.
-  // If the first attempt was actually saved, return that one.
+  // a retry after a timeout reuses the clientId, so return the saved one
   const existing = await findExisting(meId, clientId)
   if (existing) return { message: messageView(existing), otherId, created: false }
 
-  // The message's id is made now so the attachment can be claimed for it.
   const messageId = new mongoose.Types.ObjectId()
 
   let attachment = null
   if (attachmentId) {
-    // Claim the upload in ONE atomic step. The filter is the security check:
-    // it must be MY upload, for THIS conversation, and not used by another
-    // message yet - so nobody can send someone else's file, move a file into
-    // a different chat, or attach one file to two messages.
+    // One atomic claim: my upload, this chat, not used yet, so it can't be stolen, moved or reused
     attachment = await Attachment.findOneAndUpdate(
       { _id: attachmentId, uploader: meId, conversation: conversationId, message: null },
       { message: messageId },
       { new: true },
     )
     if (!attachment) {
-      // Maybe it was claimed by an identical retry that got in first.
       const retried = await findExisting(meId, clientId)
       if (retried) return { message: messageView(retried), otherId, created: false }
       throw new AppError(404, 'Attachment not found')
@@ -250,19 +201,15 @@ export async function sendMessage(meId, { conversationId, text, clientId, attach
       replyTo,
     })
   } catch (err) {
-    // Release the claim so the upload can still be sent.
     if (attachment) await Attachment.updateOne({ _id: attachment._id, message: messageId }, { message: null })
-    // Two copies of the same retry arriving at once: the unique index on
-    // (sender, clientId) lets one through; return that one.
+    // the unique (sender, clientId) index lets only one of two identical retries through
     if (err.code === 11000) {
       const saved = await findExisting(meId, clientId)
       return { message: messageView(saved), otherId, created: false }
     }
     throw err
   }
-  // Update the sidebar preview - but only if no NEWER message got there
-  // first, so two messages sent at the same moment cannot leave the older
-  // one as the preview.
+  // only if no newer message got there first, so the preview never goes backwards
   await Conversation.updateOne(
     {
       _id: conversationId,
@@ -271,13 +218,10 @@ export async function sendMessage(meId, { conversationId, text, clientId, attach
     { lastMessage: lastMessageSnapshot(message, attachment) },
   )
 
-  // A plain copy with the full attachment in place of its id, for messageView.
   const view = messageView({ ...message.toObject(), attachment })
   return { message: view, otherId, created: true }
 }
 
-// The client shape of a sidebar preview - see lastMessageView in
-// friendService.js, which this deliberately matches.
 function lastMessageClientView(snapshot) {
   if (!snapshot) return null
   return {
@@ -288,11 +232,7 @@ function lastMessageClientView(snapshot) {
   }
 }
 
-// If the message I just deleted was the conversation's preview, recompute it
-// from whatever is now the newest non-deleted message (or clear it to null),
-// and return the new preview so the caller can tell connected clients about
-// it. Returns undefined (not null) when this message was NOT the preview, so
-// the caller can tell "nothing to update" apart from "cleared to nothing".
+// undefined means "preview unchanged", which is different from null ("no preview left")
 async function recomputeLastMessageIfNeeded(conversationId, deletedMessageId) {
   const conversation = await Conversation.findById(conversationId)
   if (!conversation?.lastMessage || String(conversation.lastMessage.messageId) !== String(deletedMessageId)) {
@@ -308,10 +248,6 @@ async function recomputeLastMessageIfNeeded(conversationId, deletedMessageId) {
   return lastMessageClientView(snapshot)
 }
 
-// Deletes a message "for me" (hidden on my devices only) or "for everyone"
-// (soft-deleted for both). Returns { otherId, mode, lastMessage } so the
-// handler knows who else, if anyone, needs telling, and whether the sidebar
-// preview changed. `lastMessage` is only present when it actually changed.
 export async function deleteMessage(meId, { conversationId, messageId, mode }) {
   const conversation = await assertParticipant(conversationId, meId)
   const otherId = String(conversation.participants.find((p) => String(p) !== String(meId)))
@@ -323,9 +259,6 @@ export async function deleteMessage(meId, { conversationId, messageId, mode }) {
     if (String(message.sender) !== String(meId)) {
       throw new AppError(403, 'You can only delete your own messages for everyone')
     }
-    // Admin-editable (default 60 minutes) - matches the intent of WhatsApp's
-    // own limit: long enough to undo a mistake, short enough that it can't
-    // rewrite a conversation's history much later.
     const settings = await getSettings()
     const windowMs = settings.deleteForEveryoneWindowMinutes * 60 * 1000
     if (Date.now() - message.createdAt.getTime() > windowMs) {
@@ -340,16 +273,10 @@ export async function deleteMessage(meId, { conversationId, messageId, mode }) {
     return { otherId, mode, lastMessage }
   }
 
-  // mode === 'me': hides it on my own devices only, never announced to the
-  // other participant, and never touches the shared sidebar preview.
   await Message.updateOne({ _id: messageId }, { $addToSet: { deletedFor: meId } })
   return { otherId, mode, lastMessage: undefined }
 }
 
-// Copies a message's content into one or more OTHER conversations, as a brand
-// new message (own id, own clientId, marked forwarded: true). Each target is
-// checked independently, so being unfriended with one recipient doesn't
-// block forwarding to the rest.
 export async function forwardMessage(meId, { messageId, toConversationIds }) {
   const settings = await getSettings()
   if (!settings.forwardingEnabled) throw new AppError(403, 'Forwarding is currently disabled')
@@ -382,7 +309,6 @@ export async function forwardMessage(meId, { messageId, toConversationIds }) {
           mimeType: source.attachment.mimeType,
           size: source.attachment.size,
           kind: source.attachment.kind,
-          // A forwarded voice note keeps its length and waveform.
           durationMs: source.attachment.durationMs ?? null,
           waveform: source.attachment.waveform?.length ? source.attachment.waveform : undefined,
           message: newMessageId,
@@ -418,16 +344,8 @@ export async function forwardMessage(meId, { messageId, toConversationIds }) {
   return results
 }
 
-// ---------------------------------------------------------------------------
-// Contact info panel: shared media and files, clear chat, mute
-// ---------------------------------------------------------------------------
-
 const SHARED_LIMIT = 200
 
-// Every photo, video and document sent in this conversation that I can still
-// see - nothing deleted for everyone, nothing I deleted (or cleared) for me.
-// Newest first. Built from the MESSAGES, not the Attachment collection, so a
-// deleted message's file never shows up here.
 export async function listSharedAttachments(meId, conversationId) {
   await assertParticipant(conversationId, meId)
   const messages = await Message.find({
@@ -450,9 +368,6 @@ export async function listSharedAttachments(meId, conversationId) {
     }))
 }
 
-// "Clear chat": every message in the conversation disappears from MY view
-// only - exactly "delete for me", applied to all of them in one update. The
-// other person keeps their whole history.
 export async function clearConversation(meId, conversationId) {
   await assertParticipant(conversationId, meId)
   await Message.updateMany(

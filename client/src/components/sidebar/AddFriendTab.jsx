@@ -14,16 +14,12 @@ import Button from '../common/Button.jsx'
 import { SearchIcon } from '../common/Icons.jsx'
 import Spinner from '../common/Spinner.jsx'
 
-// Search by name or username: type at least 3 letters of either, and
-// everyone whose name or username contains them is listed (up to 20, best
-// matches first - an exact username at the top). The server leaves out
-// myself, suspended accounts and anyone blocked either way.
 const MIN_CHARS = 3
 
 export default function AddFriendTab() {
   const [query, setQuery] = useState('')
-  const [results, setResults] = useState(null) // [{ user, relationship }] | null before a search
-  const [searched, setSearched] = useState('') // the text the results are for
+  const [results, setResults] = useState(null)
+  const [searched, setSearched] = useState('')
   const [searching, setSearching] = useState(false)
   const [error, setError] = useState('')
 
@@ -113,8 +109,7 @@ function ResultCard({ result, refresh }) {
   const outgoing = requests.outgoing.find((r) => r.user.id === user.id)
   const incoming = requests.incoming.find((r) => r.user.id === user.id)
 
-  // The store is kept live by socket events, so if it knows something newer
-  // (e.g. they accepted while this card was open) it wins.
+  // The store is kept live by socket events, so when it knows something newer it wins.
   const relationship =
     localRelationship === 'self'
       ? 'self'
@@ -126,8 +121,7 @@ function ResultCard({ result, refresh }) {
             ? 'pending_incoming'
             : localRelationship
 
-  // Finds the request id for this person, refetching the list once if we do
-  // not have it (the search response itself has no request id).
+  // The search response has no request id, so refetch the requests once if needed.
   async function requestIdFor(list) {
     const find = () => store().requests[list].find((r) => r.user.id === user.id)?.id
     if (!find()) await store().fetchRequests()
@@ -140,7 +134,7 @@ function ResultCard({ result, refresh }) {
       await action()
     } catch (err) {
       store().addToast(errorMessage(err), 'error')
-      refresh() // the relationship changed under us - ask the server again
+      refresh()
     } finally {
       setBusy(false)
     }

@@ -15,31 +15,23 @@ import PingMeAvatar from './PingMeAvatar.jsx'
 const NEAR_BOTTOM_PX = 120
 const LOAD_OLDER_PX = 80
 
-// The "PingMe" updates channel: posts from the PingMe team, shown like a
-// chat, but read-only - there is no message box, only a note saying so,
-// exactly like WhatsApp's own official chat.
 export default function UpdatesChannel() {
   const updates = useChatStore((s) => s.updates)
   const store = useChatStore.getState
-  // Escape closes the channel (unless a photo is open full size).
   useEscapeKey(() => store().setActiveConversation(null))
   const { items, hasMore, status, latest, unreadCount } = updates
 
-  // Load (or refresh) the latest page every time the channel is opened.
   useEffect(() => {
     store().fetchUpdates()
   }, [store])
 
-  // Mark everything read - but only while the tab is actually visible, the
-  // same rule as a chat: open in a minimised tab is not "seen". Runs again
-  // whenever a new post arrives while the channel is open.
+  // Only marked read while the tab is visible, like a chat
   useEffect(() => {
     function markRead() {
       if (document.hidden) return
       const { latest: newest, unreadCount: count } = store().updates
       if (!newest || count === 0) return
       store().clearUpdatesUnread()
-      // If this fails, ask the server for the real count again.
       markUpdatesRead(newest.id).catch(() => store().fetchUpdatesSummary())
     }
     markRead()
@@ -88,7 +80,6 @@ export default function UpdatesChannel() {
         <UpdatesList items={items} hasMore={hasMore} />
       )}
 
-      {/* No message box: only PingMe posts here. */}
       <div className="flex items-center justify-center gap-2 border-t border-slate-200 bg-slate-100 px-4 py-3.5 text-sm text-slate-500">
         <LockIcon className="h-4 w-4 shrink-0" />
         Only PingMe can send messages here
@@ -97,9 +88,6 @@ export default function UpdatesChannel() {
   )
 }
 
-// The posts, oldest at the top - the same scrolling rules as a chat: open at
-// the bottom, keep the reader's place when older posts load above, and only
-// follow a new post down if the reader was already near the bottom.
 function UpdatesList({ items, hasMore }) {
   const fetchOlder = useChatStore((s) => s.fetchOlderUpdates)
   const listRef = useRef(null)
@@ -107,7 +95,7 @@ function UpdatesList({ items, hasMore }) {
   const lastId = useRef(null)
   const restoreFrom = useRef(null)
   const [loadingOlder, setLoadingOlder] = useState(false)
-  const [viewing, setViewing] = useState(null) // the post whose photo is open full size
+  const [viewing, setViewing] = useState(null)
 
   useLayoutEffect(() => {
     const el = listRef.current
@@ -136,7 +124,7 @@ function UpdatesList({ items, hasMore }) {
     }
   }
 
-  // A photo only gets its real height once it loads - stay at the bottom.
+  // A photo only gets its real height once it loads, so stay at the bottom
   function handleImageLoad() {
     const el = listRef.current
     if (el && nearBottom.current) el.scrollTop = el.scrollHeight
@@ -202,8 +190,6 @@ function UpdatesList({ items, hasMore }) {
   )
 }
 
-// One post: an incoming bubble from PingMe. The text is plain text, shown
-// with its line breaks (never as HTML).
 function UpdatePost({ update, onOpenImage, onImageLoad }) {
   return (
     <li className="flex justify-start">

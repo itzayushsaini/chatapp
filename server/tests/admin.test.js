@@ -22,7 +22,6 @@ describe('GET /api/settings/public', () => {
       registrationOpen: true,
       allowedEmailDomains: ['gmail.com'],
       announcement: { enabled: false, text: '' },
-      // No Google credentials in the test environment.
       googleSignIn: false,
     })
   })
@@ -140,8 +139,6 @@ describe('user management', () => {
     await makeAdmin(user.id)
     const zoya = await registerUser('zoya', { displayName: 'Zoya Khan' })
     const bina = await registerUser('bina', { displayName: 'Bina Roy' })
-    // Make the order unmistakable: aman oldest, then zoya, then bina - and
-    // only zoya has ever been seen online.
     await User.updateOne({ _id: user.id }, { createdAt: new Date('2026-01-01') })
     await User.updateOne({ _id: zoya.user.id }, { createdAt: new Date('2026-02-01'), lastSeen: new Date('2026-09-01') })
     await User.updateOne({ _id: bina.user.id }, { createdAt: new Date('2026-03-01') })
@@ -151,14 +148,10 @@ describe('user management', () => {
 
     expect(await names('newest')).toEqual(['bina', 'zoya', 'aman'])
     expect(await names('oldest')).toEqual(['aman', 'zoya', 'bina'])
-    // Case does not matter: "aman verma" comes before "Bina Roy" and "Zoya Khan".
     expect(await names('name')).toEqual(['aman', 'bina', 'zoya'])
     expect((await names('lastSeen'))[0]).toBe('zoya')
-    // Newest first when no sort is given.
     expect((await agent.get('/api/admin/users')).body.users[0].username).toBe('bina')
 
-    // An unknown sort (or a list of them) is a validation error, never
-    // passed to the database.
     expect((await agent.get('/api/admin/users').query({ sort: 'passwordHash' })).status).toBe(400)
     expect((await agent.get('/api/admin/users?sort=name&sort=oldest')).status).toBe(400)
   })
@@ -256,7 +249,6 @@ describe('activity (the charts on the admin Overview)', () => {
     const dates = res.body.days.map((d) => d.date)
     expect(dates).toEqual([...dates].sort())
     expect(dates.at(-1)).toBe(new Date().toISOString().slice(0, 10))
-    // Only the admin's own account exists, created today.
     const today = res.body.days.at(-1)
     expect(today).toEqual({ date: dates.at(-1), users: 1, messages: 0, aiAnswers: 0 })
     expect(res.body.days.slice(0, -1).every((d) => d.users === 0 && d.messages === 0)).toBe(true)
@@ -272,11 +264,11 @@ describe('activity (the charts on the admin Overview)', () => {
     await make(daysAgo(0))
     await make(daysAgo(0))
     await make(daysAgo(2))
-    await make(daysAgo(40)) // older than the window: not counted
+    await make(daysAgo(40))
     const ai = (extra) => AiMessage.create({ user: a.user.id, text: 'x', ...extra })
     await ai({ role: 'model', status: 'done', createdAt: daysAgo(1) })
-    await ai({ role: 'model', status: 'error', createdAt: daysAgo(1) }) // failed answers do not count
-    await ai({ role: 'user', createdAt: daysAgo(1) }) // a question is not an answer
+    await ai({ role: 'model', status: 'error', createdAt: daysAgo(1) })
+    await ai({ role: 'user', createdAt: daysAgo(1) })
 
     const res = await a.agent.get('/api/admin/stats/activity').query({ days: 7 })
     expect(res.body.days).toHaveLength(7)

@@ -1,13 +1,9 @@
-// The look of every button, as a plain class list - used by Button.jsx, and
-// on its own wherever a LINK has to look like a button (the home page's
-// "Get started" and "Log in" navigate to other pages, so they must be <a>,
-// not <button>). A separate file because a file of React components should
-// only export components (that is what keeps Vite's hot reload working).
+// Shared by Button.jsx and links styled as buttons. Its own file because a
+// .jsx file should only export components (keeps Vite's hot reload working).
 const VARIANTS = {
   primary: 'bg-brand-600 text-white hover:bg-brand-700 disabled:bg-brand-300',
   secondary: 'border border-slate-300 bg-surface text-slate-700 hover:bg-slate-50 disabled:text-slate-400',
-  // brightness/opacity rather than red-700/red-300: dark mode re-uses those
-  // two shades for light text on dark alert boxes (see index.css).
+  // Not red-700/red-300: dark mode reuses those shades for light alert text.
   danger: 'bg-red-600 text-white hover:brightness-90 disabled:opacity-50',
   ghost: 'text-slate-600 hover:bg-slate-100 disabled:text-slate-300',
 }

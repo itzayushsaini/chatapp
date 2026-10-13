@@ -30,18 +30,7 @@ import Logo from '../components/common/Logo.jsx'
 import ChatPreview from '../components/landing/ChatPreview.jsx'
 import { useInstallApp } from '../hooks/useInstallApp.js'
 
-// The public home page, shown at "/" to anyone who is NOT logged in (a
-// logged-in user gets the chat there instead - see App.jsx). It is a plain,
-// static page: no API calls of its own and no state, just the app's
-// features explained, with links to /register and /login.
-//
-// Everything it says is something PingMe really does - there is deliberately
-// no "voice/video calls" or "end-to-end encryption", because PingMe has
-// neither.
-//
-// Motion is CSS only (index.css): the preview's bubbles appear one by one,
-// the phone floats, and cards fade in as you scroll to them (`reveal`). All
-// of it switches off for "reduce motion".
+// Only advertise what PingMe really does: no calls, no end-to-end encryption.
 
 const REPO_URL = 'https://github.com/itzayushsaini/chatapp'
 
@@ -70,8 +59,6 @@ const HIGHLIGHTS = [
   },
 ]
 
-// The newest, headline feature - one wide card above the other twelve, so
-// the grid below stays even at every screen width.
 const AI_FEATURE = {
   icon: SparklesIcon,
   title: 'PingMe AI, built in',
@@ -209,9 +196,7 @@ const TECH = ['React', 'Node.js', 'Express', 'MongoDB', 'Socket.IO', 'Tailwind C
 
 export default function LandingPage() {
   return (
-    // overflow-x-clip: the decorative blurred blobs and the phone may stick
-    // out past the edge; clip them rather than letting the page scroll
-    // sideways on a phone. (clip, not hidden, so the sticky header still works.)
+    // overflow-x-clip, not hidden, so the sticky header still works
     <div className="landing-page min-h-dvh overflow-x-clip bg-slate-50 text-slate-900">
       <AnnouncementBanner />
       <Header />
@@ -265,9 +250,6 @@ function Header() {
   )
 }
 
-// "Install the app" - only where installing works right now: the browser
-// has offered it (Chrome, Edge, Android), or on an iPhone/iPad (then it shows
-// the Add to Home Screen steps). Already installed, or anywhere else: nothing.
 function InstallAppLink() {
   const { state, install } = useInstallApp()
   const [stepsOpen, setStepsOpen] = useState(false)
@@ -291,7 +273,6 @@ function InstallAppLink() {
 function Hero() {
   return (
     <section className="relative">
-      {/* Two soft brand-coloured glows behind the hero - decoration only. */}
       <div aria-hidden="true" className="pointer-events-none absolute inset-0">
         <div className="absolute -top-24 -left-24 h-80 w-80 rounded-full bg-brand-100 opacity-70 blur-3xl" />
         <div className="absolute top-40 -right-24 h-96 w-96 rounded-full bg-brand-50 opacity-80 blur-3xl" />
@@ -362,7 +343,6 @@ function Highlights() {
   )
 }
 
-// The small heading block every section below starts with.
 function SectionHeading({ eyebrow, title, text }) {
   return (
     <div className="reveal mx-auto max-w-2xl text-center">
@@ -373,9 +353,7 @@ function SectionHeading({ eyebrow, title, text }) {
   )
 }
 
-// Real screenshots of the app (public/screens/), light and dark, on a
-// laptop and on a phone. The Light/Dark switch only swaps which pictures
-// show - it does not change the page's own theme.
+// the Light/Dark switch only swaps pictures, not the page's own theme
 const SHOTS = {
   light: { desktop: '/screens/chat-light.webp', phone: '/screens/phone-light.webp' },
   dark: { desktop: '/screens/chat-dark.webp', phone: '/screens/phone-dark.webp' },
@@ -413,8 +391,6 @@ function Showcase() {
         </div>
 
         <div className="reveal mt-12 grid items-end gap-10 lg:grid-cols-[1fr_15rem]">
-          {/* A laptop browser window - not on a phone, where it would be too
-              small to read; the phone picture below is the one that fits. */}
           <div className="hidden overflow-hidden rounded-xl bg-surface shadow-2xl ring-1 shadow-slate-900/10 ring-slate-200 sm:block">
             <div className="flex items-center gap-1.5 border-b border-slate-200 bg-slate-100 px-4 py-2.5" aria-hidden="true">
               <span className="h-2.5 w-2.5 rounded-full bg-slate-300" />
@@ -435,7 +411,6 @@ function Showcase() {
             ))}
           </div>
 
-          {/* A phone. */}
           <div className="mx-auto w-56 overflow-hidden rounded-[2rem] border-[6px] border-neutral-800 bg-surface shadow-2xl shadow-slate-900/20 lg:mx-0 lg:w-full">
             {Object.entries(SHOTS).map(([name, shot]) => (
               <img
@@ -517,7 +492,6 @@ function HowItWorks() {
                 <h3 className="font-semibold text-slate-900">{step.title}</h3>
               </div>
               <p className="mt-3 text-sm leading-relaxed text-slate-600">{step.text}</p>
-              {/* A tiny picture of that step - decoration, hidden from screen readers. */}
               <div aria-hidden="true" className="mt-5 flex flex-1 items-end">
                 <div className="w-full rounded-xl bg-surface p-3 shadow-sm ring-1 ring-slate-200">{step.demo}</div>
               </div>
@@ -584,7 +558,6 @@ function Privacy() {
             People can find you by name, but a search shows only your name, username and photo -
             never your email - and nobody can message you until you accept their friend request.
           </p>
-          {/* A tiny picture of that rule: found by name, but only a request. */}
           <div aria-hidden="true" className="mt-8 max-w-sm rounded-2xl bg-surface p-4 shadow-sm ring-1 ring-slate-200">
             <div className="flex items-center gap-2 rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-900">
               <SearchIcon className="h-4 w-4 text-slate-400" />
@@ -624,7 +597,6 @@ function Faq() {
     <section id="faq" className="scroll-mt-20 border-t border-slate-200 bg-surface px-4 py-20 sm:px-6">
       <div className="mx-auto max-w-3xl">
         <SectionHeading eyebrow="FAQ" title="Questions, answered" />
-        {/* <details> opens and closes by itself - no JavaScript or state. */}
         <div className="mt-10 space-y-3">
           {FAQS.map(({ q, a }) => (
             <details key={q} className="reveal group rounded-xl bg-slate-50 ring-1 ring-slate-200 open:ring-brand-500/50">
@@ -644,9 +616,7 @@ function Faq() {
 function FinalCta() {
   return (
     <section className="px-4 py-20 sm:px-6">
-      {/* A fixed dark green (#01735f) for the gradient's end, not a theme
-          colour: dark mode turns emerald-700/brand-700 into LIGHT shades for
-          text, which would put white text on a pale card. */}
+      {/* fixed #01735f, not a theme colour: dark mode would make brand-700 light */}
       <div className="reveal relative mx-auto max-w-4xl overflow-hidden rounded-3xl bg-linear-to-br from-brand-600 to-[#01735f] px-6 py-14 text-center text-white shadow-xl sm:px-12">
         <div aria-hidden="true" className="pointer-events-none absolute -top-16 -right-16 h-56 w-56 rounded-full bg-white/10" />
         <div aria-hidden="true" className="pointer-events-none absolute -bottom-20 -left-10 h-48 w-48 rounded-full bg-white/10" />
@@ -674,7 +644,6 @@ function FinalCta() {
   )
 }
 
-// A link in a footer column.
 const footerLink =
   'rounded text-slate-600 transition-colors hover:text-slate-900 focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:outline-none'
 

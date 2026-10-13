@@ -2,9 +2,6 @@ import { useId, useState } from 'react'
 
 import { EyeIcon, EyeOffIcon } from './Icons.jsx'
 
-// A labelled input. Every field has a real <label>, so clicking the label
-// focuses the input and screen readers announce what the field is for.
-// type="password" gets a show/hide button.
 export default function TextField({ label, hint, type = 'text', ...inputProps }) {
   const id = useId()
   const hintId = `${id}-hint`

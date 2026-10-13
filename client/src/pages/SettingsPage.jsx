@@ -41,17 +41,13 @@ import { applyTheme } from '../utils/theme.js'
 
 const ISSUES_URL = 'https://github.com/itzayushsaini/chatapp/issues'
 
-// Everything about MY account and this device, in one place. It lives under
-// LoggedInLayout, so the socket stays connected while it is open - new
-// messages still arrive, badge the tab title and notify.
 export default function SettingsPage() {
   const { user } = useAuth()
   const [profileOpen, setProfileOpen] = useState(false)
   const [confirmLogout, setConfirmLogout] = useState(false)
 
   return (
-    // min-w-0 so a wide row inside cannot stretch the page past a phone's
-    // screen (a flex item is otherwise never narrower than its content).
+    // min-w-0, or a flex item can't shrink below its content on a phone
     <main className="flex min-h-0 min-w-0 flex-1 flex-col bg-slate-50">
       <header className="flex items-center gap-3 bg-surface px-3 py-3 shadow-sm sm:px-4">
         <Link
@@ -66,9 +62,6 @@ export default function SettingsPage() {
 
       <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain">
         <div className="mx-auto w-full max-w-2xl space-y-4 px-3 py-4 sm:px-4 sm:py-6">
-          {/* Me - the same profile editor the sidebar opens. On phones (below
-              `sm`) the button gets a full-width row of its own under the name,
-              instead of squeezing the name down to one letter beside it. */}
           <section className="flex flex-wrap items-center gap-4 rounded-2xl bg-surface p-4 shadow-sm">
             <Avatar user={user} size="lg" />
             <div className="min-w-0 flex-1">
@@ -139,8 +132,6 @@ function Card({ icon, title, children }) {
 
 function AccountSection({ onChangePassword }) {
   const { user } = useAuth()
-  // How this account can sign in. A password account that has also used
-  // "Continue with Google" (same email) can do both.
   const method =
     user.authProvider === 'google'
       ? 'Google'
@@ -168,11 +159,9 @@ function AccountSection({ onChangePassword }) {
   )
 }
 
-// People I have blocked, with Unblock. Blocking itself is done from a chat's
-// Contact info panel.
 function PrivacySection() {
   const addToast = useChatStore((s) => s.addToast)
-  const [blocked, setBlocked] = useState(null) // null while loading
+  const [blocked, setBlocked] = useState(null)
   const [busyId, setBusyId] = useState(null)
 
   useEffect(() => {
@@ -239,27 +228,23 @@ function PrivacySection() {
 function NotificationsSection() {
   const [permission, setPermission] = useState(notificationPermission)
   const [enabled, setEnabled] = useState(notificationsEnabled)
-  // Whether this device ALSO gets them while PingMe is closed (Web Push).
   const [whileClosed, setWhileClosed] = useState(false)
 
   useEffect(() => {
     hasPushSubscription().then(setWhileClosed)
   }, [])
 
-  // On only if the browser allows it AND the app switch is on.
   const on = permission === 'granted' && enabled
 
   async function toggle(next) {
     if (!next) {
       setNotificationsEnabled(false)
       setEnabled(false)
-      // Off means off: no push notifications to this device either.
       await removePushSubscription()
       setWhileClosed(false)
       return
     }
-    // The browser only asks once; after that it must be changed in the
-    // browser's own site settings.
+    // the browser only asks once; after that it's changed in its site settings
     const result = permission === 'granted' ? 'granted' : await requestNotificationPermission()
     setPermission(result)
     if (result === 'granted') {
@@ -304,8 +289,6 @@ function NotificationsSection() {
   )
 }
 
-// Installing PingMe as an app - see utils/install.js. What it shows depends
-// on what this browser can do.
 function AppSection() {
   const { state, install } = useInstallApp()
   const [stepsOpen, setStepsOpen] = useState(false)
@@ -376,8 +359,7 @@ const THEMES = [
   { id: 'system', label: 'Same as device', icon: <MonitorIcon className="h-5 w-5" /> },
 ]
 
-// Saved on the account, so it follows me to every device. Applied at once
-// (before the server answers) and put back if saving fails.
+// applied at once, and put back if saving fails
 function ThemeSection() {
   const { user, updateUser } = useAuth()
   const addToast = useChatStore((s) => s.addToast)

@@ -18,7 +18,6 @@ import ContactInfoPanel from './ContactInfoPanel.jsx'
 import MessageInput from './MessageInput.jsx'
 import MessageList from './MessageList.jsx'
 
-// How long to wait for the server's ack before marking a message as failed.
 const ACK_TIMEOUT_MS = 10_000
 
 export default function ChatWindow({ conversationId }) {
@@ -32,39 +31,23 @@ export default function ChatWindow({ conversationId }) {
   const [replyTarget, setReplyTarget] = useState(null)
   const [infoOpen, setInfoOpen] = useState(false)
 
-  // Escape steps back one thing at a time: the contact info panel, then a
-  // reply in progress, then the chat itself. (Dialogs, the message menu and
-  // a voice recording handle their own Escape first - see useEscapeKey.)
   useEscapeKey(() => {
     if (infoOpen) setInfoOpen(false)
     else if (replyTarget) setReplyTarget(null)
     else store().setActiveConversation(null)
   })
 
-  // A different chat clears the reply-in-progress state and closes the
-  // contact info panel.
   useEffect(() => {
     setReplyTarget(null)
     setInfoOpen(false)
   }, [conversationId])
 
-  // Load the latest page the first time this chat is opened.
   useEffect(() => {
     if (!store().messagesByConversation[conversationId]) store().fetchLatest(conversationId)
   }, [conversationId, store])
 
-  // Opening a chat marks everything currently in it as read - the same
-  // moment WhatsApp does. (New messages that arrive while it stays open are
-  // marked read separately, in useSocketEvents.) Only while the tab is
-  // actually visible: a chat left open in a minimised tab has not been
-  // SEEN, so it stays "delivered" until the tab is shown again - which is
-  // what the visibilitychange listener catches.
-  //
-  // The socket is null on the very first render of the logged-in layout (it
-  // is created in SocketProvider's effect). Coming back from /admin mounts
-  // that layout afresh while the store still has this chat open with its
-  // messages loaded, so without the guard this crashed the whole page.
-  // `socket` is in the dependencies, so it runs again once the socket exists.
+  // A chat open in a hidden tab hasn't been seen, so it's marked read only once the tab is visible.
+  // The socket is null on the layout's first render (e.g. coming back from /admin), so wait for it.
   useEffect(() => {
     if (!socket) return
     function markLatestRead() {
@@ -77,17 +60,13 @@ export default function ChatWindow({ conversationId }) {
     markLatestRead()
     document.addEventListener('visibilitychange', markLatestRead)
     return () => document.removeEventListener('visibilitychange', markLatestRead)
-    // Only re-run when the LATEST message actually changes, not on every
-    // store update (e.g. presence ticking) that happens to touch this entry.
+    // Re-run only when the latest message changes, not on every store update
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [socket, conversationId, entry?.status, entry?.messages?.at(-1)?.id])
 
   if (!item) return null
   const { friend } = item
 
-  // Sends over the socket and waits for the ack. socket.timeout() makes the
-  // callback fire with an error if no ack arrives in time - for example if
-  // the connection dropped. The message then shows "Failed - Retry".
   function emit(message) {
     const payload = { conversationId, text: message.text, clientId: message.clientId }
     if (message.attachmentId) payload.attachmentId = message.attachmentId
@@ -109,9 +88,6 @@ export default function ChatWindow({ conversationId }) {
       )
   }
 
-  // A message with a file goes in two steps: upload the file (REST, with a
-  // progress bar), then send the message pointing at it (socket). If the
-  // upload already worked, a Retry skips straight to step 2.
   async function deliver(message) {
     const { clientId } = message
     if (message.file && !message.attachmentId) {
@@ -136,10 +112,7 @@ export default function ChatWindow({ conversationId }) {
     emit(message)
   }
 
-  // Optimistic sending: show the bubble immediately, then send. The clientId
-  // is made here, in the browser, so a Retry can reuse it and the server
-  // recognises the retry instead of saving the message twice.
-  // `voice` ({ durationMs, waveform }) is set only for a recorded voice note.
+  // The clientId is made here so a Retry reuses it and the server doesn't save the message twice
   function send(text, file, replyToId, voice) {
     const message = {
       clientId: crypto.randomUUID(),
@@ -151,8 +124,6 @@ export default function ChatWindow({ conversationId }) {
     }
     if (replyToId) {
       message.replyToId = replyToId
-      // Shown at once, from what's already on screen - replaced by the
-      // server's own snapshot once the ack/message:new arrives.
       message.replyTo = {
         messageId: replyTarget.id,
         senderId: replyTarget.senderId,
@@ -163,8 +134,6 @@ export default function ChatWindow({ conversationId }) {
     if (file) {
       message.file = file
       message.progress = 0
-      // What the bubble shows until the server has the file: the file itself,
-      // from a temporary blob: URL. `local` marks it for clean-up later.
       message.attachment = {
         name: file.name,
         size: file.size,
@@ -173,7 +142,6 @@ export default function ChatWindow({ conversationId }) {
         local: true,
         ...(voice && { durationMs: voice.durationMs, waveform: voice.waveform }),
       }
-      // Kept on the message so a Retry uploads it with the same details.
       if (voice) message.voice = voice
     }
     store().addPendingMessage(message)
@@ -181,7 +149,7 @@ export default function ChatWindow({ conversationId }) {
   }
 
   function retry(message) {
-    // Read the latest copy: the upload may have finished since this render.
+    // Read the latest copy: the upload may have finished since this render
     const current =
       store().messagesByConversation[conversationId]?.messages.find(
         (m) => m.clientId === message.clientId && !m.id,
@@ -192,15 +160,9 @@ export default function ChatWindow({ conversationId }) {
   }
 
   return (
-    // min-w-0: a flex item is never narrower than its content by default, so
-    // without it a long name in the header or a wide bubble made the whole
-    // chat wider than a phone screen, with the left part cut off.
+    // min-w-0 so a long name or wide bubble can't make the chat wider than a phone screen
     <section className="relative flex min-h-0 min-w-0 flex-1" aria-label={`Chat with ${friend.displayName}`}>
-      {/* Keyed by conversationId so the WHOLE pane (header, list, input) is
-          torn down and rebuilt on every switch - not just the list inside it.
-          Without this, an old MessageList could end up not being cleanly
-          replaced, leaving a stale instance showing the previous chat's
-          messages under the new chat's header. */}
+      {/* Keyed so the whole pane is rebuilt on every chat switch, not just the list */}
       <div key={conversationId} className="flex min-h-0 min-w-0 flex-1 flex-col bg-slate-50">
         <ChatHeader
           friend={friend}
@@ -253,7 +215,6 @@ export default function ChatWindow({ conversationId }) {
         />
       </div>
 
-      {/* Over the chat on small and medium screens, beside it on wide ones. */}
       {infoOpen && <ContactInfoPanel item={item} onClose={() => setInfoOpen(false)} />}
     </section>
   )
@@ -264,7 +225,6 @@ function ChatHeader({ friend, muted, conversationId, onBack, onOpenInfo }) {
 
   return (
     <header className="flex items-center gap-3 border-b border-slate-200 bg-surface px-3 py-3 sm:px-4">
-      {/* Only on small screens, where the list and the chat are separate views. */}
       <button
         type="button"
         onClick={onBack}
@@ -273,8 +233,6 @@ function ChatHeader({ friend, muted, conversationId, onBack, onOpenInfo }) {
       >
         <BackIcon />
       </button>
-      {/* The picture and the name both open Contact info. The picture is
-          skipped by Tab (tabIndex -1) so keyboard users have one stop. */}
       <button
         type="button"
         tabIndex={-1}

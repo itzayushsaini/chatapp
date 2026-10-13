@@ -8,7 +8,6 @@ import Spinner from '../components/common/Spinner.jsx'
 import TextField from '../components/common/TextField.jsx'
 import AuthLayout from '../components/layout/AuthLayout.jsx'
 
-// Reached from the link inside the reset email: /reset-password?token=...&email=...
 export default function ResetPasswordPage() {
   const [params] = useSearchParams()
   const navigate = useNavigate()
@@ -20,7 +19,6 @@ export default function ResetPasswordPage() {
   const [error, setError] = useState('')
   const [submitting, setSubmitting] = useState(false)
 
-  // A malformed or missing link - no point showing a form that cannot work.
   if (!email || !token) {
     return (
       <AuthLayout
@@ -49,8 +47,7 @@ export default function ResetPasswordPage() {
     setSubmitting(true)
     try {
       await authApi.resetPassword(email, token, password)
-      // Not auto-logged-in: a fresh, explicit login is the clearer signal
-      // that the new password is the one now in effect.
+      // not logged in automatically on purpose: they log in with the new password
       navigate('/login?reset=success', { replace: true })
     } catch (err) {
       setError(errorMessage(err))

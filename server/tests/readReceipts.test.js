@@ -8,8 +8,6 @@ import { Conversation } from '../src/models/Conversation.js'
 import { initSocket } from '../src/socket/index.js'
 import { makeFriends, registerUser } from './helpers.js'
 
-// Same live http+socket server pattern as socket.test.js, scoped to this
-// file so it can run independently.
 let httpServer
 let io
 let url

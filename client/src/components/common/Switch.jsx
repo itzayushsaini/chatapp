@@ -1,6 +1,3 @@
-// An on/off toggle. A real <button role="switch"> with aria-checked, so
-// keyboards (Space/Enter) and screen readers ("switch, on") both work.
-// `label` is the visible text; `description` an optional line under it.
 export default function Switch({ checked, onChange, label, description, disabled = false }) {
   return (
     <button

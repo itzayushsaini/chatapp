@@ -26,9 +26,7 @@ import {
   upload,
 } from './helpers.js'
 
-// geminiClient.js is the only file that talks to Google, so replacing it
-// with a fake tests everything else for real - and no test ever sends a
-// request to Gemini. AiError stays the real class.
+// fake the only file that talks to Google (AiError stays real), so no test ever calls Gemini
 vi.mock('../src/services/geminiClient.js', async (importOriginal) => ({
   ...(await importOriginal()),
   isConfigured: vi.fn(),
@@ -36,7 +34,6 @@ vi.mock('../src/services/geminiClient.js', async (importOriginal) => ({
   createImage: vi.fn(),
 }))
 
-// A normal, successful answer, arriving in two pieces.
 async function fakeAnswer({ onUpdate }) {
   onUpdate({ text: 'Hello', reasoning: 'The user said hi.' })
   onUpdate({ text: 'Hello there! **How can I help?**', reasoning: 'The user said hi.' })
@@ -58,7 +55,7 @@ function askWithFile(agent, buffer, filename, fields = {}) {
   return req.attach('file', buffer, filename)
 }
 
-// The answer is written in the background, after the 202 - wait for it.
+// the answer is written in the background after the 202, so poll for it
 async function waitForAnswer(agent) {
   for (let i = 0; i < 150; i++) {
     const res = await agent.get('/api/ai/messages')
@@ -69,11 +66,8 @@ async function waitForAnswer(agent) {
   throw new Error('the answer never finished')
 }
 
-// What the fake Gemini was asked last time.
 const lastRequest = () => vi.mocked(streamReply).mock.calls.at(-1)[0]
 
-// A promise the test resolves by hand - an answer that takes as long as the
-// test wants it to.
 function deferred() {
   let resolve
   const promise = new Promise((r) => (resolve = r))
@@ -338,7 +332,6 @@ describe('PingMe AI: stop, errors and retry', () => {
     expect((await agent.post('/api/ai/stop')).status).toBe(204)
     const answer = await waitForAnswer(agent)
     expect(answer).toMatchObject({ status: 'stopped', text: 'The first part' })
-    // Stopping again (nothing running) is harmless.
     expect((await agent.post('/api/ai/stop')).status).toBe(204)
   })
 
@@ -646,7 +639,6 @@ describe('PingMe AI: live events', () => {
     const mine = tab.events.filter(([event]) => event.startsWith('ai:'))
     expect(mine.map(([event]) => event)).toEqual(['ai:new', 'ai:delta', 'ai:delta', 'ai:done'])
     expect(mine[0][1].messages.map((m) => m.id)).toEqual([res.body.question.id, res.body.answer.id])
-    // Each delta carries the WHOLE answer so far.
     expect(mine[1][1]).toEqual({ id: res.body.answer.id, text: 'Hello', reasoning: 'The user said hi.' })
     expect(mine[2][1].text).toBe('Hello there! **How can I help?**')
     expect(mine[3][1].message).toMatchObject({ id: res.body.answer.id, status: 'done' })

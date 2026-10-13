@@ -7,14 +7,12 @@ import { enterToSend } from '../../utils/preferences.js'
 import { FileIcon, MicIcon, PaperclipIcon, SendIcon, VideoIcon } from '../common/Icons.jsx'
 import VoiceRecorderBar from './VoiceRecorderBar.jsx'
 
-// Anything shorter is almost certainly a mis-tap, not a message.
+// Anything shorter is a mis-tap
 const MIN_VOICE_MS = 500
 
 const MAX_LENGTH = 2000
-// Show the character counter only once the user is getting close.
 const COUNTER_FROM = 1800
-// While typing, "I am typing" is re-sent at most this often (not on every
-// keystroke), and "stopped" is sent after this long without a keystroke.
+// "typing" is re-sent at most this often, and "stopped" is sent after this long idle
 const TYPING_REPEAT_MS = 3000
 const TYPING_IDLE_MS = 3000
 
@@ -26,14 +24,6 @@ function attachmentSnippetLabel(kind) {
   return 'Message'
 }
 
-// onSend(text, file, replyToId, voice) - file and replyToId are null when not
-// used; `voice` ({ durationMs, waveform }) is only there for a voice note.
-// `replyTarget` is the message being replied to (or null), and `onCancelReply`
-// clears it - both owned by the parent, since a reply started from a bubble
-// must reach this sibling component.
-// onTyping(isTyping) tells the other person "typing..." starts or stops. The
-// parent renders this component with key={conversationId}, so one instance
-// only ever belongs to one chat.
 export default function MessageInput({
   onSend,
   onTyping,
@@ -48,15 +38,11 @@ export default function MessageInput({
   const textareaRef = useRef(null)
   const fileInputRef = useRef(null)
   const addToast = useChatStore((s) => s.addToast)
-  // Read once per chat opened - this component remounts for each chat.
   const [sendOnEnter] = useState(enterToSend)
-  // { lastSent, idleTimer, stop } - `stop` is set while "typing" is active.
   const typing = useRef({ lastSent: 0, idleTimer: null, stop: null })
 
   const trimmed = text.trim()
   const canSend = !disabled && (trimmed.length > 0 || file) && text.length <= MAX_LENGTH
-  // With nothing typed and no file chosen, the round button records a voice
-  // note instead of sending - it turns back into Send the moment you type.
   const showMic = !trimmed && !file
 
   const voice = useVoiceRecorder({
@@ -97,8 +83,6 @@ export default function MessageInput({
     t.lastSent = 0
   }
 
-  // Called on every keystroke, but only emits when it matters: the first
-  // keystroke, then at most once every few seconds while it continues.
   function noteTyping(value) {
     if (!value.trim()) return stopTyping()
     const t = typing.current
@@ -112,7 +96,7 @@ export default function MessageInput({
     t.idleTimer = setTimeout(stopTyping, TYPING_IDLE_MS)
   }
 
-  // Leaving the chat (or the page) while mid-sentence still says "stopped".
+  // Leaving the chat mid-sentence still sends "stopped"
   useEffect(() => stopTyping, [])
 
   function submit() {
@@ -126,10 +110,7 @@ export default function MessageInput({
     textareaRef.current?.focus()
   }
 
-  // Enter sends; Shift+Enter adds a new line - unless "Enter to send" is
-  // switched off in Settings, when Enter is just a new line. isComposing is
-  // true while an input method (e.g. for Hindi or Japanese) is still
-  // building a word - Enter then confirms the word and must not send.
+  // isComposing: an input method (e.g. Hindi, Japanese) is still building a word, so Enter must not send
   function handleKeyDown(event) {
     if (!sendOnEnter) return
     if (event.key === 'Enter' && !event.shiftKey && !event.nativeEvent.isComposing) {
@@ -142,7 +123,7 @@ export default function MessageInput({
     const chosen = event.target.files[0]
     event.target.value = '' // so picking the same file again still fires
     if (!chosen) return
-    // Quick feedback only - the server checks the file's real contents.
+    // Quick feedback only; the server checks the file's real contents
     const problem = checkFile(chosen)
     if (problem) {
       addToast(problem, 'error')
@@ -152,13 +133,10 @@ export default function MessageInput({
     textareaRef.current?.focus()
   }
 
-  // Focus the composer the moment a reply is picked, the same as clicking
-  // into the text field directly.
   useEffect(() => {
     if (replyTarget) textareaRef.current?.focus()
   }, [replyTarget])
 
-  // Grow the box with its content, up to about 5 lines.
   function resize(value) {
     const el = textareaRef.current
     if (!el) return
@@ -204,8 +182,6 @@ export default function MessageInput({
         />
       ) : (
         <div className="flex items-end gap-2">
-          {/* The paperclip and the text field share one white pill, the way
-              WhatsApp's composer does; Send is its own circular button. */}
           <div className="flex flex-1 items-end gap-1 rounded-3xl bg-surface pr-1 pl-1.5 shadow-sm transition-shadow duration-150 focus-within:ring-2 focus-within:ring-brand-500/40">
             <button
               type="button"
@@ -271,8 +247,6 @@ export default function MessageInput({
   )
 }
 
-// The message being replied to, shown above the input with a Cancel button -
-// the same quoted preview that will appear inside the sent bubble.
 function ReplyPreview({ target, myId, friendName, onCancel }) {
   return (
     <div className="mb-2 flex items-center gap-3 rounded-xl border border-slate-200 bg-slate-50 p-2">
@@ -296,13 +270,10 @@ function ReplyPreview({ target, myId, friendName, onCancel }) {
   )
 }
 
-// The file waiting to be sent, shown above the input with a Remove button.
 export function ChosenFile({ file, onRemove }) {
   const kind = kindOf(file)
   const [previewUrl, setPreviewUrl] = useState(null)
 
-  // A photo is previewed from a temporary blob: URL, which must be released
-  // when this preview goes away or the memory stays allocated.
   useEffect(() => {
     if (kind !== 'image') return
     const url = URL.createObjectURL(file)

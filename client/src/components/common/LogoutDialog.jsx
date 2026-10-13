@@ -1,11 +1,8 @@
 import { useAuth } from '../../context/AuthContext.jsx'
 import ConfirmDialog from './ConfirmDialog.jsx'
 
-// The "Log out?" confirmation, shared by the sidebar's log out button and
-// the Settings page.
 export default function LogoutDialog({ open, onClose }) {
   const { user, logout } = useAuth()
-  // A Google-only account has no password to "log back in" with.
   const howToReturn =
     user?.authProvider === 'google'
       ? 'You can log back in any time with "Continue with Google".'

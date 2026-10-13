@@ -2,17 +2,13 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <!-- interactive-widget=resizes-content: when the phone keyboard opens,
-         the page itself gets shorter (Android Chrome/Edge/Firefox), instead
-         of the browser sliding the whole page up and hiding the chat header.
-         iPhone Safari ignores it - see src/utils/viewport.js. -->
+    <!-- resizes-content: on Android the page shrinks when the keyboard opens, so the chat header stays visible -->
     <meta name="viewport" content="width=device-width, initial-scale=1.0, interactive-widget=resizes-content" />
     <meta
       name="description"
       content="PingMe - private one-to-one real-time chat. Find friends by their exact username, send a request, and chat with read receipts, files and voice notes."
     />
     <meta name="theme-color" content="#00a884" />
-    <!-- What a shared link shows in WhatsApp, Telegram, LinkedIn... -->
     <meta property="og:type" content="website" />
     <meta property="og:title" content="PingMe - private real-time chat" />
     <meta
@@ -20,8 +16,6 @@
       content="Chat only with people you choose: find friends by their exact username, then message them in real time."
     />
     <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
-    <!-- Installable as an app: the manifest (name, icons, full screen) and
-         what iPhones need, since Safari reads some of it from these tags. -->
     <link rel="manifest" href="/manifest.webmanifest" />
     <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png" />
     <meta name="mobile-web-app-capable" content="yes" />

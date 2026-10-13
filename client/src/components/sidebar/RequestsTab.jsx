@@ -51,8 +51,7 @@ function RequestRow({ request, kind }) {
       removeRequest(request.id)
     } catch (err) {
       addToast(errorMessage(err), 'error')
-      // A 404 means the request no longer exists (e.g. they cancelled it a
-      // moment ago), so drop it. Any other error: keep it and allow a retry.
+      // 404: the request is already gone (e.g. they cancelled it), so drop it.
       if (err.response?.status === 404) removeRequest(request.id)
       else setBusy(false)
     }

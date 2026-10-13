@@ -10,14 +10,11 @@ import { UPLOAD_MAX_BYTES } from '../services/attachmentService.js'
 
 const historyQuery = z.object({
   before: objectId.optional(),
-  // Query strings are always text, so coerce "30" to 30. Capped at 50 so one
-  // request can never ask for the whole history.
   limit: z.coerce.number().int().min(1).max(50).default(30),
 })
 
 const conversationParams = validate({ params: z.object({ id: objectId }) })
 
-// The text fields a voice note is uploaded with - see middleware/upload.js.
 const uploadFields = z.object(voiceNoteFields)
 
 const router = Router()
@@ -30,9 +27,7 @@ router.get(
   conversations.messages,
 )
 
-// Step 1 of sending a file (step 2 is message:send with the attachmentId).
-// The order matters: rate limit -> valid id -> may I upload here? -> only
-// then read the file (and its text fields, which arrive with it).
+// Order matters: check the user may upload here before multer reads the file
 router.post(
   '/:id/attachments',
   uploadLimiter,
@@ -43,8 +38,6 @@ router.post(
   conversations.upload,
 )
 
-// The contact info panel. Clearing and muting are per-user preferences with
-// the same generous per-user budget as profile edits.
 router.get('/:id/attachments', conversationParams, conversations.sharedAttachments)
 router.post('/:id/clear', profileLimiter, conversationParams, conversations.clear)
 router.patch(

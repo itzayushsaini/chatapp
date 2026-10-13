@@ -13,8 +13,7 @@ export async function listRequests(req, res) {
   res.json(await friendService.listRequests(req.user._id))
 }
 
-// 201 { request } for a new request, or 200 { friend } when it turned into an
-// accept because they had already asked me.
+// 200 { friend } when they had already asked me, so it became an accept
 export async function sendRequest(req, res) {
   const result = await friendService.sendRequest(req.user._id, req.valid.body.username)
   res.status(result.request ? 201 : 200).json(result)

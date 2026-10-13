@@ -3,8 +3,6 @@ import { previewTime } from '../../utils/time.js'
 import { VerifiedIcon } from '../common/Icons.jsx'
 import PingMeAvatar from './PingMeAvatar.jsx'
 
-// The pinned "PingMe" row at the very top of the Chats list - always there,
-// even before you have any friends, like WhatsApp's own official chat.
 export default function UpdatesRow() {
   const latest = useChatStore((s) => s.updates.latest)
   const unread = useChatStore((s) => s.updates.unreadCount)

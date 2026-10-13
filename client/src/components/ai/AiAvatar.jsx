@@ -6,8 +6,6 @@ const SIZES = {
   lg: { box: 'h-16 w-16', icon: 'h-8 w-8' },
 }
 
-// PingMe AI's picture: sparkles on a green-to-violet gradient, the same
-// sizes as a user's Avatar - so it is never mistaken for a real person.
 export default function AiAvatar({ size = 'md' }) {
   const { box, icon } = SIZES[size]
   return (

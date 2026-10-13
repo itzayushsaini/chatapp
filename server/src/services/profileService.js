@@ -10,9 +10,6 @@ const COOLDOWN_MS = USERNAME_COOLDOWN_DAYS * 24 * 60 * 60 * 1000
 
 const AVATAR_TYPES = ['image/jpeg', 'image/png', 'image/webp', 'image/gif']
 
-// Tells everyone who has me in a list (friends, pending requests) about my
-// new name / bio / picture, so their sidebar and chat header update at once.
-// My own other tabs get the full selfUser; everyone else the public shape.
 async function announce(user) {
   emitToUser(user._id, 'user:updated', { user: selfUser(user) })
   for (const contactId of await getContactIds(user._id)) {
@@ -20,8 +17,6 @@ async function announce(user) {
   }
 }
 
-// Any of displayName, bio, username and theme may be given; the rest stay as
-// they are. Returns the updated user document.
 export async function updateProfile(meId, { displayName, bio, username, theme }) {
   const me = await User.findById(meId)
   const changes = {}
@@ -34,9 +29,7 @@ export async function updateProfile(meId, { displayName, bio, username, theme })
   if (changingUsername) {
     changes.username = username
     changes.usernameChangedAt = new Date()
-    // The cooldown is part of the SAME atomic update: "only if I have never
-    // changed it, or the last change was 30+ days ago". Two changes sent at
-    // once cannot both pass, just like accepting a friend request twice.
+    // cooldown is in the same atomic filter, so two changes at once can't both pass
     filter.$or = [
       { usernameChangedAt: null },
       { usernameChangedAt: { $lte: new Date(Date.now() - COOLDOWN_MS) } },
@@ -49,8 +42,6 @@ export async function updateProfile(meId, { displayName, bio, username, theme })
   try {
     updated = await User.findOneAndUpdate(filter, { $set: changes }, { new: true, runValidators: true })
   } catch (err) {
-    // As at registration, the unique index is the real guard against two
-    // people taking the same username at the same moment.
     if (err.code === 11000 && err.keyPattern?.username) {
       throw new AppError(409, 'Username already taken')
     }
@@ -58,7 +49,7 @@ export async function updateProfile(meId, { displayName, bio, username, theme })
   }
 
   if (!updated) {
-    // The filter did not match, so the cooldown has not passed yet.
+    // filter didn't match, so the cooldown hasn't passed
     const fresh = await User.findById(meId)
     const allowedAt = new Date(fresh.usernameChangedAt.getTime() + COOLDOWN_MS)
     throw new AppError(
@@ -71,7 +62,6 @@ export async function updateProfile(meId, { displayName, bio, username, theme })
   return updated
 }
 
-// `file` is multer's { buffer, originalname }. Returns the updated user.
 export async function setAvatar(meId, file) {
   const type = detectFileType(file.buffer, file.originalname)
   if (!type || !AVATAR_TYPES.includes(type.mime)) {
@@ -84,8 +74,7 @@ export async function setAvatar(meId, file) {
     metadata: { purpose: 'avatar', owner: meId },
   })
 
-  // Swap in the new picture, then delete the old one. { new: false } returns
-  // the document as it was BEFORE the update, so we know which file to delete.
+  // new: false returns the old document, so we know which file to delete
   const before = await User.findOneAndUpdate({ _id: meId }, { avatarFileId: fileId }, { new: false })
   await deleteFile(before.avatarFileId)
 
@@ -94,14 +83,10 @@ export async function setAvatar(meId, file) {
   return updated
 }
 
-// Every account must have a profile photo (the team's rule), so it can be
-// changed - setAvatar above replaces it - but never removed.
 export async function removeAvatar() {
   throw new AppError(400, 'A profile photo is required. You can change it, but not remove it.')
 }
 
-// What the avatar route needs to stream the picture. Any logged-in user may
-// see it: the picture is part of the public profile shown in search results.
 export async function getAvatar(userId) {
   const user = await User.findById(userId)
   const info = user?.avatarFileId ? await getFileInfo(user.avatarFileId) : null

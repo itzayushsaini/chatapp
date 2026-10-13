@@ -16,25 +16,20 @@ import Spinner from '../common/Spinner.jsx'
 import Switch from '../common/Switch.jsx'
 import VoicePlayer from './VoicePlayer.jsx'
 
-// How many photos/videos the grid shows before "Show all".
 const MEDIA_PREVIEW = 6
 
-// "Contact info" - opened from the chat header, like WhatsApp's panel on the
-// right: their profile, the photos/videos and documents sent in this chat,
-// and the actions that only affect MY side of it (mute, clear chat, block,
-// remove friend).
 export default function ContactInfoPanel({ item, onClose }) {
   const { friend, conversationId, muted = false } = item
   const status = useFriendStatus(friend.id, conversationId).text
   const store = useChatStore.getState
-  // Re-list the shared files whenever a message arrives or is deleted here.
+  // Used to re-list the shared files when a message arrives or is deleted
   const latestId = useChatStore((s) => s.messagesByConversation[conversationId]?.messages.at(-1)?.id)
   const messageCount = useChatStore((s) => s.messagesByConversation[conversationId]?.messages.length)
 
-  const [shared, setShared] = useState(null) // null while loading
+  const [shared, setShared] = useState(null)
   const [showAllMedia, setShowAllMedia] = useState(false)
-  const [viewing, setViewing] = useState(null) // the photo/video open full size
-  const [confirm, setConfirm] = useState(null) // 'clear' | 'block' | 'unfriend'
+  const [viewing, setViewing] = useState(null)
+  const [confirm, setConfirm] = useState(null)
   const [savingMute, setSavingMute] = useState(false)
 
   useEffect(() => {
@@ -63,8 +58,6 @@ export default function ContactInfoPanel({ item, onClose }) {
     }
   }
 
-  // Each returns normally on success so ConfirmDialog closes; errors become
-  // a toast and the dialog closes too (nothing to retry inside it).
   async function run(action) {
     try {
       await action()
@@ -111,7 +104,6 @@ export default function ContactInfoPanel({ item, onClose }) {
       </div>
 
       <div className="min-h-0 flex-1 space-y-2 overflow-y-auto overscroll-contain pb-4">
-        {/* Who they are - PublicUser fields only, the same as anywhere else. */}
         <section className="flex flex-col items-center bg-surface px-6 pt-6 pb-5 text-center">
           <Avatar user={friend} size="xl" />
           <p className="mt-3 text-lg font-semibold text-slate-900">{friend.displayName}</p>
@@ -313,7 +305,6 @@ function MediaThumb({ attachment, onOpen }) {
   )
 }
 
-// A photo or video from the grid, full size.
 function MediaViewer({ attachment, onClose }) {
   return (
     <Dialog open={Boolean(attachment)} onClose={onClose} title={attachment?.name ?? ''} wide>
